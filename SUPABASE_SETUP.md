@@ -1,6 +1,6 @@
 # Connecting Supabase
 
-Chart Scanner uses Supabase for accounts: sign up, log in and log out. Supabase stores the users and handles passwords, so none of that lives in this code. This guide takes about 15 minutes.
+Vertex Chart Scanner uses Supabase for accounts: sign up, log in and log out. Supabase stores the users and handles passwords, so none of that lives in this code. This guide takes about 15 minutes.
 
 You need a free Supabase account at https://supabase.com.
 
@@ -73,7 +73,7 @@ Supabase's built in email is only meant for testing. It sends very few emails pe
 
 1. Create an account with an email provider such as Resend, Brevo or Postmark and verify your domain there.
 2. In Supabase open **Project Settings** then **Authentication** then **SMTP Settings**, turn on **Enable custom SMTP** and enter the details from the provider.
-3. Optional but worth it: under **Authentication** then **Emails**, edit the templates so they say Chart Scanner and match your brand.
+3. Optional but worth it: under **Authentication** then **Emails**, edit the templates so they say Vertex Chart Scanner and match your brand.
 
 ## 7. Test it
 

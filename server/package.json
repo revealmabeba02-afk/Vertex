@@ -1,7 +1,7 @@
 {
   "name": "forex-chart-scanner-server",
   "version": "1.0.0",
-  "description": "Backend for Forex Chart Scanner - analyzes uploaded chart screenshots with Claude vision and returns structured trading analysis.",
+  "description": "Backend for Vertex Chart Scanner - analyzes uploaded chart screenshots with Claude vision and returns structured trading analysis.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

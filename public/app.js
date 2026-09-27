@@ -9,6 +9,11 @@
   const Auth = window.Auth;
   const root = document.documentElement;
 
+  // True while a scan request is in flight, so a spurious SIGNED_OUT auth
+  // event (see onAuthStateChange below) cannot yank the user away from a
+  // scan that is actually still running.
+  let scanInFlight = false;
+
   // app.html hides the page (class "auth-check") until the session has been
   // checked, so a logged out visitor never sees the scanner flash up before
   // the redirect. It is revealed here, or by a timeout in app.html.
@@ -43,8 +48,15 @@
     });
 
     // Signed out in another tab, or the session could not be refreshed.
+    // Supabase can also fire this itself during a long-running request (its
+    // token refresh timer overlapping the scan) — that is not a real sign
+    // out, so it must not interrupt a scan that is already in flight. The
+    // scan's own 401 handling (in runScan below) is what actually decides
+    // whether the session was rejected.
     Auth.client.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT" && !Auth.isSigningOut()) location.replace("/login?next=/app");
+      if (event === "SIGNED_OUT" && !Auth.isSigningOut() && !scanInFlight) {
+        location.replace("/login?next=/app");
+      }
     });
   }
 
@@ -242,6 +254,7 @@
   });
 
   async function runScan(file, timeframe) {
+    scanInFlight = true;
     setLoadingUI(true);
     showState("loading");
 
@@ -269,7 +282,21 @@
         return;
       }
 
-      const data = await res.json();
+      // The server always replies with JSON, but a slow host (waking up from
+      // idle, or timing out at the network layer) can hand back a plain-text
+      // or HTML error page instead. Read the body as text first so that case
+      // produces a readable message instead of a silent parse crash.
+      const raw = await res.text();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          res.ok
+            ? "The server sent back something unexpected. Please try again."
+            : `Server error (${res.status}). If the site was just idle, it may still be waking up — please try again in a moment.`
+        );
+      }
 
       if (!res.ok) {
         throw new Error(data.error || "Something went wrong while analyzing the chart.");
@@ -281,6 +308,7 @@
       errorText.textContent = err.message || "Something went wrong. Please try again.";
       showState("error");
     } finally {
+      scanInFlight = false;
       setLoadingUI(false);
     }
   }

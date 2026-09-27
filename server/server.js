@@ -380,6 +380,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Forex Chart Scanner running at http://localhost:${PORT}`);
+  console.log(`Vertex Chart Scanner running at http://localhost:${PORT}`);
   console.log(`Using model: ${MODEL}`);
 });
