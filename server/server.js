@@ -9,20 +9,34 @@ const envLoad = require("dotenv").config({ path: ENV_PATH });
 
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
 const rateLimit = require("express-rate-limit");
-const Anthropic = require("@anthropic-ai/sdk");
-
-const {
-  isValidTimeframe,
-  buildSystemPrompt,
-  buildUserPrompt
-} = require("./analysisPrompt");
 
 const PORT = process.env.PORT || 3000;
-const MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5";
-const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 8);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
+
+// FXSynapse AI provides the actual chart analysis: given a symbol and a
+// timeframe, it measures market structure, levels and a trade plan directly
+// from live price bars (no screenshot involved). Get a key from the API
+// Access section of https://fxsynapseai.com/dashboard.
+const FXSYNAPSE_API_KEY = (process.env.FXSYNAPSE_API_KEY || "").trim();
+const FXSYNAPSE_BASE_URL = (process.env.FXSYNAPSE_BASE_URL || "https://fxsynapseai.com")
+  .trim()
+  .replace(/\/+$/, "");
+
+const VALID_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
+const TIMEFRAME_LABELS = {
+  M1: "1 minute", M5: "5 minutes", M15: "15 minutes", M30: "30 minutes",
+  H1: "1 hour", H4: "4 hours",
+  D1: "1 day", W1: "1 week", MN1: "1 month"
+};
+function isValidTimeframe(tf) {
+  return VALID_TIMEFRAMES.includes(tf);
+}
+// Symbols are plain alphanumeric tickers (EURUSD, XAUUSD, ...). This just
+// rejects obvious junk before it ever reaches FXSynapse's API.
+function isValidSymbol(sym) {
+  return /^[A-Z0-9]{3,10}$/.test(sym);
+}
 
 // Supabase handles accounts. The URL and anon key are public by design (they
 // ship to every browser) and access is enforced by Supabase itself. The
@@ -97,19 +111,15 @@ if (!SUPABASE_READY) {
   );
 }
 
-if (!process.env.ANTHROPIC_API_KEY) {
+if (!FXSYNAPSE_API_KEY) {
   console.error(
-    "\n[FATAL] ANTHROPIC_API_KEY is not set.\n" +
-    "Copy server/.env.example to server/.env and add your key.\n"
+    "\n[FATAL] FXSYNAPSE_API_KEY is not set.\n" +
+    "Copy server/.env.example to server/.env and add your key, or set it in\n" +
+    "your host's environment variables. Get one from the API Access section\n" +
+    "of https://fxsynapseai.com/dashboard.\n"
   );
   process.exit(1);
 }
-
-// The Anthropic client lives only on the server. The API key never
-// reaches the browser in any request/response.
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY
-});
 
 const app = express();
 
@@ -160,31 +170,14 @@ app.use(express.static(path.join(__dirname, "..", "public"), { index: false }));
 // --- Auth gate ---------------------------------------------------------------
 // The browser sends its Supabase access token; Supabase confirms who it
 // belongs to. A forged, expired or signed out token gets a 401, so nobody
-// can spend the Anthropic key without an account.
-// This gate runs before the upload is read. Answering while the image is
-// still arriving makes the connection drop before the browser sees the
-// reply, so a logged out user got a network error instead of a clean 401.
-// Let an upload of allowed size finish arriving first; anything bigger is
-// cut off rather than read.
-function rejectUpload(req, res, status, body) {
-  res.set("Connection", "close");
-  const len = Number(req.headers["content-length"] || 0);
-  const maxLen = MAX_UPLOAD_MB * 1024 * 1024 + 256 * 1024;
-  if (req.complete || !len || len > maxLen) {
-    return res.status(status).json(body);
-  }
-  req.on("end", () => res.status(status).json(body));
-  req.on("error", () => res.destroy());
-  req.resume();
-}
-
+// can spend the FXSynapse key without an account.
 async function requireUser(req, res, next) {
   if (!SUPABASE_READY) {
-    return rejectUpload(req, res, 503, { error: "Accounts are not set up on this server yet." });
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   }
   const match = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || "");
   if (!match) {
-    return rejectUpload(req, res, 401, { error: "Please log in to scan charts." });
+    return res.status(401).json({ error: "Please log in to scan charts." });
   }
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -192,41 +185,23 @@ async function requireUser(req, res, next) {
       signal: AbortSignal.timeout(8000)
     });
     if (r.status === 401 || r.status === 403) {
-      return rejectUpload(req, res, 401, { error: "Your session has expired. Please log in again." });
+      return res.status(401).json({ error: "Your session has expired. Please log in again." });
     }
     if (!r.ok) {
       console.error("Supabase user check failed:", r.status);
-      return rejectUpload(req, res, 502, { error: "Could not verify your account right now. Please try again." });
+      return res.status(502).json({ error: "Could not verify your account right now. Please try again." });
     }
     const user = await r.json();
     if (!user?.id) {
-      return rejectUpload(req, res, 401, { error: "Please log in to scan charts." });
+      return res.status(401).json({ error: "Please log in to scan charts." });
     }
     req.user = { id: user.id, email: user.email };
     next();
   } catch (err) {
     console.error("Supabase user check error:", err.message);
-    rejectUpload(req, res, 502, { error: "Could not verify your account right now. Please try again." });
+    res.status(502).json({ error: "Could not verify your account right now. Please try again." });
   }
 }
-
-// --- Upload handling -------------------------------------------------
-const ACCEPTED_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp"
-]);
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!ACCEPTED_MIME_TYPES.has(file.mimetype)) {
-      return cb(new Error("UNSUPPORTED_FILE_TYPE"));
-    }
-    cb(null, true);
-  }
-});
 
 // --- Basic abuse protection -------------------------------------------
 // Analysis calls cost real money server-side, so this endpoint is rate
@@ -242,131 +217,179 @@ const analyzeLimiter = rateLimit({
 // --- Routes -------------------------------------------------------------
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, model: MODEL, accounts: SUPABASE_READY });
+  res.json({ ok: true, provider: "fxsynapse", accounts: SUPABASE_READY });
 });
 
-app.post(
-  "/api/analyze",
-  requireUser,
-  analyzeLimiter,
-  (req, res, next) => {
-    upload.single("chart")(req, res, (err) => {
-      if (err instanceof multer.MulterError) {
-        if (err.code === "LIMIT_FILE_SIZE") {
-          return res
-            .status(413)
-            .json({ error: `Image too large. Max size is ${MAX_UPLOAD_MB}MB.` });
-        }
-        return res.status(400).json({ error: "Upload error: " + err.message });
-      }
-      if (err && err.message === "UNSUPPORTED_FILE_TYPE") {
-        return res
-          .status(400)
-          .json({ error: "Unsupported file type. Please upload PNG, JPEG, or WebP." });
-      }
-      if (err) return next(err);
-      next();
-    });
-  },
-  async (req, res) => {
-    try {
-      const timeframe = req.body.timeframe;
-      const file = req.file;
+// --- FXSynapse response shaping ------------------------------------------
+// The scanner's result screen expects one steady shape regardless of what
+// changed upstream: { pair_guess, market_bias, market_structure, ... }. This
+// turns FXSynapse's own JSON (symbol, marketStructure, levels, plan,
+// concepts, topDown, ...) into that same shape, so the result UI didn't
+// need to be rebuilt from scratch.
+function fmtNum(n) {
+  return typeof n === "number" ? String(n) : n != null ? String(n) : "—";
+}
 
-      if (!file) {
-        return res.status(400).json({ error: "No chart image was uploaded." });
-      }
-      if (!timeframe || !isValidTimeframe(timeframe)) {
-        return res.status(400).json({ error: "Invalid or missing timeframe." });
-      }
+function describeLevels(levels) {
+  if (!Array.isArray(levels)) return [];
+  return levels.slice(0, 6).map((lvl) => {
+    const rej =
+      lvl && lvl.rejections != null
+        ? ` · ${lvl.rejections} rejection${lvl.rejections === 1 ? "" : "s"}`
+        : "";
+    return `${fmtNum(lvl?.low)} – ${fmtNum(lvl?.high)}${rej}`;
+  });
+}
 
-      const base64Image = file.buffer.toString("base64");
+function biasFromStructure(structure) {
+  const s = (structure || "").toLowerCase();
+  if (s.includes("up")) return "Bullish";
+  if (s.includes("down")) return "Bearish";
+  return "Neutral / Ranging";
+}
 
-      // Anthropic's direct API rejects any single image whose base64-encoded
-      // size exceeds 10MB, regardless of what MAX_UPLOAD_MB allows for the
-      // raw upload. Check this explicitly so a misconfigured limit fails
-      // with a clear message instead of an opaque error from the AI provider.
-      const ANTHROPIC_MAX_BASE64_BYTES = 10 * 1024 * 1024;
-      if (base64Image.length > ANTHROPIC_MAX_BASE64_BYTES) {
-        return res.status(413).json({
-          error: "Image is too large once encoded for the AI provider. Please upload a smaller or more compressed image."
-        });
-      }
-
-      const message = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 2000,
-        system: buildSystemPrompt(),
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: file.mimetype,
-                  data: base64Image
-                }
-              },
-              {
-                type: "text",
-                text: buildUserPrompt(timeframe)
-              }
-            ]
-          }
-        ]
-      });
-
-      const textBlock = message.content.find((b) => b.type === "text");
-      if (!textBlock) {
-        return res.status(502).json({ error: "The AI response did not contain analysis text." });
-      }
-
-      let analysis;
-      try {
-        const cleaned = textBlock.text
-          .trim()
-          .replace(/^```json\s*/i, "")
-          .replace(/^```\s*/i, "")
-          .replace(/```\s*$/i, "")
-          .trim();
-        try {
-          analysis = JSON.parse(cleaned);
-        } catch {
-          // Fallback: the model sometimes adds a stray sentence before/after
-          // the JSON despite instructions not to. Extract the outermost
-          // {...} block and retry once before giving up.
-          const start = cleaned.indexOf("{");
-          const end = cleaned.lastIndexOf("}");
-          if (start === -1 || end === -1 || end <= start) throw new Error("NO_JSON_FOUND");
-          analysis = JSON.parse(cleaned.slice(start, end + 1));
-        }
-        if (typeof analysis !== "object" || analysis === null || Array.isArray(analysis)) {
-          throw new Error("NOT_AN_OBJECT");
-        }
-      } catch (parseErr) {
-        console.error("Failed to parse model JSON:", parseErr, textBlock.text);
-        return res.status(502).json({
-          error: "The AI response could not be parsed. Please try again.",
-          raw: textBlock.text
-        });
-      }
-
-      res.json({ analysis, timeframe, model: MODEL });
-    } catch (err) {
-      console.error("Analysis error:", err);
-      const status = err?.status || 500;
-      const message =
-        status === 401
-          ? "Server is misconfigured (invalid API key)."
-          : status === 429
-          ? "Rate limited by the AI provider. Please try again shortly."
-          : "Something went wrong while analyzing the chart.";
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: message });
-    }
+function computeRR(entry, stop, target) {
+  if (typeof entry !== "number" || typeof stop !== "number" || typeof target !== "number") {
+    return null;
   }
-);
+  const risk = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+  if (!risk) return null;
+  return `~1:${(reward / risk).toFixed(1)}`;
+}
+
+function conceptSummary(concepts) {
+  if (!concepts || typeof concepts !== "object") return "";
+  const parts = Object.entries(concepts)
+    .filter(([, v]) => v && v.found)
+    .map(([key, v]) => `${key.toUpperCase()} ×${v.found}`);
+  return parts.length ? `Detected: ${parts.join(", ")}.` : "";
+}
+
+function mapFxSynapseToAnalysis(fx) {
+  const plan = fx.plan || {};
+  const planOk = !!plan.ok;
+  const bias = planOk && plan.side
+    ? (String(plan.side).toLowerCase() === "buy" ? "Bullish" : "Bearish")
+    : biasFromStructure(fx.marketStructure);
+
+  const entries = planOk
+    ? [{
+        type: String(plan.side || "").toLowerCase() === "buy" ? "Long" : "Short",
+        entry_zone: fmtNum(plan.entry),
+        trigger: "Rule-based structure entry, calculated from live price bars.",
+        rationale: "Derived from detected market structure, levels and order flow — not a visual read of a screenshot."
+      }]
+    : [];
+
+  const targets = Array.isArray(plan.targets)
+    ? plan.targets.map((t) => ({ target: fmtNum(t), rationale: "" }))
+    : [];
+
+  const firstTarget = Array.isArray(plan.targets) && typeof plan.targets[0] === "number" ? plan.targets[0] : null;
+  const rr = planOk ? computeRR(plan.entry, plan.stop, firstTarget) : null;
+
+  const notesParts = [];
+  const cs = conceptSummary(fx.concepts);
+  if (cs) notesParts.push(cs);
+  if (typeof fx.bars === "number") notesParts.push(`Measured over the last ${fx.bars} bars.`);
+  if (!planOk) notesParts.push("No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting.");
+
+  const structureLabel = (fx.marketStructure || "range").replace(/^\w/, (c) => c.toUpperCase());
+
+  return {
+    pair_guess: fx.symbol || null,
+    market_bias: bias,
+    confidence: null,
+    bars: typeof fx.bars === "number" ? fx.bars : null,
+    market_structure: {
+      trend: `${structureLabel} market structure, measured directly from live price bars (no screenshot involved).`,
+      key_levels: describeLevels(fx.levels),
+      chart_pattern: null
+    },
+    potential_entries: entries,
+    stop_loss: {
+      suggestion: planOk ? fmtNum(plan.stop) : "—",
+      rationale: planOk ? "Calculated from the nearest invalidating structure." : ""
+    },
+    take_profit: targets,
+    risk_reward_estimate: rr,
+    invalidation: planOk
+      ? `Plan is invalidated if price closes back through ${fmtNum(plan.stop)}.`
+      : "No directional plan right now, so nothing to invalidate.",
+    notes: notesParts.join(" "),
+    disclaimer: "This is a rule-based technical read calculated from live price data, not financial advice. Always confirm with your own analysis and risk management.",
+    top_down: Array.isArray(fx.topDown)
+      ? fx.topDown.map((td) => ({
+          timeframe: td?.timeframe || "—",
+          bias: td?.bias || "—",
+          zone: td?.zone || "—"
+        }))
+      : []
+  };
+}
+
+app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
+  try {
+    const symbol = String(req.body.symbol || "").trim().toUpperCase();
+    const timeframe = String(req.body.timeframe || "").trim().toUpperCase();
+    const topDown = req.body.topDown !== false;
+
+    if (!isValidSymbol(symbol)) {
+      return res.status(400).json({ error: "Enter a valid symbol, e.g. EURUSD or XAUUSD." });
+    }
+    if (!isValidTimeframe(timeframe)) {
+      return res.status(400).json({ error: "Invalid or missing timeframe." });
+    }
+
+    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}/api/v1/chart`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${FXSYNAPSE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        symbol,
+        timeframe,
+        concepts: ["crt", "killzones", "vwap"],
+        top_down: topDown
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+
+    const rawBody = await fxRes.text();
+    let fxData;
+    try {
+      fxData = JSON.parse(rawBody);
+    } catch {
+      console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
+      return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
+    }
+
+    if (!fxRes.ok) {
+      console.error("FXSynapse error:", fxRes.status, fxData);
+      // Reply with our own HTTP status here, never the provider's. In
+      // particular, never send back a bare 401: the browser treats a 401
+      // from this endpoint as "your login session was rejected" and signs
+      // you out (see the 401 handling in app.js). A bad or expired
+      // FXSYNAPSE_API_KEY is a server misconfiguration, not a user auth
+      // problem, and must not log the user out.
+      const message =
+        fxRes.status === 401 || fxRes.status === 403
+          ? "Server is misconfigured (invalid FXSynapse API key)."
+          : fxRes.status === 429
+          ? "Rate limited by the analysis provider. Please try again shortly."
+          : fxData?.error || "Something went wrong while analyzing that symbol.";
+      return res.status(502).json({ error: message });
+    }
+
+    const analysis = mapFxSynapseToAnalysis(fxData);
+    res.json({ analysis, timeframe, symbol });
+  } catch (err) {
+    console.error("Analysis error:", err);
+    res.status(502).json({ error: "Something went wrong while analyzing that symbol. Please try again." });
+  }
+});
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.
 app.use("/api", (req, res) => res.status(404).json({ error: "Not found." }));
@@ -381,5 +404,5 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`Vertex Chart Scanner running at http://localhost:${PORT}`);
-  console.log(`Using model: ${MODEL}`);
+  console.log(`Using provider: FXSynapse AI (${FXSYNAPSE_BASE_URL})`);
 });

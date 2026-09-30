@@ -1,7 +1,7 @@
 {
   "name": "forex-chart-scanner-server",
   "version": "1.0.0",
-  "description": "Backend for Vertex Chart Scanner - analyzes uploaded chart screenshots with Claude vision and returns structured trading analysis.",
+  "description": "Backend for Vertex Chart Scanner - analyzes a symbol and timeframe with the FXSynapse AI API and returns a structured trading analysis.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -9,11 +9,9 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "express-rate-limit": "^7.4.0",
-    "multer": "^1.4.5-lts.1"
+    "express-rate-limit": "^7.4.0"
   }
 }

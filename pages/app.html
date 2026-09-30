@@ -64,67 +64,76 @@
   <section class="hero" aria-label="Upload and configure">
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
-      AI structure reader · 9 timeframes
+      Live structure reader · 9 timeframes
     </p>
-    <h1 class="hero__title">Upload your chart</h1>
-    <p class="hero__lede">Bias, structure, key levels and trade zones,<br class="br-desktop" /> read from a single screenshot.</p>
+    <h1 class="hero__title">Scan any pair</h1>
+    <p class="hero__lede">Bias, structure, key levels and trade zones,<br class="br-desktop" /> measured from live price data. No screenshot needed.</p>
 
     <p class="setup-notice" id="setup-notice" hidden>Accounts are not connected yet, so scanning is switched off. Add the Supabase keys to <code>server/.env</code> and restart. See SUPABASE_SETUP.md.</p>
 
     <form id="scan-form" class="scanform" novalidate>
 
-      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload chart screenshot" aria-describedby="dropzone-hint">
-        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" hidden />
-
-        <span class="corner corner--tl" aria-hidden="true"></span>
-        <span class="corner corner--tr" aria-hidden="true"></span>
-        <span class="corner corner--bl" aria-hidden="true"></span>
-        <span class="corner corner--br" aria-hidden="true"></span>
-
-        <div id="dropzone-empty" class="dropzone__empty">
-          <span class="dropzone__icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M4 16.5v1.5A2 2 0 0 0 6 20h12a2 2 0 0 0 2-2v-1.5M7.5 8.5 12 4l4.5 4.5M12 4v12" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="dropzone__text">Drop your chart to scan</span>
-          <span id="dropzone-hint" class="dropzone__hint">or tap to browse · PNG · JPG · WebP · 7MB</span>
-        </div>
-
-        <div id="dropzone-preview" class="dropzone__preview" hidden>
-          <img id="preview-img" alt="Uploaded chart preview" />
-          <button type="button" id="remove-file" class="dropzone__remove" aria-label="Remove image">Replace</button>
-        </div>
+      <div class="symbolfield">
+        <label class="symbolfield__label" for="symbol-input">Symbol</label>
+        <input
+          type="text"
+          id="symbol-input"
+          class="symbolfield__input"
+          placeholder="e.g. EURUSD, XAUUSD, GBPJPY"
+          list="symbol-options"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          maxlength="10"
+        />
+        <datalist id="symbol-options">
+          <option value="EURUSD"></option>
+          <option value="GBPUSD"></option>
+          <option value="USDJPY"></option>
+          <option value="USDCHF"></option>
+          <option value="AUDUSD"></option>
+          <option value="USDCAD"></option>
+          <option value="NZDUSD"></option>
+          <option value="EURJPY"></option>
+          <option value="GBPJPY"></option>
+          <option value="XAUUSD"></option>
+          <option value="XAGUSD"></option>
+        </datalist>
       </div>
 
       <fieldset class="tf">
         <legend class="tf__legend">Timeframe</legend>
         <div class="tf__chips" id="tf-chips">
-          <label class="chip-tf"><input type="radio" name="tf" value="1m" /><span>1m</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="5m" /><span>5m</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="15m" /><span>15m</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="30m" /><span>30m</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="1H" /><span>1H</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="4H" /><span>4H</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="1D" /><span>1D</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="1W" /><span>1W</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="1M" /><span>1M</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="M1" /><span>M1</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="M5" /><span>M5</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="M15" /><span>M15</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="M30" /><span>M30</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="H1" /><span>H1</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="H4" /><span>H4</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="D1" /><span>D1</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="W1" /><span>W1</span></label>
+          <label class="chip-tf"><input type="radio" name="tf" value="MN1" /><span>MN</span></label>
         </div>
 
         <!-- The chips drive this select. app.js reads its value, so it stays in the DOM. -->
         <select id="timeframe-select" class="visually-hidden" tabindex="-1" aria-hidden="true">
           <option value="" selected>Select timeframe</option>
-          <option value="1m">1 minute</option>
-          <option value="5m">5 minutes</option>
-          <option value="15m">15 minutes</option>
-          <option value="30m">30 minutes</option>
-          <option value="1H">1 hour</option>
-          <option value="4H">4 hours</option>
-          <option value="1D">1 day</option>
-          <option value="1W">1 week</option>
-          <option value="1M">1 month</option>
+          <option value="M1">1 minute</option>
+          <option value="M5">5 minutes</option>
+          <option value="M15">15 minutes</option>
+          <option value="M30">30 minutes</option>
+          <option value="H1">1 hour</option>
+          <option value="H4">4 hours</option>
+          <option value="D1">1 day</option>
+          <option value="W1">1 week</option>
+          <option value="MN1">1 month</option>
         </select>
       </fieldset>
+
+      <label class="topdown-toggle">
+        <input type="checkbox" id="topdown-checkbox" checked />
+        <span>Include higher-timeframe bias (top-down)</span>
+      </label>
 
       <button type="submit" id="scan-btn" class="scan-btn">
         <span class="scan-btn__label">Scan chart</span>
@@ -134,8 +143,8 @@
       <p id="form-error" class="form-error" role="alert" hidden></p>
     </form>
 
-    <p class="platforms">MT4 · MT5 · TradingView · cTrader</p>
-    <p class="disclaimer-note disclaimer-note--hero">Technical, AI generated analysis of the image only. Not financial advice.</p>
+    <p class="platforms">EURUSD · GBPUSD · XAUUSD · and more</p>
+    <p class="disclaimer-note disclaimer-note--hero">Rule-based technical read of live price data. Not financial advice.</p>
   </section>
 
   <!-- ============ OUTPUT ============ -->
@@ -144,12 +153,34 @@
     <div id="state-empty" class="state state--empty"></div>
 
     <div id="state-loading" class="state state--loading" hidden>
-      <div class="scanner-anim" aria-hidden="true"><span></span></div>
-      <p class="state-loading__text">Reading price structure…</p>
-      <div class="loading-rows" aria-hidden="true">
-        <div class="loading-row"></div>
-        <div class="loading-row"></div>
-        <div class="loading-row short"></div>
+      <div class="scan-hud">
+        <div class="scan-hud__scrim" aria-hidden="true"></div>
+        <div class="scan-hud__grid" aria-hidden="true"></div>
+        <span class="scan-hud__corner scan-hud__corner--tl" aria-hidden="true"></span>
+        <span class="scan-hud__corner scan-hud__corner--tr" aria-hidden="true"></span>
+        <span class="scan-hud__corner scan-hud__corner--bl" aria-hidden="true"></span>
+        <span class="scan-hud__corner scan-hud__corner--br" aria-hidden="true"></span>
+
+        <div class="scan-hud__center">
+          <div class="scan-hud__eye" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <p class="scan-hud__title">Analyzing</p>
+          <p class="scan-hud__status" id="scan-hud-status">Reading price structure…</p>
+        </div>
+
+        <div class="scan-hud__progress">
+          <div class="scan-hud__progress-label">
+            <span id="scan-hud-progress-text">Mapping market structure</span>
+            <span id="scan-hud-progress-pct">0%</span>
+          </div>
+          <div class="scan-hud__progress-track">
+            <div class="scan-hud__progress-fill" id="scan-hud-progress-fill"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -161,7 +192,7 @@
           <div class="result__meta">
             <span class="result__tf" id="res-tf">—</span>
             <span class="result__sep" aria-hidden="true">·</span>
-            <span class="result__confidence-label">Confidence</span>
+            <span class="result__confidence-label">Bars</span>
             <span id="res-confidence" class="result__confidence-value">—</span>
           </div>
         </div>
@@ -207,6 +238,11 @@
         <section class="result-section result-section--wide" id="res-notes-wrap">
           <h2 class="result-section__title">Notes</h2>
           <p id="res-notes" class="result-section__body"></p>
+        </section>
+
+        <section class="result-section result-section--wide" id="res-topdown-wrap" hidden>
+          <h2 class="result-section__title">Top-down bias</h2>
+          <div id="res-topdown" class="topdown-list"></div>
         </section>
       </div>
 

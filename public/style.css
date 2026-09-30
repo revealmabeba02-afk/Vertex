@@ -479,6 +479,107 @@ body::after {
 .dropzone__remove:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ===========================================================
+   Symbol field
+   =========================================================== */
+.symbolfield {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.symbolfield__label {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.symbolfield__input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.symbolfield__input::placeholder {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-faint);
+}
+
+.symbolfield__input:focus {
+  border-color: var(--bull);
+}
+
+/* ===========================================================
+   Top-down toggle
+   =========================================================== */
+.topdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13.5px;
+  color: var(--text-dim, var(--text-faint));
+  cursor: pointer;
+  user-select: none;
+}
+
+.topdown-toggle input {
+  accent-color: var(--bull);
+  width: 16px;
+  height: 16px;
+}
+
+/* ===========================================================
+   Top-down bias table (result screen)
+   =========================================================== */
+.topdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.topdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.topdown-row__tf {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  min-width: 36px;
+}
+
+.topdown-row__bias {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.topdown-row__bias--bullish { color: var(--bull); }
+.topdown-row__bias--bearish { color: var(--bear, #E5484D); }
+
+.topdown-row__zone {
+  color: var(--text-faint);
+  text-transform: capitalize;
+}
+
+/* ===========================================================
    Timeframe chips
    =========================================================== */
 .tf {
@@ -633,65 +734,144 @@ body::after {
 .state--loading {
   min-height: 300px;
   display: flex;
+}
+
+/* ---- Scan HUD: the uploaded chart, blurred, behind a scanning readout ---- */
+.scan-hud {
+  position: relative;
+  width: 100%;
+  min-height: 340px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 22px;
 }
 
-.scanner-anim {
-  position: relative;
-  width: 120px;
-  height: 80px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  overflow: hidden;
-  background:
-    linear-gradient(color-mix(in srgb, var(--text) 5%, transparent) 1px, transparent 1px) 0 0 / 100% 16px,
-    var(--panel);
-}
-
-.scanner-anim span {
+.scan-hud__bg {
   position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent) 55%, transparent);
-  animation: sweep 1.6s ease-in-out infinite alternate;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(22px) saturate(1.15) brightness(0.55);
+  transform: scale(1.15); /* hides the blurred edge fringe */
 }
 
-@keyframes sweep {
-  from { top: 6%; }
-  to   { top: 92%; }
+.scan-hud__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, var(--bg) 55%, transparent) 55%, var(--bg) 100%);
 }
 
-.loading-rows {
-  width: min(320px, 80%);
+.scan-hud__grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--bull) 55%, transparent) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+  opacity: 0.35;
+  animation: hud-grid-drift 6s linear infinite;
+}
+
+@keyframes hud-grid-drift {
+  from { background-position: 0 0; }
+  to   { background-position: 0 -40px; }
+}
+
+.scan-hud__corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--bull) 70%, transparent);
+  opacity: 0.8;
+}
+.scan-hud__corner--tl { top: 14px; left: 14px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+.scan-hud__corner--tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; border-top-right-radius: 6px; }
+.scan-hud__corner--bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; border-bottom-left-radius: 6px; }
+.scan-hud__corner--br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+
+.scan-hud__center {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 10px;
+  text-align: center;
 }
 
-.loading-row {
-  height: 10px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, var(--panel-alt) 25%, var(--border) 37%, var(--panel-alt) 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
+.scan-hud__eye {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: var(--bull);
+  border: 1px solid color-mix(in srgb, var(--bull) 45%, transparent);
+  background: color-mix(in srgb, var(--bull) 12%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 45%, transparent);
+  animation: hud-eye-pulse 1.8s ease-out infinite;
 }
-.loading-row.short { width: 60%; }
 
-@keyframes shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
+@keyframes hud-eye-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 14px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-.state-loading__text {
+.scan-hud__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.scan-hud__status {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-dim);
+  min-height: 1.2em;
+}
+
+.scan-hud__progress {
+  position: relative;
+  width: min(360px, 84%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-hud__progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+#scan-hud-progress-pct { color: var(--bull); font-weight: 600; }
+
+.scan-hud__progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-soft);
+  overflow: hidden;
+}
+
+.scan-hud__progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--bull), var(--accent));
+  transition: width 0.4s ease;
 }
 
 .state--error {

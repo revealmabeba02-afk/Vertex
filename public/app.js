@@ -63,12 +63,8 @@
   document.getElementById("logout-btn").addEventListener("click", () => Auth.signOut());
 
   const form = document.getElementById("scan-form");
-  const fileInput = document.getElementById("file-input");
-  const dropzone = document.getElementById("dropzone");
-  const dropzoneEmpty = document.getElementById("dropzone-empty");
-  const dropzonePreview = document.getElementById("dropzone-preview");
-  const previewImg = document.getElementById("preview-img");
-  const removeFileBtn = document.getElementById("remove-file");
+  const symbolInput = document.getElementById("symbol-input");
+  const topdownCheckbox = document.getElementById("topdown-checkbox");
   const timeframeSelect = document.getElementById("timeframe-select");
   const scanBtn = document.getElementById("scan-btn");
   const formError = document.getElementById("form-error");
@@ -81,12 +77,15 @@
   const retryBtn = document.getElementById("retry-btn");
   const scanAgainBtn = document.getElementById("scan-again-btn");
 
+  const scanHudStatus = document.getElementById("scan-hud-status");
+  const scanHudProgressText = document.getElementById("scan-hud-progress-text");
+  const scanHudProgressPct = document.getElementById("scan-hud-progress-pct");
+  const scanHudProgressFill = document.getElementById("scan-hud-progress-fill");
+
   const outputPanel = document.getElementById("output");
   const tfRadios = document.querySelectorAll('input[name="tf"]');
   const statusEl = document.getElementById("status");
   const statusText = document.getElementById("status-text");
-
-  const MAX_BYTES = 7 * 1024 * 1024;
 
   // --------------------------------------------------------------
   // Timeframe chips drive the (visually hidden) select, which is what the
@@ -137,76 +136,28 @@
     .then((r) => (r.ok ? r.json() : Promise.reject()))
     .then(() => { statusEl.dataset.state = "online"; statusText.textContent = "Online"; })
     .catch(() => { statusEl.dataset.state = "offline"; statusText.textContent = "Offline"; });
-  let selectedFile = null;
 
   // --------------------------------------------------------------
-  // File selection (click, drag/drop)
+  // Symbol field: uppercase as the user types, so "eurusd" and "EURUSD"
+  // both work without a validation nag while typing.
   // --------------------------------------------------------------
-  dropzone.addEventListener("click", () => fileInput.click());
-  dropzone.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      fileInput.click();
-    }
-  });
-
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files && fileInput.files[0]) {
-      setFile(fileInput.files[0]);
-    }
-  });
-
-  ["dragenter", "dragover"].forEach((evt) => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.add("is-dragover");
-    });
-  });
-
-  ["dragleave", "drop"].forEach((evt) => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("is-dragover");
-    });
-  });
-
-  dropzone.addEventListener("drop", (e) => {
-    const file = e.dataTransfer?.files?.[0];
-    if (file) setFile(file);
-  });
-
-  removeFileBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    clearFile();
-    fileInput.click();
-  });
-
-  function setFile(file) {
+  symbolInput.addEventListener("input", () => {
+    const upper = symbolInput.value.toUpperCase();
+    if (upper !== symbolInput.value) symbolInput.value = upper;
     clearFormError();
+  });
 
-    const acceptedTypes = ["image/png", "image/jpeg", "image/webp"];
-    if (!acceptedTypes.includes(file.type)) {
-      showFormError("Please upload a PNG, JPEG, or WebP image.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      showFormError("Image is too large. Max size is 7MB.");
-      return;
-    }
-
-    selectedFile = file;
-    const url = URL.createObjectURL(file);
-    previewImg.src = url;
-    dropzoneEmpty.hidden = true;
-    dropzonePreview.hidden = false;
+  function getSymbol() {
+    return symbolInput.value.trim().toUpperCase();
   }
 
-  function clearFile() {
-    selectedFile = null;
-    fileInput.value = "";
-    previewImg.src = "";
-    dropzoneEmpty.hidden = false;
-    dropzonePreview.hidden = true;
+  function isValidSymbol(sym) {
+    return /^[A-Z0-9]{3,10}$/.test(sym);
+  }
+
+  function clearForm() {
+    symbolInput.value = "";
+    clearTimeframe();
   }
 
   function showFormError(msg) {
@@ -226,57 +177,101 @@
     e.preventDefault();
     clearFormError();
 
-    if (!selectedFile) {
-      showFormError("Please upload a chart screenshot first.");
+    const symbol = getSymbol();
+    if (!isValidSymbol(symbol)) {
+      showFormError("Enter a valid symbol, e.g. EURUSD or XAUUSD.");
       return;
     }
     if (!timeframeSelect.value) {
-      showFormError("Please select the chart's timeframe.");
+      showFormError("Please select a timeframe.");
       return;
     }
 
-    await runScan(selectedFile, timeframeSelect.value);
+    await runScan(symbol, timeframeSelect.value, topdownCheckbox.checked);
   });
 
   retryBtn.addEventListener("click", () => {
-    if (selectedFile && timeframeSelect.value) {
-      runScan(selectedFile, timeframeSelect.value);
+    const symbol = getSymbol();
+    if (isValidSymbol(symbol) && timeframeSelect.value) {
+      runScan(symbol, timeframeSelect.value, topdownCheckbox.checked);
     } else {
       showState("empty");
     }
   });
 
   scanAgainBtn.addEventListener("click", () => {
-    clearFile();
-    clearTimeframe();
+    clearForm();
     showState("empty");
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  async function runScan(file, timeframe) {
+  // Stages the loading HUD cycles through while a scan is running. There is
+  // no real progress signal from the server (a single API call, not a
+  // stream), so this is a paced simulation: it eases up to ~92% and holds
+  // there, then the caller jumps it to 100% the moment a real response
+  // lands. Text and percentage change together so the bar never looks
+  // stuck on a stale label.
+  const HUD_STAGES = [
+    { until: 30, status: "Reading price structure…", label: "Mapping market structure" },
+    { until: 58, status: "Mapping structure & liquidity…", label: "Scanning liquidity & key levels" },
+    { until: 80, status: "Weighing bias and momentum…", label: "Checking bias & momentum" },
+    { until: 92, status: "Locating entries and targets…", label: "Building trade zones" }
+  ];
+  let hudTimer = null;
+
+  function startScanHud() {
+    let pct = 0;
+    const render = () => {
+      const stage = HUD_STAGES.find((s) => pct < s.until) || HUD_STAGES[HUD_STAGES.length - 1];
+      scanHudStatus.textContent = stage.status;
+      scanHudProgressText.textContent = stage.label;
+      scanHudProgressPct.textContent = Math.round(pct) + "%";
+      scanHudProgressFill.style.width = pct + "%";
+    };
+    render();
+    hudTimer = setInterval(() => {
+      const cap = 92;
+      if (pct >= cap) return;
+      // Slows down as it approaches the cap so it never visibly stalls.
+      pct = Math.min(cap, pct + Math.max(0.6, (cap - pct) * 0.06));
+      render();
+    }, 110);
+  }
+
+  function finishScanHud(success) {
+    if (hudTimer) {
+      clearInterval(hudTimer);
+      hudTimer = null;
+    }
+    if (success) {
+      scanHudProgressPct.textContent = "100%";
+      scanHudProgressFill.style.width = "100%";
+    }
+  }
+
+  async function runScan(symbol, timeframe, topDown) {
     scanInFlight = true;
     setLoadingUI(true);
     showState("loading");
-
-    const formData = new FormData();
-    formData.append("chart", file);
-    formData.append("timeframe", timeframe);
+    startScanHud();
 
     try {
       // Ask for the session at scan time rather than caching it: supabase-js
       // refreshes the access token when it is close to expiring.
       const session = await Auth.getSession();
-      const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const headers = { "Content-Type": "application/json" };
+      if (session) headers.Authorization = `Bearer ${session.access_token}`;
 
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers,
-        body: formData
+        body: JSON.stringify({ symbol, timeframe, topDown })
       });
 
       if (res.status === 401) {
         // The server did not accept the token. Drop it here too, otherwise the
         // log in page would see a stored session and send the user straight back.
+        finishScanHud(false);
         await Auth.clearSession();
         location.replace("/login?next=/app");
         return;
@@ -302,9 +297,11 @@
         throw new Error(data.error || "Something went wrong while analyzing the chart.");
       }
 
+      finishScanHud(true);
       renderResult(data.analysis, data.timeframe);
       showState("result");
     } catch (err) {
+      finishScanHud(false);
       errorText.textContent = err.message || "Something went wrong. Please try again.";
       showState("error");
     } finally {
@@ -336,23 +333,23 @@
   // Render
   // --------------------------------------------------------------
   const TF_LABELS = {
-    "1m": "1 minute", "5m": "5 minutes", "15m": "15 minutes", "30m": "30 minutes",
-    "1H": "1 hour", "4H": "4 hours",
-    "1D": "1 day", "1W": "1 week", "1M": "1 month"
+    M1: "1 minute", M5: "5 minutes", M15: "15 minutes", M30: "30 minutes",
+    H1: "1 hour", H4: "4 hours",
+    D1: "1 day", W1: "1 week", MN1: "1 month"
   };
 
   function renderResult(a, timeframe) {
-    document.getElementById("res-pair").textContent = a.pair_guess || "Pair unclear";
+    document.getElementById("res-pair").textContent = a.pair_guess || "Symbol unclear";
     document.getElementById("res-tf").textContent = TF_LABELS[timeframe] || timeframe;
 
     const biasEl = document.getElementById("res-bias");
     biasEl.textContent = a.market_bias || "Neutral / Ranging";
     biasEl.className = "bias-tag " + biasClass(a.market_bias);
 
-    document.getElementById("res-confidence").textContent = a.confidence || "—";
+    document.getElementById("res-confidence").textContent = a.bars ? String(a.bars) : "—";
 
     const structure = a.market_structure || {};
-    document.getElementById("res-trend").textContent = structure.trend || "Not enough visible detail to describe trend.";
+    document.getElementById("res-trend").textContent = structure.trend || "Not enough data to describe trend.";
 
     const patternWrap = document.getElementById("res-pattern-wrap");
     if (structure.chart_pattern) {
@@ -419,7 +416,41 @@
     }
 
     document.getElementById("res-disclaimer").textContent =
-      a.disclaimer || "This is an AI-generated technical read of a chart image, not financial advice. Always confirm with your own analysis and risk management.";
+      a.disclaimer || "This is a rule-based technical read of live price data, not financial advice. Always confirm with your own analysis and risk management.";
+
+    const topdownWrap = document.getElementById("res-topdown-wrap");
+    const topdownEl = document.getElementById("res-topdown");
+    topdownEl.innerHTML = "";
+    const topdown = Array.isArray(a.top_down) ? a.top_down : [];
+    if (topdown.length === 0) {
+      topdownWrap.hidden = true;
+    } else {
+      topdown.forEach((td) => {
+        const row = document.createElement("div");
+        row.className = "topdown-row";
+
+        const tf = document.createElement("span");
+        tf.className = "topdown-row__tf";
+        tf.textContent = td.timeframe || "—";
+
+        const bias = document.createElement("span");
+        const biasLower = (td.bias || "").toLowerCase();
+        bias.className = "topdown-row__bias" +
+          (biasLower.includes("bull") ? " topdown-row__bias--bullish"
+            : biasLower.includes("bear") ? " topdown-row__bias--bearish" : "");
+        bias.textContent = td.bias || "—";
+
+        const zone = document.createElement("span");
+        zone.className = "topdown-row__zone";
+        zone.textContent = td.zone || "";
+
+        row.appendChild(tf);
+        row.appendChild(bias);
+        row.appendChild(zone);
+        topdownEl.appendChild(row);
+      });
+      topdownWrap.hidden = false;
+    }
   }
 
   function buildEntryCard(entry) {
