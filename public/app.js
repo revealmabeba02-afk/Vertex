@@ -121,12 +121,13 @@
   // --------------------------------------------------------------
   const views = {
     scan: document.getElementById("view-scan"),
-    how: document.getElementById("view-how")
+    how: document.getElementById("view-how"),
+    settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
 
   function applyView() {
-    const name = location.hash === "#how" ? "how" : "scan";
+    const name = location.hash === "#how" ? "how" : location.hash === "#settings" ? "settings" : "scan";
     Object.entries(views).forEach(([key, el]) => { el.hidden = key !== name; });
     tabs.forEach((tab) => {
       const active = tab.dataset.view === name;
@@ -138,6 +139,32 @@
 
   window.addEventListener("hashchange", applyView);
   applyView();
+
+  // --------------------------------------------------------------
+  // Theme: light/dark. The actual theme is applied before paint by an
+  // inline script in app.html (reads localStorage directly) so the page
+  // never flashes the wrong mode; this just keeps the switch and storage
+  // in sync with it.
+  // --------------------------------------------------------------
+  const THEME_KEY = "vertex-theme";
+  const themeToggle = document.getElementById("theme-toggle");
+
+  function setTheme(mode) {
+    if (mode === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    themeToggle.setAttribute("aria-checked", String(mode === "light"));
+    try { localStorage.setItem(THEME_KEY, mode); } catch {}
+  }
+
+  setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+
+  themeToggle.addEventListener("click", () => {
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    setTheme(isLight ? "dark" : "light");
+  });
 
   // --------------------------------------------------------------
   // Header status: a real check against the server, not decoration.
