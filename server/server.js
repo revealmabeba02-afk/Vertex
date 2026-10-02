@@ -10,18 +10,26 @@ const envLoad = require("dotenv").config({ path: ENV_PATH });
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
 
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
-// FXSynapse AI provides the actual chart analysis: given a symbol and a
-// timeframe, it measures market structure, levels and a trade plan directly
-// from live price bars (no screenshot involved). Get a key from the API
-// Access section of https://fxsynapseai.com/dashboard.
+// FXSynapse AI provides the actual chart analysis. The confirmed/documented
+// endpoint analyzes a symbol+timeframe from live price bars (no screenshot).
+// There is also an IMAGE-upload endpoint that showed up in FXSynapse's
+// dashboard "Quick Start" box, but it has never been confirmed by FXSynapse
+// (it even used a different domain, fxsynapse.com vs fxsynapseai.com). We are
+// going with it here because that's what the UI needs, but treat its
+// response shape as a best guess until it's confirmed — and note that
+// nothing will actually call through successfully until the FXSynapse
+// account has an active API plan (it currently does not).
 const FXSYNAPSE_API_KEY = (process.env.FXSYNAPSE_API_KEY || "").trim();
 const FXSYNAPSE_BASE_URL = (process.env.FXSYNAPSE_BASE_URL || "https://fxsynapseai.com")
   .trim()
   .replace(/\/+$/, "");
+// Override if your brother confirms a different path/domain for the image endpoint.
+const FXSYNAPSE_IMAGE_PATH = (process.env.FXSYNAPSE_IMAGE_PATH || "/api/v1/analyze").trim();
 
 const VALID_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
 const TIMEFRAME_LABELS = {
@@ -32,11 +40,18 @@ const TIMEFRAME_LABELS = {
 function isValidTimeframe(tf) {
   return VALID_TIMEFRAMES.includes(tf);
 }
-// Symbols are plain alphanumeric tickers (EURUSD, XAUUSD, ...). This just
-// rejects obvious junk before it ever reaches FXSynapse's API.
-function isValidSymbol(sym) {
-  return /^[A-Z0-9]{3,10}$/.test(sym);
-}
+
+const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 7 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!ACCEPTED_MIME_TYPES.includes(file.mimetype)) {
+      return cb(new Error("Please upload a PNG, JPG or WEBP image."));
+    }
+    cb(null, true);
+  }
+});
 
 // Supabase handles accounts. The URL and anon key are public by design (they
 // ship to every browser) and access is enforced by Supabase itself. The
@@ -329,66 +344,73 @@ function mapFxSynapseToAnalysis(fx) {
   };
 }
 
-app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
-  try {
-    const symbol = String(req.body.symbol || "").trim().toUpperCase();
+app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
+  upload.single("image")(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      const msg =
+        uploadErr.code === "LIMIT_FILE_SIZE"
+          ? "That image is too large. Keep it under 7MB."
+          : uploadErr.message || "Could not read the uploaded image.";
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Upload a chart screenshot first." });
+    }
+
     const timeframe = String(req.body.timeframe || "").trim().toUpperCase();
-    const topDown = req.body.topDown !== false;
-
-    if (!isValidSymbol(symbol)) {
-      return res.status(400).json({ error: "Enter a valid symbol, e.g. EURUSD or XAUUSD." });
-    }
-    if (!isValidTimeframe(timeframe)) {
-      return res.status(400).json({ error: "Invalid or missing timeframe." });
+    if (timeframe && !isValidTimeframe(timeframe)) {
+      return res.status(400).json({ error: "Invalid timeframe." });
     }
 
-    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}/api/v1/chart`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${FXSYNAPSE_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        symbol,
-        timeframe,
-        concepts: ["crt", "killzones", "vwap"],
-        top_down: topDown
-      }),
-      signal: AbortSignal.timeout(20000)
-    });
-
-    const rawBody = await fxRes.text();
-    let fxData;
     try {
-      fxData = JSON.parse(rawBody);
-    } catch {
-      console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
-      return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
-    }
+      const form = new FormData();
+      form.append(
+        "image",
+        new Blob([req.file.buffer], { type: req.file.mimetype }),
+        req.file.originalname || "chart.png"
+      );
+      if (timeframe) form.append("timeframe", timeframe);
 
-    if (!fxRes.ok) {
-      console.error("FXSynapse error:", fxRes.status, fxData);
-      // Reply with our own HTTP status here, never the provider's. In
-      // particular, never send back a bare 401: the browser treats a 401
-      // from this endpoint as "your login session was rejected" and signs
-      // you out (see the 401 handling in app.js). A bad or expired
-      // FXSYNAPSE_API_KEY is a server misconfiguration, not a user auth
-      // problem, and must not log the user out.
-      const message =
-        fxRes.status === 401 || fxRes.status === 403
-          ? "Server is misconfigured (invalid FXSynapse API key)."
-          : fxRes.status === 429
-          ? "Rate limited by the analysis provider. Please try again shortly."
-          : fxData?.error || "Something went wrong while analyzing that symbol.";
-      return res.status(502).json({ error: message });
-    }
+      const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_IMAGE_PATH}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${FXSYNAPSE_API_KEY}` },
+        body: form,
+        signal: AbortSignal.timeout(30000)
+      });
 
-    const analysis = mapFxSynapseToAnalysis(fxData);
-    res.json({ analysis, timeframe, symbol });
-  } catch (err) {
-    console.error("Analysis error:", err);
-    res.status(502).json({ error: "Something went wrong while analyzing that symbol. Please try again." });
-  }
+      const rawBody = await fxRes.text();
+      let fxData;
+      try {
+        fxData = JSON.parse(rawBody);
+      } catch {
+        console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
+        return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
+      }
+
+      if (!fxRes.ok) {
+        console.error("FXSynapse error:", fxRes.status, fxData);
+        // Reply with our own HTTP status here, never the provider's. In
+        // particular, never send back a bare 401: the browser treats a 401
+        // from this endpoint as "your login session was rejected" and signs
+        // you out (see the 401 handling in app.js). A bad or expired
+        // FXSYNAPSE_API_KEY, or no active API plan, is a server-side/provider
+        // problem, not a user auth problem, and must not log the user out.
+        const message =
+          fxRes.status === 401 || fxRes.status === 403
+            ? "Analysis provider rejected the request (no active API plan or invalid key)."
+            : fxRes.status === 429
+            ? "Rate limited by the analysis provider. Please try again shortly."
+            : fxData?.error || "Something went wrong while analyzing that chart.";
+        return res.status(502).json({ error: message });
+      }
+
+      const analysis = mapFxSynapseToAnalysis(fxData);
+      res.json({ analysis, timeframe: timeframe || null });
+    } catch (err) {
+      console.error("Analysis error:", err);
+      res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
+    }
+  });
 });
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.

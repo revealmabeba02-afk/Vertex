@@ -64,45 +64,36 @@
   <section class="hero" aria-label="Upload and configure">
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
-      Live structure reader · 9 timeframes
+      AI-powered analysis
     </p>
-    <h1 class="hero__title">Scan any pair</h1>
-    <p class="hero__lede">Bias, structure, key levels and trade zones,<br class="br-desktop" /> measured from live price data. No screenshot needed.</p>
+    <h1 class="hero__title">Upload your chart</h1>
+    <p class="hero__lede">Annotated in about 30 seconds.</p>
 
     <p class="setup-notice" id="setup-notice" hidden>Accounts are not connected yet, so scanning is switched off. Add the Supabase keys to <code>server/.env</code> and restart. See SUPABASE_SETUP.md.</p>
 
     <form id="scan-form" class="scanform" novalidate>
 
-      <div class="symbolfield">
-        <label class="symbolfield__label" for="symbol-input">Symbol</label>
-        <input
-          type="text"
-          id="symbol-input"
-          class="symbolfield__input"
-          placeholder="e.g. EURUSD, XAUUSD, GBPJPY"
-          list="symbol-options"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          maxlength="10"
-        />
-        <datalist id="symbol-options">
-          <option value="EURUSD"></option>
-          <option value="GBPUSD"></option>
-          <option value="USDJPY"></option>
-          <option value="USDCHF"></option>
-          <option value="AUDUSD"></option>
-          <option value="USDCAD"></option>
-          <option value="NZDUSD"></option>
-          <option value="EURJPY"></option>
-          <option value="GBPJPY"></option>
-          <option value="XAUUSD"></option>
-          <option value="XAGUSD"></option>
-        </datalist>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload chart screenshot" aria-describedby="dropzone-hint">
+        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" hidden />
+        <span class="corner corner--tl" aria-hidden="true"></span>
+        <span class="corner corner--tr" aria-hidden="true"></span>
+        <span class="corner corner--bl" aria-hidden="true"></span>
+        <span class="corner corner--br" aria-hidden="true"></span>
+        <div id="dropzone-empty" class="dropzone__empty">
+          <span class="dropzone__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+          </span>
+          <span class="dropzone__text">Drop your chart to scan</span>
+          <span id="dropzone-hint" class="dropzone__hint">or tap to choose a chart · PNG · JPG · 7MB</span>
+        </div>
+        <div id="dropzone-preview" class="dropzone__preview" hidden>
+          <img id="preview-img" alt="Uploaded chart preview" />
+          <button type="button" id="remove-file" class="dropzone__remove" aria-label="Remove image">Replace</button>
+        </div>
       </div>
 
       <fieldset class="tf">
-        <legend class="tf__legend">Timeframe</legend>
+        <legend class="tf__legend">Timeframe (optional)</legend>
         <div class="tf__chips" id="tf-chips">
           <label class="chip-tf"><input type="radio" name="tf" value="M1" /><span>M1</span></label>
           <label class="chip-tf"><input type="radio" name="tf" value="M5" /><span>M5</span></label>
@@ -130,12 +121,7 @@
         </select>
       </fieldset>
 
-      <label class="topdown-toggle">
-        <input type="checkbox" id="topdown-checkbox" checked />
-        <span>Include higher-timeframe bias (top-down)</span>
-      </label>
-
-      <button type="submit" id="scan-btn" class="scan-btn">
+      <button type="submit" id="scan-btn" class="scan-btn" disabled>
         <span class="scan-btn__label">Scan chart</span>
         <span class="scan-btn__spinner" aria-hidden="true"></span>
       </button>
@@ -143,8 +129,8 @@
       <p id="form-error" class="form-error" role="alert" hidden></p>
     </form>
 
-    <p class="platforms">EURUSD · GBPUSD · XAUUSD · and more</p>
-    <p class="disclaimer-note disclaimer-note--hero">Rule-based technical read of live price data. Not financial advice.</p>
+    <p class="platforms">MT4 · MT5 · TradingView · cTrader</p>
+    <p class="disclaimer-note disclaimer-note--hero">Technical, AI generated analysis of the image only. Not financial advice.</p>
   </section>
 
   <!-- ============ OUTPUT ============ -->
@@ -154,6 +140,7 @@
 
     <div id="state-loading" class="state state--loading" hidden>
       <div class="scan-hud">
+        <img id="scan-hud-bg" class="scan-hud__bg" alt="" aria-hidden="true" />
         <div class="scan-hud__scrim" aria-hidden="true"></div>
         <div class="scan-hud__grid" aria-hidden="true"></div>
         <span class="scan-hud__corner scan-hud__corner--tl" aria-hidden="true"></span>

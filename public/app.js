@@ -63,11 +63,21 @@
   document.getElementById("logout-btn").addEventListener("click", () => Auth.signOut());
 
   const form = document.getElementById("scan-form");
-  const symbolInput = document.getElementById("symbol-input");
-  const topdownCheckbox = document.getElementById("topdown-checkbox");
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("file-input");
+  const dropzoneEmpty = document.getElementById("dropzone-empty");
+  const dropzonePreview = document.getElementById("dropzone-preview");
+  const previewImg = document.getElementById("preview-img");
+  const removeFileBtn = document.getElementById("remove-file");
   const timeframeSelect = document.getElementById("timeframe-select");
   const scanBtn = document.getElementById("scan-btn");
   const formError = document.getElementById("form-error");
+  const scanHudBg = document.getElementById("scan-hud-bg");
+
+  const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+  const MAX_BYTES = 7 * 1024 * 1024;
+  let currentFile = null;
+  let currentPreviewUrl = null;
 
   const stateEmpty = document.getElementById("state-empty");
   const stateLoading = document.getElementById("state-loading");
@@ -138,25 +148,78 @@
     .catch(() => { statusEl.dataset.state = "offline"; statusText.textContent = "Offline"; });
 
   // --------------------------------------------------------------
-  // Symbol field: uppercase as the user types, so "eurusd" and "EURUSD"
-  // both work without a validation nag while typing.
+  // Dropzone: click to choose, drag & drop, preview, remove.
   // --------------------------------------------------------------
-  symbolInput.addEventListener("input", () => {
-    const upper = symbolInput.value.toUpperCase();
-    if (upper !== symbolInput.value) symbolInput.value = upper;
+  function setFile(file) {
+    if (!file) return;
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      showFormError("Please use a PNG, JPG or WEBP image.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      showFormError("That image is too large. Keep it under 7MB.");
+      return;
+    }
     clearFormError();
+    currentFile = file;
+
+    if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+    currentPreviewUrl = URL.createObjectURL(file);
+    previewImg.src = currentPreviewUrl;
+
+    dropzoneEmpty.hidden = true;
+    dropzonePreview.hidden = false;
+    scanBtn.disabled = false;
+  }
+
+  function clearFile() {
+    currentFile = null;
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+      currentPreviewUrl = null;
+    }
+    previewImg.src = "";
+    fileInput.value = "";
+    dropzoneEmpty.hidden = false;
+    dropzonePreview.hidden = true;
+    scanBtn.disabled = true;
+  }
+
+  dropzone.addEventListener("click", () => {
+    if (!currentFile) fileInput.click();
+  });
+  dropzone.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && !currentFile) {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files && fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+  removeFileBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearFile();
   });
 
-  function getSymbol() {
-    return symbolInput.value.trim().toUpperCase();
-  }
-
-  function isValidSymbol(sym) {
-    return /^[A-Z0-9]{3,10}$/.test(sym);
-  }
+  ["dragenter", "dragover"].forEach((evt) => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+  });
+  ["dragleave", "dragend"].forEach((evt) => {
+    dropzone.addEventListener(evt, () => dropzone.classList.remove("is-dragover"));
+  });
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("is-dragover");
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
 
   function clearForm() {
-    symbolInput.value = "";
+    clearFile();
     clearTimeframe();
   }
 
@@ -177,23 +240,17 @@
     e.preventDefault();
     clearFormError();
 
-    const symbol = getSymbol();
-    if (!isValidSymbol(symbol)) {
-      showFormError("Enter a valid symbol, e.g. EURUSD or XAUUSD.");
-      return;
-    }
-    if (!timeframeSelect.value) {
-      showFormError("Please select a timeframe.");
+    if (!currentFile) {
+      showFormError("Upload a chart screenshot first.");
       return;
     }
 
-    await runScan(symbol, timeframeSelect.value, topdownCheckbox.checked);
+    await runScan(currentFile, timeframeSelect.value);
   });
 
   retryBtn.addEventListener("click", () => {
-    const symbol = getSymbol();
-    if (isValidSymbol(symbol) && timeframeSelect.value) {
-      runScan(symbol, timeframeSelect.value, topdownCheckbox.checked);
+    if (currentFile) {
+      runScan(currentFile, timeframeSelect.value);
     } else {
       showState("empty");
     }
@@ -249,9 +306,10 @@
     }
   }
 
-  async function runScan(symbol, timeframe, topDown) {
+  async function runScan(file, timeframe) {
     scanInFlight = true;
     setLoadingUI(true);
+    if (scanHudBg) scanHudBg.src = currentPreviewUrl || "";
     showState("loading");
     startScanHud();
 
@@ -259,13 +317,17 @@
       // Ask for the session at scan time rather than caching it: supabase-js
       // refreshes the access token when it is close to expiring.
       const session = await Auth.getSession();
-      const headers = { "Content-Type": "application/json" };
+      const headers = {};
       if (session) headers.Authorization = `Bearer ${session.access_token}`;
+
+      const body = new FormData();
+      body.append("image", file);
+      if (timeframe) body.append("timeframe", timeframe);
 
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers,
-        body: JSON.stringify({ symbol, timeframe, topDown })
+        body
       });
 
       if (res.status === 401) {
@@ -340,7 +402,7 @@
 
   function renderResult(a, timeframe) {
     document.getElementById("res-pair").textContent = a.pair_guess || "Symbol unclear";
-    document.getElementById("res-tf").textContent = TF_LABELS[timeframe] || timeframe;
+    document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";
 
     const biasEl = document.getElementById("res-bias");
     biasEl.textContent = a.market_bias || "Neutral / Ranging";
