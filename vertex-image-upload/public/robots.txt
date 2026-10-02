@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /app
-Disallow: /login
-Disallow: /signup
-Disallow: /api/
-
-Sitemap: https://vertex-9s4c.onrender.com/sitemap.xml
