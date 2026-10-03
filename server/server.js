@@ -456,6 +456,46 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
   }
 });
 
+// Same admin-only pattern as /api/admin/stats, but the actual user list
+// (name, email, signup date). admin_list_users() in Postgres re-checks the
+// admin email independently — see supabase/admin_setup.sql.
+app.get("/api/admin/users", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_list_users`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json"
+      },
+      body: "{}",
+      signal: AbortSignal.timeout(8000)
+    });
+    const raw = await r.text();
+    if (!r.ok) {
+      console.error("Admin users RPC failed:", r.status, raw.slice(0, 300));
+      return res.status(502).json({ error: "Could not load users. Has the latest supabase/admin_setup.sql been run?" });
+    }
+    let users = [];
+    try {
+      const parsed = JSON.parse(raw);
+      users = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      /* leave empty, handled below */
+    }
+    res.json({ users });
+  } catch (err) {
+    console.error("Admin users error:", err.message);
+    res.status(502).json({ error: "Could not load users." });
+  }
+});
+
 app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
   upload.single("image")(req, res, async (uploadErr) => {
     if (uploadErr) {
