@@ -1172,6 +1172,11 @@ body.scanning .scan-hud {
   box-shadow: 0 0 20px color-mix(in srgb, var(--bear) 45%, transparent);
 }
 .signal-tag--none { display: none; }
+.signal-tag--wait {
+  color: var(--text-dim);
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+}
 
 .result__grid {
   display: grid;

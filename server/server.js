@@ -308,7 +308,11 @@ function mapFxSynapseToAnalysis(fx) {
   const cs = conceptSummary(fx.concepts);
   if (cs) notesParts.push(cs);
   if (typeof fx.bars === "number") notesParts.push(`Measured over the last ${fx.bars} bars.`);
-  if (!planOk) notesParts.push("No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting.");
+  if (!fx.symbol) {
+    notesParts.push("Could not read the pair from this screenshot — crop it so the symbol name (e.g. EURUSD) is clearly visible, then rescan.");
+  } else if (!planOk) {
+    notesParts.push("No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting.");
+  }
 
   const structureLabel = (fx.marketStructure || "range").replace(/^\w/, (c) => c.toUpperCase());
 

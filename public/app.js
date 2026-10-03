@@ -499,18 +499,20 @@
     biasEl.textContent = a.market_bias || "Neutral / Ranging";
     biasEl.className = "bias-tag " + biasClass(a.market_bias);
 
-    // The headline call: BUY/SELL when there's an actual directional entry,
-    // hidden entirely when the scan found no clean setup.
+    // The headline call: always a clear verdict, never blank. BUY/SELL when
+    // there's an actual directional entry, otherwise an explicit "No trade"
+    // badge — so the user is never left guessing why nothing showed up.
     const signalEl = document.getElementById("res-signal");
     const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
     const side = (firstEntry?.type || "").toLowerCase();
     if (side === "long" || side === "short") {
       signalEl.textContent = side === "long" ? "Buy" : "Sell";
       signalEl.className = "signal-tag " + (side === "long" ? "signal-tag--buy" : "signal-tag--sell");
-      signalEl.hidden = false;
     } else {
-      signalEl.hidden = true;
+      signalEl.textContent = "No trade";
+      signalEl.className = "signal-tag signal-tag--wait";
     }
+    signalEl.hidden = false;
 
     document.getElementById("res-confidence").textContent = a.bars ? String(a.bars) : "—";
 
