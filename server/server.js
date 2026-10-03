@@ -375,7 +375,9 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
         method: "POST",
         headers: { Authorization: `Bearer ${FXSYNAPSE_API_KEY}` },
         body: form,
-        signal: AbortSignal.timeout(30000)
+        // 55s gives slow image analysis room to finish without railing past
+        // Render's own ~60s request ceiling.
+        signal: AbortSignal.timeout(55000)
       });
 
       const rawBody = await fxRes.text();
