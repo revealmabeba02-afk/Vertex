@@ -38,6 +38,39 @@
 
 .btn--lg { min-height: 54px; padding: 0 26px; font-size: 16px; border-radius: 14px; }
 
+/* ===========================================================
+   Top bar — landing, login, signup. The app itself uses the sidebar
+   (style.css); these standalone pages use this simple floating pill bar.
+   =========================================================== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 16px clamp(16px, 4vw, 40px) 0;
+}
+
+.topbar__pill {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.topbar__nav .navpill { padding: 8px 14px; }
+
 .topbar__actions {
   margin-left: auto;
   display: flex;
