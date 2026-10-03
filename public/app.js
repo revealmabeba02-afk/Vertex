@@ -170,6 +170,63 @@
   });
 
   // --------------------------------------------------------------
+  // Accent color: same before-paint pattern as theme (set in app.html's
+  // inline script), this just keeps the swatches and storage in sync.
+  // --------------------------------------------------------------
+  const ACCENT_KEY = "vertex-accent";
+  const accentSwatches = document.getElementById("accent-swatches");
+
+  function setAccent(accent) {
+    if (accent) {
+      document.documentElement.setAttribute("data-accent", accent);
+    } else {
+      document.documentElement.removeAttribute("data-accent");
+    }
+    if (accentSwatches) {
+      accentSwatches.querySelectorAll(".swatch").forEach((btn) => {
+        const match = btn.dataset.accent === accent;
+        btn.classList.toggle("is-active", match);
+        btn.setAttribute("aria-checked", String(match));
+      });
+    }
+    try { localStorage.setItem(ACCENT_KEY, accent || ""); } catch {}
+  }
+
+  if (accentSwatches) {
+    setAccent(document.documentElement.getAttribute("data-accent") || "");
+    accentSwatches.addEventListener("click", (e) => {
+      const btn = e.target.closest(".swatch");
+      if (!btn) return;
+      setAccent(btn.dataset.accent || "");
+    });
+  }
+
+  // --------------------------------------------------------------
+  // Sidebar collapse: "kick it" open/closed, remembered across visits.
+  // --------------------------------------------------------------
+  const SIDEBAR_KEY = "vertex-sidebar";
+  const sidebarOpenBtn = document.getElementById("sidebar-open-btn");
+  const sidebarCloseBtn = document.getElementById("sidebar-close-btn");
+
+  function setSidebar(collapsed) {
+    if (collapsed) {
+      document.documentElement.setAttribute("data-sidebar", "collapsed");
+    } else {
+      document.documentElement.removeAttribute("data-sidebar");
+    }
+    if (sidebarOpenBtn) sidebarOpenBtn.hidden = !collapsed;
+    try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "collapsed" : "open"); } catch {}
+  }
+
+  if (sidebarOpenBtn) {
+    sidebarOpenBtn.hidden = document.documentElement.getAttribute("data-sidebar") !== "collapsed";
+    sidebarOpenBtn.addEventListener("click", () => setSidebar(false));
+  }
+  if (sidebarCloseBtn) {
+    sidebarCloseBtn.addEventListener("click", () => setSidebar(true));
+  }
+
+  // --------------------------------------------------------------
   // Header status: a real check against the server, not decoration.
   // --------------------------------------------------------------
   fetch("/api/health")
