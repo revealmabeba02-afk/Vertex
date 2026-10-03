@@ -216,10 +216,6 @@
     }
     const authHeader = { Authorization: `Bearer ${session.access_token}` };
 
-    // Paying users are always "—" for now: there is no payment system yet
-    // (that's next). Once it exists, this page gets wired up to show it.
-    statPaidEl.textContent = "—";
-
     try {
       const [statsRes, usersRes] = await Promise.all([
         fetch("/api/admin/stats", { headers: authHeader }),
@@ -239,6 +235,10 @@
       } else {
         statUsersEl.textContent = "—";
       }
+      statPaidEl.textContent =
+        statsRes.ok && statsData && typeof statsData.payingUsers === "number"
+          ? String(statsData.payingUsers)
+          : "—";
 
       const usersData = await usersRes.json().catch(() => null);
       const users = usersData && Array.isArray(usersData.users) ? usersData.users : [];
@@ -256,12 +256,16 @@
         tbodyEl.innerHTML = "";
         users.forEach((u) => {
           const tr = document.createElement("tr");
+          const paidLabel =
+            u.paid_usd && u.paid_usd > 0
+              ? `$${Number(u.paid_usd).toFixed(2)} (${u.paid_scans} scans)`
+              : "—";
           tr.innerHTML = `
             <td class="users-table__name">${u.full_name ? escapeHtml(u.full_name) : "—"}</td>
             <td>${escapeHtml(u.email || "—")}</td>
             <td>${fmtDate(u.created_at)}</td>
             <td>${fmtDate(u.last_sign_in_at)}</td>
-            <td class="users-table__paid">—</td>
+            <td class="users-table__paid">${escapeHtml(paidLabel)}</td>
           `;
           tbodyEl.appendChild(tr);
         });

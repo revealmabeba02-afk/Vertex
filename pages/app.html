@@ -102,12 +102,18 @@
 
   <nav class="sidenav" role="tablist" aria-label="Sections">
     <a class="navpill is-active" href="#scan" data-view="scan" role="tab" aria-selected="true" aria-controls="view-scan" id="tab-scan">Scanner</a>
+    <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
     <a class="navpill" href="#how" data-view="how" role="tab" aria-selected="false" aria-controls="view-how" id="tab-how">How it works</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
     <a class="navpill" href="#settings" data-view="settings" role="tab" aria-selected="false" aria-controls="view-settings" id="tab-settings">Settings</a>
   </nav>
 
   <div class="sidebar__foot">
+    <a href="#credits" data-view="credits" class="credit-pill" id="credit-pill" aria-label="Scan credits remaining">
+      <span class="credit-pill__dot" aria-hidden="true"></span>
+      <span id="credit-pill-text">— credits</span>
+    </a>
+
     <div class="status" id="status" data-state="checking">
       <span class="status__dot" aria-hidden="true"></span>
       <span class="status__text" id="status-text">Checking</span>
@@ -344,6 +350,74 @@
     <a class="scan-btn how__cta" href="#scan" data-view="scan">Scan a chart</a>
 
     <p class="disclaimer-note">Output is technical, AI generated analysis of the image only. It is not financial advice and not a guarantee of any market outcome.</p>
+  </section>
+
+  <!-- ============ CREDITS (own tab) ============ -->
+  <section class="view credits" id="view-credits" role="tabpanel" aria-labelledby="tab-credits" hidden>
+    <p class="eyebrow">
+      <span class="eyebrow__dot" aria-hidden="true"></span>
+      Pay per scan
+    </p>
+    <h1 class="hero__title">Credits</h1>
+    <p class="hero__lede">Buy a bundle, pay with Binance Pay, scan whenever you want.</p>
+
+    <div class="credit-balance-card">
+      <div>
+        <p class="settings-row__title">Your balance</p>
+        <p class="credit-balance-card__value" id="credit-balance-value">—</p>
+      </div>
+    </div>
+
+    <p class="credits-status" id="credits-status" hidden></p>
+
+    <div class="bundle-grid" id="bundle-grid">
+      <div class="bundle-card" data-bundle="starter">
+        <p class="bundle-card__name">Starter</p>
+        <p class="bundle-card__desc">For trying it on your own charts.</p>
+        <p class="bundle-card__price">$8.99</p>
+        <p class="bundle-card__scans">20 scans · $0.45 per scan</p>
+        <button type="button" class="scan-btn bundle-card__btn" data-bundle="starter">Buy Starter</button>
+      </div>
+      <div class="bundle-card bundle-card--popular" data-bundle="trader">
+        <span class="bundle-card__badge">Most popular</span>
+        <p class="bundle-card__name">Trader</p>
+        <p class="bundle-card__desc">For reading the market every week.</p>
+        <p class="bundle-card__price">$12.99</p>
+        <p class="bundle-card__scans">60 scans · $0.22 per scan</p>
+        <button type="button" class="scan-btn bundle-card__btn" data-bundle="trader">Buy Trader</button>
+      </div>
+      <div class="bundle-card" data-bundle="pro">
+        <p class="bundle-card__name">Pro</p>
+        <p class="bundle-card__desc">For active traders on several pairs.</p>
+        <p class="bundle-card__price">$19.99</p>
+        <p class="bundle-card__scans">150 scans · $0.13 per scan</p>
+        <button type="button" class="scan-btn bundle-card__btn" data-bundle="pro">Buy Pro</button>
+      </div>
+    </div>
+
+    <div class="pay-panel" id="pay-panel" hidden>
+      <div class="pay-panel__head">
+        <p class="settings-row__title">Complete your payment</p>
+        <button type="button" class="ghost-btn pay-panel__cancel" id="pay-cancel-btn">Cancel</button>
+      </div>
+      <p class="pay-panel__amount" id="pay-amount">$0.00</p>
+      <p class="pay-panel__desc">Send this amount via <strong>Binance Pay</strong> to:</p>
+      <div class="pay-panel__id-row">
+        <span class="pay-panel__id" id="pay-binance-id">—</span>
+        <button type="button" class="ghost-btn pay-panel__copy" id="pay-copy-btn">Copy ID</button>
+      </div>
+      <p class="pay-panel__hint">In the Binance app: Pay → Send → Pay/Transfer to User → paste this Binance ID → enter the exact amount above.</p>
+      <div class="pay-panel__waiting" id="pay-waiting">
+        <span class="pay-panel__spinner" aria-hidden="true"></span>
+        <span id="pay-waiting-text">Waiting for payment — this updates automatically once it's detected.</span>
+      </div>
+      <div class="pay-panel__done" id="pay-done" hidden>
+        <span class="pay-panel__check" aria-hidden="true">✓</span>
+        <span>Payment received — credits added!</span>
+      </div>
+    </div>
+
+    <p class="disclaimer-note">Credits never expire. Payments are matched automatically within about a minute — if yours is slower, it'll still land, just check back here.</p>
   </section>
 
   <!-- ============ SETTINGS (own tab) ============ -->

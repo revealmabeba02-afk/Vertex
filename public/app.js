@@ -121,12 +121,13 @@
   // --------------------------------------------------------------
   const views = {
     scan: document.getElementById("view-scan"),
+    credits: document.getElementById("view-credits"),
     how: document.getElementById("view-how"),
     history: document.getElementById("view-history"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#how": "how", "#history": "history", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#how": "how", "#history": "history", "#settings": "settings" };
 
   function applyView() {
     const name = HASH_TO_VIEW[location.hash] || "scan";
@@ -138,6 +139,7 @@
     });
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
+    if (name === "credits") refreshBalance();
   }
 
   window.addEventListener("hashchange", applyView);
@@ -443,16 +445,29 @@
       }
 
       if (!res.ok) {
-        throw new Error(data.error || "Something went wrong while analyzing the chart.");
+        const err = new Error(data.error || "Something went wrong while analyzing the chart.");
+        err.code = data.code || null;
+        throw err;
       }
 
       finishScanHud(true);
       historyLoaded = false; // the server just saved this scan; refetch next time History is opened
       renderResult(data.analysis, data.timeframe);
       showState("result");
+      if (typeof window.__vertexRefreshCredits === "function") window.__vertexRefreshCredits();
     } catch (err) {
       finishScanHud(false);
-      errorText.textContent = err.message || "Something went wrong. Please try again.";
+      if (err.code === "no_credits") {
+        errorText.innerHTML = "";
+        errorText.appendChild(document.createTextNode("You're out of scan credits. "));
+        const link = document.createElement("a");
+        link.href = "#credits";
+        link.className = "error-link";
+        link.textContent = "Buy more credits →";
+        errorText.appendChild(link);
+      } else {
+        errorText.textContent = err.message || "Something went wrong. Please try again.";
+      }
       showState("error");
     } finally {
       scanInFlight = false;
@@ -752,4 +767,168 @@
       historyList.appendChild(row);
     });
   }
+
+  // --------------------------------------------------------------
+  // Credits: balance display, buying a bundle, and the Binance Pay panel
+  // that polls until the server's background job detects the payment.
+  // --------------------------------------------------------------
+  const creditPillText = document.getElementById("credit-pill-text");
+  const creditBalanceValue = document.getElementById("credit-balance-value");
+  const creditsStatus = document.getElementById("credits-status");
+  const bundleGrid = document.getElementById("bundle-grid");
+  const payPanel = document.getElementById("pay-panel");
+  const payAmount = document.getElementById("pay-amount");
+  const payBinanceId = document.getElementById("pay-binance-id");
+  const payCopyBtn = document.getElementById("pay-copy-btn");
+  const payCancelBtn = document.getElementById("pay-cancel-btn");
+  const payWaiting = document.getElementById("pay-waiting");
+  const payWaitingText = document.getElementById("pay-waiting-text");
+  const payDone = document.getElementById("pay-done");
+
+  let currentBalance = null;
+  let orderPollTimer = null;
+  let activeOrderId = null;
+
+  function setCreditPill(balance) {
+    if (!creditPillText) return;
+    if (balance === null) {
+      creditPillText.textContent = "— credits";
+    } else if (balance === 0) {
+      creditPillText.textContent = "0 credits — buy more";
+    } else {
+      creditPillText.textContent = `${balance} credit${balance === 1 ? "" : "s"}`;
+    }
+  }
+
+  async function refreshBalance() {
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/credits/balance", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      currentBalance = typeof data.balance === "number" ? data.balance : null;
+      setCreditPill(currentBalance);
+      if (creditBalanceValue) creditBalanceValue.textContent = currentBalance === null ? "—" : String(currentBalance);
+    } catch {
+      // Best-effort — leave whatever was last shown.
+    }
+  }
+
+  // Balance shows up as soon as the page is ready to scan, not just when
+  // the Credits tab is opened, so the sidebar pill is accurate right away.
+  if (Auth.ready) {
+    Auth.getSession().then((session) => { if (session) refreshBalance(); });
+  }
+
+  function showCreditsStatus(msg, isError) {
+    if (!creditsStatus) return;
+    creditsStatus.textContent = msg;
+    creditsStatus.hidden = !msg;
+    creditsStatus.classList.toggle("credits-status--error", Boolean(isError));
+  }
+
+  if (bundleGrid) {
+    bundleGrid.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".bundle-card__btn");
+      if (!btn) return;
+      const bundle = btn.dataset.bundle;
+      btn.disabled = true;
+      showCreditsStatus("Starting your order…", false);
+
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/credits/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ bundle })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          showCreditsStatus((data && data.error) || "Could not start that order. Please try again.", true);
+          return;
+        }
+        showCreditsStatus("", false);
+        openPayPanel(data);
+      } catch {
+        showCreditsStatus("Could not reach the server. Please try again.", true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function openPayPanel(data) {
+    activeOrderId = data.order.id;
+    payAmount.textContent = `$${Number(data.order.amount_usd).toFixed(2)}`;
+    payBinanceId.textContent = data.payTo.binancePayId;
+    payDone.hidden = true;
+    payWaiting.hidden = false;
+    payWaitingText.textContent = "Waiting for payment — this updates automatically once it's detected.";
+    payPanel.hidden = false;
+    payPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    startOrderPoll();
+  }
+
+  function closePayPanel() {
+    payPanel.hidden = true;
+    activeOrderId = null;
+    stopOrderPoll();
+  }
+
+  if (payCancelBtn) payCancelBtn.addEventListener("click", closePayPanel);
+
+  if (payCopyBtn) {
+    payCopyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(payBinanceId.textContent || "");
+        payCopyBtn.textContent = "Copied!";
+        setTimeout(() => { payCopyBtn.textContent = "Copy ID"; }, 1500);
+      } catch {
+        // Clipboard permission denied or unavailable — the ID is still
+        // visible on screen for the user to select manually.
+      }
+    });
+  }
+
+  function startOrderPoll() {
+    stopOrderPoll();
+    orderPollTimer = setInterval(checkOrderStatus, 5000);
+    checkOrderStatus();
+  }
+
+  function stopOrderPoll() {
+    if (orderPollTimer) {
+      clearInterval(orderPollTimer);
+      orderPollTimer = null;
+    }
+  }
+
+  async function checkOrderStatus() {
+    if (!activeOrderId) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/credits/orders", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const order = (data.orders || []).find((o) => o.id === activeOrderId);
+      if (order && order.status === "paid") {
+        stopOrderPoll();
+        payWaiting.hidden = true;
+        payDone.hidden = false;
+        refreshBalance();
+        setTimeout(closePayPanel, 3000);
+      }
+    } catch {
+      // Keep polling — a single failed check is not worth surfacing.
+    }
+  }
+
+  window.__vertexRefreshCredits = refreshBalance;
 })();

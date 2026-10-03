@@ -64,6 +64,34 @@ const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || "").trim();
 // two independent locks, so a bug in one does not expose the other.
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "revealmabeba02@gmail.com").trim().toLowerCase();
 
+// --- Credits / Binance Pay ------------------------------------------------
+// Pay-per-scan credits. No Binance secret and no Supabase service_role key
+// ever sit in the browser: the API key below is a READ-ONLY personal
+// Binance key (Account > API Management, "Enable Reading" only — see
+// supabase/credits_setup.sql for the full design) used only to check for
+// incoming Binance Pay payments, and crediting a user's balance happens
+// through a SECURITY DEFINER Postgres function guarded by a shared secret,
+// the same pattern already used for the admin functions.
+const BINANCE_API_KEY = (process.env.BINANCE_API_KEY || "").trim();
+const BINANCE_API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
+const BINANCE_PAY_ID = (process.env.BINANCE_PAY_ID || "1283803211").trim();
+const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
+const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
+
+const CREDIT_BUNDLES = {
+  starter: { scans: 20, amount: 8.99, label: "Starter" },
+  trader: { scans: 60, amount: 12.99, label: "Trader" },
+  pro: { scans: 150, amount: 19.99, label: "Pro" }
+};
+
+if (!CREDITS_READY) {
+  console.warn(
+    "\n[WARN] Credits are not fully configured: missing one of BINANCE_API_KEY, " +
+    "BINANCE_API_SECRET, CREDIT_FULFILL_SECRET. Buying credits and the payment\n" +
+    "poller will be disabled until all three are set. See supabase/credits_setup.sql.\n"
+  );
+}
+
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.
 function jwtRole(token) {
@@ -238,7 +266,7 @@ const analyzeLimiter = rateLimit({
 // --- Routes -------------------------------------------------------------
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, provider: "fxsynapse", accounts: SUPABASE_READY });
+  res.json({ ok: true, provider: "fxsynapse", accounts: SUPABASE_READY, credits: CREDITS_READY });
 });
 
 // --- FXSynapse response shaping ------------------------------------------
@@ -391,6 +419,214 @@ async function saveHistoryRow(user, analysis, timeframe) {
   }
 }
 
+// --- Credits ---------------------------------------------------------------
+// Thin helper around Supabase's RPC endpoint. `token` is the caller's own
+// access token for user-facing functions, or just SUPABASE_ANON_KEY for the
+// "system" functions that take a secret instead of checking auth.uid().
+async function supabaseRpc(fnName, args, token) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(args || {}),
+    signal: AbortSignal.timeout(8000)
+  });
+  const raw = await r.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    /* leave null */
+  }
+  if (!r.ok) {
+    const message = (data && (data.message || data.error)) || raw.slice(0, 300) || `RPC ${fnName} failed`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+// Best-effort refund: a failed scan should never cost a credit, but if the
+// refund call itself fails, we log it rather than blocking the error
+// response the user is already waiting on.
+async function refundIfSpent(user, wasSpent) {
+  if (!wasSpent) return;
+  try {
+    await supabaseRpc("refund_credit", {}, user.token);
+  } catch (err) {
+    console.error("Credit refund failed:", err.message);
+  }
+}
+
+app.get("/api/credits/balance", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const balance = await supabaseRpc("my_credit_balance", {}, req.user.token);
+    res.json({ balance: typeof balance === "number" ? balance : 0 });
+  } catch (err) {
+    console.error("Credit balance error:", err.message);
+    res.status(502).json({ error: "Could not load your credit balance." });
+  }
+});
+
+app.get("/api/credits/orders", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/credit_orders?select=id,bundle,scans,amount_usd,status,created_at,paid_at&order=created_at.desc&limit=20`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) {
+      console.error("Orders fetch failed:", r.status, await r.text().catch(() => ""));
+      return res.json({ orders: [] });
+    }
+    const orders = await r.json();
+    res.json({ orders: Array.isArray(orders) ? orders : [] });
+  } catch (err) {
+    console.error("Orders fetch error:", err.message);
+    res.json({ orders: [] });
+  }
+});
+
+app.post("/api/credits/order", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if (!CREDITS_READY) return res.status(503).json({ error: "Buying credits is not set up on this server yet." });
+
+  const bundle = String(req.body?.bundle || "").trim().toLowerCase();
+  if (!CREDIT_BUNDLES[bundle]) {
+    return res.status(400).json({ error: "Unknown credit bundle." });
+  }
+
+  try {
+    const order = await supabaseRpc("create_credit_order", { p_bundle: bundle }, req.user.token);
+    res.json({
+      order,
+      payTo: { binancePayId: BINANCE_PAY_ID },
+      instructions:
+        `Send exactly $${Number(order.amount_usd).toFixed(2)} (USDT or equivalent) via Binance Pay to Binance ID ${BINANCE_PAY_ID}. ` +
+        "Your credits are added automatically once the payment is detected — usually within a minute."
+    });
+  } catch (err) {
+    console.error("Create order error:", err.message);
+    res.status(502).json({ error: "Could not start that order. Please try again." });
+  }
+});
+
+// --- Binance Pay poller ----------------------------------------------------
+// Background job, not tied to any one request: every POLL interval, ask
+// Postgres for pending orders (via the shared-secret system function) and
+// ask Binance for recent incoming Pay transactions, then match them by
+// amount. The exact shape of Binance's /sapi/v1/pay/transactions response
+// has not been confirmed against this live account yet (no order has gone
+// through it so far) — this is built strictly from Binance's published API
+// docs, so if it turns out the field names differ, this will need a real
+// payment to compare the raw response against and adjust.
+const crypto = require("crypto");
+
+async function binanceSignedGet(urlPath, params) {
+  const query = new URLSearchParams({ ...params, timestamp: String(Date.now()), recvWindow: "10000" });
+  const signature = crypto.createHmac("sha256", BINANCE_API_SECRET).update(query.toString()).digest("hex");
+  query.append("signature", signature);
+  const r = await fetch(`https://api.binance.com${urlPath}?${query.toString()}`, {
+    headers: { "X-MBX-APIKEY": BINANCE_API_KEY },
+    signal: AbortSignal.timeout(10000)
+  });
+  const raw = await r.text();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`Binance returned non-JSON (${r.status}): ${raw.slice(0, 200)}`);
+  }
+  if (!r.ok) {
+    throw new Error(`Binance error ${r.status}: ${data?.msg || raw.slice(0, 200)}`);
+  }
+  return data;
+}
+
+// Pulls recent Binance Pay transactions. Best-effort: on anything going
+// wrong (wrong field names, a changed endpoint, a bad key) this logs and
+// returns an empty list rather than crashing the poller loop.
+async function fetchRecentBinancePayTransactions() {
+  try {
+    const data = await binanceSignedGet("/sapi/v1/pay/transactions", {
+      startTime: String(Date.now() - 48 * 60 * 60 * 1000)
+    });
+    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+    return list
+      .filter((t) => {
+        const type = String(t.orderType || t.transactionType || "").toUpperCase();
+        // Keep only money coming IN. Binance's own field naming for this
+        // isn't confirmed yet (see comment above) — "PAY" / "C2C" / a
+        // positive amount with no outgoing marker are the best guesses.
+        return !type.includes("WITHDRAW") && !type.includes("SEND");
+      })
+      .map((t) => ({
+        id: String(t.transactionId || t.orderId || t.id || ""),
+        amount: Number(t.amount ?? t.orderAmount ?? t.totalFee ?? 0),
+        currency: String(t.currency || t.fiatCurrency || "USDT"),
+        time: Number(t.transactionTime || t.createTime || 0)
+      }))
+      .filter((t) => t.id && t.amount > 0);
+  } catch (err) {
+    console.error("Binance transactions fetch error:", err.message);
+    return [];
+  }
+}
+
+async function pollBinancePayments() {
+  if (!CREDITS_READY || !SUPABASE_READY) return;
+  try {
+    const pendingOrders = await supabaseRpc(
+      "list_pending_orders",
+      { p_secret: CREDIT_FULFILL_SECRET },
+      SUPABASE_ANON_KEY
+    );
+    if (!Array.isArray(pendingOrders) || pendingOrders.length === 0) return;
+
+    const transactions = await fetchRecentBinancePayTransactions();
+    if (transactions.length === 0) return;
+
+    const usedTxIds = new Set();
+    for (const order of pendingOrders) {
+      const orderCreatedMs = new Date(order.created_at).getTime();
+      const amount = Number(order.amount_usd);
+      const match = transactions.find(
+        (t) =>
+          !usedTxIds.has(t.id) &&
+          Math.abs(t.amount - amount) < 0.02 &&
+          (!t.time || t.time >= orderCreatedMs - 2 * 60 * 1000)
+      );
+      if (!match) continue;
+
+      try {
+        await supabaseRpc(
+          "admin_credit_order",
+          { p_order_id: order.id, p_secret: CREDIT_FULFILL_SECRET },
+          SUPABASE_ANON_KEY
+        );
+        usedTxIds.add(match.id);
+        console.log(`Credited order ${order.id} (${order.scans} scans) after matching Binance Pay transaction ${match.id}.`);
+      } catch (err) {
+        console.error(`Could not credit order ${order.id}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error("Payment poll error:", err.message);
+  }
+}
+
+if (CREDITS_READY && SUPABASE_READY) {
+  const POLL_MS = Number(process.env.CREDIT_POLL_INTERVAL_MS) || 20000;
+  setInterval(pollBinancePayments, POLL_MS);
+  console.log(`Binance Pay poller running every ${Math.round(POLL_MS / 1000)}s.`);
+}
+
 app.get("/api/history", requireUser, async (req, res) => {
   try {
     const r = await fetch(
@@ -426,30 +662,24 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
     return res.status(403).json({ error: "Not authorized." });
   }
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_user_count`, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${req.user.token}`,
-        "Content-Type": "application/json"
-      },
-      body: "{}",
-      signal: AbortSignal.timeout(8000)
+    const totalUsers = await supabaseRpc("admin_user_count", {}, req.user.token).catch((err) => {
+      console.error("Admin stats RPC failed:", err.message);
+      return null;
     });
-    const raw = await r.text();
-    if (!r.ok) {
-      console.error("Admin stats RPC failed:", r.status, raw.slice(0, 300));
-      // Most likely cause: supabase/admin_setup.sql has not been run yet.
+    // Paying-users count needs supabase/credits_setup.sql to have been run;
+    // fail soft (null, shown as "—" by admin.html) rather than taking the
+    // whole stats card down if it hasn't been yet.
+    const payingUsers = await supabaseRpc("admin_paying_users_count", {}, req.user.token).catch((err) => {
+      console.error("Admin paying-users RPC failed:", err.message);
+      return null;
+    });
+    if (totalUsers === null) {
       return res.status(502).json({ error: "Could not load admin stats. Has supabase/admin_setup.sql been run yet?" });
     }
-    let totalUsers = null;
-    try {
-      const parsed = JSON.parse(raw);
-      totalUsers = typeof parsed === "number" ? parsed : null;
-    } catch {
-      /* leave null, handled below */
-    }
-    res.json({ totalUsers });
+    res.json({
+      totalUsers: typeof totalUsers === "number" ? totalUsers : null,
+      payingUsers: typeof payingUsers === "number" ? payingUsers : null
+    });
   } catch (err) {
     console.error("Admin stats error:", err.message);
     res.status(502).json({ error: "Could not load admin stats." });
@@ -489,6 +719,27 @@ app.get("/api/admin/users", requireUser, async (req, res) => {
     } catch {
       /* leave empty, handled below */
     }
+
+    // Merge in who has actually paid. Soft-fails to "no paid data" if
+    // credits_setup.sql hasn't been run yet, rather than breaking the whole
+    // user list.
+    const paidSummary = await supabaseRpc("admin_paid_summary", {}, req.user.token).catch((err) => {
+      console.error("Admin paid summary RPC failed:", err.message);
+      return [];
+    });
+    const paidByUser = new Map(
+      (Array.isArray(paidSummary) ? paidSummary : []).map((row) => [row.user_id, row])
+    );
+    users = users.map((u) => {
+      const paid = paidByUser.get(u.id);
+      return {
+        ...u,
+        paid_usd: paid ? Number(paid.paid_usd) : 0,
+        paid_scans: paid ? Number(paid.paid_scans) : 0,
+        orders_count: paid ? Number(paid.orders_count) : 0
+      };
+    });
+
     res.json({ users });
   } catch (err) {
     console.error("Admin users error:", err.message);
@@ -512,6 +763,23 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
     const timeframe = String(req.body.timeframe || "").trim().toUpperCase();
     if (timeframe && !isValidTimeframe(timeframe)) {
       return res.status(400).json({ error: "Invalid timeframe." });
+    }
+
+    // Spend one credit up front. If the user has none left, stop here —
+    // never call FXSynapse (which costs real money) for a request that
+    // can't be charged. If the scan itself fails below, the credit is
+    // refunded, so a failed scan never costs the user anything.
+    let creditSpent = false;
+    if (CREDITS_READY) {
+      try {
+        await supabaseRpc("spend_credit", {}, req.user.token);
+        creditSpent = true;
+      } catch (err) {
+        return res.status(402).json({
+          error: "You're out of scan credits. Buy more to keep scanning.",
+          code: "no_credits"
+        });
+      }
     }
 
     try {
@@ -538,6 +806,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
         fxData = JSON.parse(rawBody);
       } catch {
         console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
+        await refundIfSpent(req.user, creditSpent);
         return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
       }
 
@@ -555,6 +824,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
             : fxRes.status === 429
             ? "Rate limited by the analysis provider. Please try again shortly."
             : fxData?.error || "Something went wrong while analyzing that chart.";
+        await refundIfSpent(req.user, creditSpent);
         return res.status(502).json({ error: message });
       }
 
@@ -563,6 +833,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
       saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
     } catch (err) {
       console.error("Analysis error:", err);
+      await refundIfSpent(req.user, creditSpent);
       res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
     }
   });
