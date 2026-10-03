@@ -474,7 +474,10 @@
     stateError.hidden = name !== "error";
 
     outputPanel.classList.toggle("is-idle", name === "empty");
-    if (name !== "empty") {
+    // Full-screen takeover while a scan is in flight (see .scanning in
+    // style.css); dropped the moment it resolves to result or error.
+    document.body.classList.toggle("scanning", name === "loading");
+    if (name !== "empty" && name !== "loading") {
       outputPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }

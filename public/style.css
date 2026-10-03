@@ -145,14 +145,14 @@ body::after {
 .orb--ring {
   width: 64vmax;
   height: 64vmax;
-  border: 2px solid color-mix(in srgb, var(--ring) 55%, transparent);
+  border: 2px solid color-mix(in srgb, var(--ring) 38%, transparent);
   box-shadow:
-    0 0 40px 6px color-mix(in srgb, var(--ring) 28%, transparent),
-    inset 0 0 40px 6px color-mix(in srgb, var(--ring) 28%, transparent),
-    0 0 160px 40px color-mix(in srgb, var(--ring) 9%, transparent),
-    inset 0 0 160px 40px color-mix(in srgb, var(--ring) 9%, transparent);
+    0 0 32px 5px color-mix(in srgb, var(--ring) 18%, transparent),
+    inset 0 0 32px 5px color-mix(in srgb, var(--ring) 18%, transparent),
+    0 0 130px 32px color-mix(in srgb, var(--ring) 6%, transparent),
+    inset 0 0 130px 32px color-mix(in srgb, var(--ring) 6%, transparent);
   filter: blur(1.5px);
-  opacity: 0.55;
+  opacity: 0.4;
 }
 
 .orb--a {
@@ -179,14 +179,14 @@ body::after {
   background: var(--accent);
   left: 8vw;
   top: 52vh;
-  opacity: 0.10;
+  opacity: 0.07;
 }
 
 .orb--d {
   background: var(--accent-2);
   right: 14vw;
   top: -14vmax;
-  opacity: 0.14;
+  opacity: 0.09;
 }
 
 @keyframes drift-a {
@@ -218,6 +218,35 @@ body::after {
 @keyframes twinkle {
   0%, 100% { opacity: 0.12; transform: scale(0.8); }
   50% { opacity: 0.9; transform: scale(1.3); }
+}
+
+/* A rare shooting star: streaks diagonally across the sky, then waits a
+   long beat before doing it again. --sd sets the wait so they don't all
+   fire together. */
+.star--shoot {
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  box-shadow: 0 0 6px 1px var(--text);
+  animation: shoot var(--ss, 7s) linear var(--sd, 0s) infinite;
+}
+
+.star--shoot::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 70px;
+  height: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 70%, transparent));
+}
+
+@keyframes shoot {
+  0%, 92% { opacity: 0; transform: translate(0, 0); }
+  93% { opacity: 1; }
+  98% { opacity: 0.8; transform: translate(-120px, 120px); }
+  100% { opacity: 0; transform: translate(-130px, 130px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -855,6 +884,32 @@ body::after {
 .state--loading {
   min-height: 300px;
   display: flex;
+}
+
+/* While a scan is running, the HUD takes over the whole screen like its
+   own page: sidebar hidden, output card unpinned from the layout and
+   centered edge-to-edge. body.scanning is toggled in app.js. */
+body.scanning { overflow: hidden; }
+body.scanning .sidebar,
+body.scanning .sidebar-open-btn { display: none; }
+body.scanning .output {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 40px);
+}
+body.scanning .scan-hud {
+  width: 100%;
+  max-width: 640px;
+  min-height: min(70vh, 520px);
 }
 
 /* ---- Scan HUD: the uploaded chart, blurred, behind a scanning readout ---- */
