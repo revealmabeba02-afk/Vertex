@@ -122,12 +122,14 @@
   const views = {
     scan: document.getElementById("view-scan"),
     how: document.getElementById("view-how"),
+    history: document.getElementById("view-history"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
+  const HASH_TO_VIEW = { "#how": "how", "#history": "history", "#settings": "settings" };
 
   function applyView() {
-    const name = location.hash === "#how" ? "how" : location.hash === "#settings" ? "settings" : "scan";
+    const name = HASH_TO_VIEW[location.hash] || "scan";
     Object.entries(views).forEach(([key, el]) => { el.hidden = key !== name; });
     tabs.forEach((tab) => {
       const active = tab.dataset.view === name;
@@ -135,6 +137,7 @@
       tab.setAttribute("aria-selected", String(active));
     });
     window.scrollTo({ top: 0, behavior: "auto" });
+    if (name === "history") loadHistory();
   }
 
   window.addEventListener("hashchange", applyView);
@@ -387,6 +390,7 @@
       }
 
       finishScanHud(true);
+      historyLoaded = false; // the server just saved this scan; refetch next time History is opened
       renderResult(data.analysis, data.timeframe);
       showState("result");
     } catch (err) {
@@ -434,6 +438,19 @@
     const biasEl = document.getElementById("res-bias");
     biasEl.textContent = a.market_bias || "Neutral / Ranging";
     biasEl.className = "bias-tag " + biasClass(a.market_bias);
+
+    // The headline call: BUY/SELL when there's an actual directional entry,
+    // hidden entirely when the scan found no clean setup.
+    const signalEl = document.getElementById("res-signal");
+    const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+    const side = (firstEntry?.type || "").toLowerCase();
+    if (side === "long" || side === "short") {
+      signalEl.textContent = side === "long" ? "Buy" : "Sell";
+      signalEl.className = "signal-tag " + (side === "long" ? "signal-tag--buy" : "signal-tag--sell");
+      signalEl.hidden = false;
+    } else {
+      signalEl.hidden = true;
+    }
 
     document.getElementById("res-confidence").textContent = a.bars ? String(a.bars) : "—";
 
@@ -588,5 +605,89 @@
     if (b.includes("bull")) return "bias-tag--bullish";
     if (b.includes("bear")) return "bias-tag--bearish";
     return "bias-tag--neutral";
+  }
+
+  // --------------------------------------------------------------
+  // History. The server saves a row after every successful scan (see
+  // runScan's /api/analyze call); this just reads them back.
+  // --------------------------------------------------------------
+  const historyEmpty = document.getElementById("history-empty");
+  const historyList = document.getElementById("history-list");
+  let historyLoaded = false;
+
+  async function loadHistory() {
+    if (historyLoaded) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/history", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      renderHistory(Array.isArray(data.items) ? data.items : []);
+      historyLoaded = true;
+    } catch {
+      // History is a nice-to-have; a failed fetch just leaves the empty state.
+    }
+  }
+
+  function renderHistory(items) {
+    historyList.innerHTML = "";
+    if (items.length === 0) {
+      historyEmpty.hidden = false;
+      historyList.hidden = true;
+      return;
+    }
+    historyEmpty.hidden = true;
+    historyList.hidden = false;
+
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "history-item";
+
+      const main = document.createElement("div");
+      main.className = "history-item__main";
+
+      const pair = document.createElement("span");
+      pair.className = "history-item__pair";
+      pair.textContent = item.pair || "Chart scan";
+      main.appendChild(pair);
+
+      if (item.timeframe) {
+        const tf = document.createElement("span");
+        tf.className = "history-item__tf";
+        tf.textContent = TF_LABELS[item.timeframe] || item.timeframe;
+        main.appendChild(tf);
+      }
+
+      const date = document.createElement("span");
+      date.className = "history-item__date";
+      try {
+        date.textContent = new Date(item.created_at).toLocaleString();
+      } catch {
+        date.textContent = "";
+      }
+      main.appendChild(date);
+
+      const right = document.createElement("div");
+      right.className = "history-item__right";
+
+      if (item.signal === "buy" || item.signal === "sell") {
+        const sig = document.createElement("span");
+        sig.className = "signal-tag " + (item.signal === "buy" ? "signal-tag--buy" : "signal-tag--sell");
+        sig.textContent = item.signal === "buy" ? "Buy" : "Sell";
+        right.appendChild(sig);
+      }
+
+      const bias = document.createElement("span");
+      bias.className = "bias-tag " + biasClass(item.bias);
+      bias.textContent = item.bias || "Neutral";
+      right.appendChild(bias);
+
+      row.appendChild(main);
+      row.appendChild(right);
+      historyList.appendChild(row);
+    });
   }
 })();

@@ -210,7 +210,7 @@ async function requireUser(req, res, next) {
     if (!user?.id) {
       return res.status(401).json({ error: "Please log in to scan charts." });
     }
-    req.user = { id: user.id, email: user.email };
+    req.user = { id: user.id, email: user.email, token: match[1] };
     next();
   } catch (err) {
     console.error("Supabase user check error:", err.message);
@@ -344,6 +344,65 @@ function mapFxSynapseToAnalysis(fx) {
   };
 }
 
+// --- Scan history ---------------------------------------------------------
+// One row per successful scan, written with the user's own access token so
+// Supabase's row-level security (not this server) decides who can read or
+// write it. Requires a `scan_history` table with RLS policies scoping each
+// row to its own user_id — see supabase/scan_history.sql in the repo root.
+async function saveHistoryRow(user, analysis, timeframe) {
+  if (!SUPABASE_READY || !user?.token) return;
+  const firstEntry = Array.isArray(analysis.potential_entries) ? analysis.potential_entries[0] : null;
+  const side = (firstEntry?.type || "").toLowerCase();
+  const signal = side === "long" ? "buy" : side === "short" ? "sell" : null;
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/scan_history`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({
+        user_id: user.id,
+        pair: analysis.pair_guess || null,
+        timeframe,
+        bias: analysis.market_bias || null,
+        signal
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not save scan history:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Scan history save error:", err.message);
+  }
+}
+
+app.get("/api/history", requireUser, async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/scan_history?select=pair,timeframe,bias,signal,created_at&order=created_at.desc&limit=50`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) {
+      // Most likely cause: the scan_history table/policies don't exist yet.
+      console.error("History fetch failed:", r.status, await r.text().catch(() => ""));
+      return res.json({ items: [] });
+    }
+    const items = await r.json();
+    res.json({ items: Array.isArray(items) ? items : [] });
+  } catch (err) {
+    console.error("History fetch error:", err.message);
+    res.json({ items: [] });
+  }
+});
+
 app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
   upload.single("image")(req, res, async (uploadErr) => {
     if (uploadErr) {
@@ -408,6 +467,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
 
       const analysis = mapFxSynapseToAnalysis(fxData);
       res.json({ analysis, timeframe: timeframe || null });
+      saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
     } catch (err) {
       console.error("Analysis error:", err);
       res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
