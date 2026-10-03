@@ -62,7 +62,7 @@ const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || "").trim();
 // Who gets the admin page. Checked here AND again inside the
 // admin_user_count() Postgres function (see supabase/admin_setup.sql) —
 // two independent locks, so a bug in one does not expose the other.
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "reveal@shadowfx.co.za").trim().toLowerCase();
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "revealmabeba02@gmail.com").trim().toLowerCase();
 
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.

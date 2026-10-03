@@ -19,7 +19,7 @@ as $$
 declare
   result integer;
 begin
-  if (auth.jwt() ->> 'email') is distinct from 'reveal@shadowfx.co.za' then
+  if (auth.jwt() ->> 'email') is distinct from 'revealmabeba02@gmail.com' then
     raise exception 'Not authorized';
   end if;
 
