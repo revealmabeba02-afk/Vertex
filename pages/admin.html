@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  try {
+    if (localStorage.getItem("vertex-theme") === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+    var savedAccent = localStorage.getItem("vertex-accent");
+    if (savedAccent) {
+      document.documentElement.setAttribute("data-accent", savedAccent);
+    }
+  } catch (e) {}
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0E0B12" />
+<title>Admin · Vertex Chart Scanner</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/site.css" />
+<style>
+  .admin-wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: clamp(40px, 8vh, 96px) clamp(16px, 4vw, 40px) 64px;
+  }
+  .admin-card {
+    margin-top: 28px;
+    padding: clamp(22px, 3vw, 32px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .stat-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 0;
+  }
+  .stat-row + .stat-row { border-top: 1px solid var(--border-soft); }
+  .stat-row__label {
+    font-size: 13.5px;
+    color: var(--text-dim);
+  }
+  .stat-row__value {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 28px;
+    color: var(--text);
+  }
+  .admin-status {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+  .admin-status--error { color: var(--bear); }
+</style>
+</head>
+<body>
+
+<div class="orbs" aria-hidden="true">
+  <span class="orb orb--ring orb--a"></span>
+  <span class="orb orb--ring orb--b"></span>
+  <span class="orb orb--blob orb--c"></span>
+  <span class="orb orb--blob orb--d"></span>
+  <div class="stars">
+    <span class="star" style="--x:8%; --y:14%; --d:0s; --s:2.4s;"></span>
+    <span class="star" style="--x:22%; --y:62%; --d:0.6s; --s:3.1s;"></span>
+    <span class="star" style="--x:35%; --y:30%; --d:1.1s; --s:2.8s;"></span>
+    <span class="star" style="--x:48%; --y:80%; --d:0.3s; --s:3.6s;"></span>
+    <span class="star" style="--x:58%; --y:18%; --d:1.6s; --s:2.5s;"></span>
+    <span class="star" style="--x:67%; --y:52%; --d:0.9s; --s:3.3s;"></span>
+    <span class="star" style="--x:78%; --y:8%; --d:0.2s; --s:2.9s;"></span>
+    <span class="star" style="--x:85%; --y:70%; --d:1.4s; --s:3.4s;"></span>
+    <span class="star" style="--x:12%; --y:88%; --d:0.8s; --s:2.6s;"></span>
+    <span class="star" style="--x:92%; --y:40%; --d:1.9s; --s:3.0s;"></span>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="topbar__pill">
+    <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3.5" y="14" width="2.6" height="6" rx="0.6" fill="#3FBF8A"/><line x1="4.8" y1="12.5" x2="4.8" y2="21" stroke="#3FBF8A" stroke-width="1"/>   <rect x="8.2" y="10.5" width="2.6" height="7.5" rx="0.6" fill="#3FBF8A"/><line x1="9.5" y1="9" x2="9.5" y2="19" stroke="#3FBF8A" stroke-width="1"/>   <rect x="12.9" y="6.5" width="2.6" height="8.5" rx="0.6" fill="#3FBF8A"/><line x1="14.2" y1="5" x2="14.2" y2="16" stroke="#3FBF8A" stroke-width="1"/>   <rect x="17.6" y="3" width="2.6" height="8" rx="0.6" fill="#3FBF8A"/><line x1="18.9" y1="1.5" x2="18.9" y2="12" stroke="#3FBF8A" stroke-width="1"/>   <line x1="3" y1="20.5" x2="21" y2="2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </span>
+      <span class="brand__name">Vertex AI</span>
+    </a>
+    <div class="topbar__actions">
+      <a class="btn btn--ghost" href="/app">Back to scanner</a>
+    </div>
+  </div>
+</header>
+
+<main class="admin-wrap">
+  <p class="eyebrow">
+    <span class="eyebrow__dot" aria-hidden="true"></span>
+    Admin
+  </p>
+  <h1 class="hero__title" style="font-size: clamp(28px, 4vw, 38px);">Vertex AI</h1>
+  <p class="hero__lede" style="margin-bottom: 0;">Only you can see this page.</p>
+
+  <div class="admin-card">
+    <div class="stat-row">
+      <span class="stat-row__label">Total signed-up users</span>
+      <span class="stat-row__value" id="stat-users">—</span>
+    </div>
+  </div>
+
+  <p class="admin-status" id="admin-status">Loading…</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
+<script src="/config.js"></script>
+<script src="/auth-client.js"></script>
+<script>
+  (async () => {
+    const { Auth } = window;
+    const statusEl = document.getElementById("admin-status");
+    const usersEl = document.getElementById("stat-users");
+
+    const session = await Auth.getSession();
+    if (!session) {
+      location.replace("/login?next=/admin");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/stats", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (res.status === 403) {
+        statusEl.textContent = "Not authorized.";
+        statusEl.classList.add("admin-status--error");
+        usersEl.textContent = "—";
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || typeof data.totalUsers !== "number") {
+        statusEl.textContent = (data && data.error) || "Could not load admin stats.";
+        statusEl.classList.add("admin-status--error");
+        return;
+      }
+
+      usersEl.textContent = String(data.totalUsers);
+      statusEl.textContent = "Updated just now.";
+    } catch {
+      statusEl.textContent = "Could not reach the server. Try again.";
+      statusEl.classList.add("admin-status--error");
+    }
+  })();
+</script>
+</body>
+</html>

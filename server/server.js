@@ -59,6 +59,11 @@ const upload = multer({
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || "").trim();
 
+// Who gets the admin page. Checked here AND again inside the
+// admin_user_count() Postgres function (see supabase/admin_setup.sql) —
+// two independent locks, so a bug in one does not expose the other.
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "reveal@shadowfx.co.za").trim().toLowerCase();
+
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.
 function jwtRole(token) {
@@ -162,6 +167,7 @@ app.get("/", (req, res) => res.sendFile(page("landing.html")));
 app.get("/login", (req, res) => res.sendFile(page("login.html")));
 app.get("/signup", (req, res) => res.sendFile(page("signup.html")));
 app.get("/app", (req, res) => res.sendFile(page("app.html")));
+app.get("/admin", (req, res) => res.sendFile(page("admin.html")));
 
 // Public Supabase settings for the browser, generated from .env so the keys
 // live in one place.
@@ -404,6 +410,49 @@ app.get("/api/history", requireUser, async (req, res) => {
   } catch (err) {
     console.error("History fetch error:", err.message);
     res.json({ items: [] });
+  }
+});
+
+// --- Admin ---------------------------------------------------------------
+// Only the configured ADMIN_EMAIL gets anything back. The real security
+// boundary is in Postgres (admin_user_count() checks the caller's own
+// email again) — this check is just a fast, friendly reject for everyone
+// else, and keeps unauthorized calls from spending a round trip.
+app.get("/api/admin/stats", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_user_count`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json"
+      },
+      body: "{}",
+      signal: AbortSignal.timeout(8000)
+    });
+    const raw = await r.text();
+    if (!r.ok) {
+      console.error("Admin stats RPC failed:", r.status, raw.slice(0, 300));
+      // Most likely cause: supabase/admin_setup.sql has not been run yet.
+      return res.status(502).json({ error: "Could not load admin stats. Has supabase/admin_setup.sql been run yet?" });
+    }
+    let totalUsers = null;
+    try {
+      const parsed = JSON.parse(raw);
+      totalUsers = typeof parsed === "number" ? parsed : null;
+    } catch {
+      /* leave null, handled below */
+    }
+    res.json({ totalUsers });
+  } catch (err) {
+    console.error("Admin stats error:", err.message);
+    res.status(502).json({ error: "Could not load admin stats." });
   }
 });
 
