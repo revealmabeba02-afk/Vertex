@@ -730,12 +730,22 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
       console.error("Admin paying-users RPC failed:", err.message);
       return null;
     });
+    // Total revenue: sum of amount_usd across every paid order. Soft-fails
+    // to null (shown as "—") rather than breaking the rest of the stats.
+    const paidSummary = await supabaseRpc("admin_paid_summary", {}, req.user.token).catch((err) => {
+      console.error("Admin paid summary RPC (for revenue) failed:", err.message);
+      return null;
+    });
+    const totalRevenue = Array.isArray(paidSummary)
+      ? paidSummary.reduce((sum, row) => sum + Number(row.paid_usd || 0), 0)
+      : null;
     if (totalUsers === null) {
       return res.status(502).json({ error: "Could not load admin stats. Has supabase/admin_setup.sql been run yet?" });
     }
     res.json({
       totalUsers: typeof totalUsers === "number" ? totalUsers : null,
-      payingUsers: typeof payingUsers === "number" ? payingUsers : null
+      payingUsers: typeof payingUsers === "number" ? payingUsers : null,
+      totalRevenue
     });
   } catch (err) {
     console.error("Admin stats error:", err.message);

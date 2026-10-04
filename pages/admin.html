@@ -334,6 +334,10 @@
       <div class="stat-card__label">Paying users</div>
       <div class="stat-card__value" id="stat-paid">—</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Total revenue</div>
+      <div class="stat-card__value" id="stat-revenue">—</div>
+    </div>
   </div>
 
   <p class="admin-status" id="admin-status">Loading…</p>
@@ -373,6 +377,7 @@
     const statusEl = document.getElementById("admin-status");
     const statUsersEl = document.getElementById("stat-users");
     const statPaidEl = document.getElementById("stat-paid");
+    const statRevenueEl = document.getElementById("stat-revenue");
     const tableEl = document.getElementById("users-table");
     const tbodyEl = document.getElementById("users-tbody");
     const emptyEl = document.getElementById("users-empty");
@@ -422,6 +427,10 @@
       statPaidEl.textContent =
         statsRes.ok && statsData && typeof statsData.payingUsers === "number"
           ? String(statsData.payingUsers)
+          : "—";
+      statRevenueEl.textContent =
+        statsRes.ok && statsData && typeof statsData.totalRevenue === "number"
+          ? `$${statsData.totalRevenue.toFixed(2)}`
           : "—";
 
       const usersData = await usersRes.json().catch(() => null);
