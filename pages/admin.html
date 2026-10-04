@@ -110,6 +110,43 @@
     font-size: 13.5px;
   }
 
+  .briefing-card {
+    margin-top: 28px;
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .briefing-card__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .briefing-card__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--bull);
+    box-shadow: 0 0 8px var(--bull);
+    animation: briefing-pulse 2s ease-in-out infinite;
+  }
+  @keyframes briefing-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .briefing-card__text {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
   .health-card {
     margin-top: 28px;
     padding: 22px 24px;
@@ -247,6 +284,11 @@
   <h1 class="hero__title" style="font-size: clamp(28px, 4vw, 38px);">Vertex AI</h1>
   <p class="hero__lede" style="margin-bottom: 0;">Only you can see this page.</p>
 
+  <div class="briefing-card">
+    <div class="briefing-card__label"><span class="briefing-card__dot" aria-hidden="true"></span>Vertex AI Briefing</div>
+    <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
+  </div>
+
   <div class="health-card">
     <div class="health-card__percent" id="health-percent">—</div>
     <div class="health-card__checks" id="health-checks">
@@ -322,8 +364,9 @@
     }
     const authHeader = { Authorization: `Bearer ${session.access_token}` };
 
-    // Health and support load independently of the stats/users block below —
-    // a failure in one never blocks the other from showing.
+    // Briefing, health and support all load independently of the stats/users
+    // block below — a failure in one never blocks the others from showing.
+    loadBriefing(authHeader);
     loadHealth(authHeader);
     loadSupport(authHeader);
 
@@ -393,6 +436,21 @@
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function loadBriefing(authHeader) {
+      const textEl = document.getElementById("briefing-text");
+      try {
+        const res = await fetch("/api/admin/briefing", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || typeof data.text !== "string") {
+          textEl.textContent = (data && data.error) || "Could not load briefing.";
+          return;
+        }
+        textEl.textContent = data.text;
+      } catch {
+        textEl.textContent = "Could not reach the server.";
+      }
     }
 
     async function loadHealth(authHeader) {

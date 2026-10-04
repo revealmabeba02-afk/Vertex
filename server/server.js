@@ -872,6 +872,110 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
   }
 });
 
+// --- AI Briefing -----------------------------------------------------------
+// A short "welcome back" status briefing for the admin page, built from the
+// same real data as the health card, user stats and support inbox. Uses the
+// same ANTHROPIC_API_KEY as support AI triage; falls back to a plain
+// templated summary (no AI, but still real numbers) if that key isn't set.
+const BRIEFING_AI_SYSTEM_PROMPT = `You are a loyal, sharp AI assistant giving the owner of "Vertex Chart Scanner" a short status briefing, in the style of a calm, capable aide reporting to their commander. Always address them as "sir". Open with a short "Welcome back, sir" style greeting, then report the real numbers you're given in plain, confident language. If something needs attention (a failing system check, open support tickets, pending payments), flag it clearly and say what to do about it. If everything looks good, say so and keep it short. Never invent numbers you weren't given — only use what's in the data. Keep it under 90 words, plain text, no markdown, no bullet points, written as natural spoken sentences.`;
+
+async function aiBriefing(data) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 250,
+        system: BRIEFING_AI_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: JSON.stringify(data) }]
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const result = await r.json();
+    if (!r.ok) {
+      console.error("Briefing AI error:", r.status, result);
+      return null;
+    }
+    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
+    return text.trim() || null;
+  } catch (err) {
+    console.error("Briefing AI failed:", err.message);
+    return null;
+  }
+}
+
+function fallbackBriefing(data) {
+  const bits = [`Welcome back, sir. Systems are at ${data.healthPercent}%.`];
+  if (data.failingChecks.length > 0) {
+    bits.push(`Needs attention: ${data.failingChecks.join(", ")}.`);
+  }
+  bits.push(`${data.payingUsers ?? "—"} paying users out of ${data.totalUsers ?? "—"} total.`);
+  if (data.openTickets > 0) {
+    bits.push(`${data.openTickets} support ${data.openTickets === 1 ? "ticket needs" : "tickets need"} a reply.`);
+  } else {
+    bits.push("No open support tickets.");
+  }
+  if (data.pendingOrders > 0) {
+    bits.push(`${data.pendingOrders} payment${data.pendingOrders === 1 ? "" : "s"} still awaiting confirmation.`);
+  }
+  return bits.join(" ");
+}
+
+app.get("/api/admin/briefing", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const [accounts, scanProvider, paymentsConfigured, paymentsReachable] = await Promise.all([
+      checkAccounts(req.user.token),
+      checkScanProvider(),
+      checkPaymentsConfigured(),
+      checkPaymentsReachable()
+    ]);
+    const checks = [
+      { name: "Accounts & database", ...accounts },
+      { name: "Scan provider", ...scanProvider },
+      { name: "Payments configured", ...paymentsConfigured },
+      { name: "Payments network", ...paymentsReachable }
+    ];
+    const healthPercent = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
+    const failingChecks = checks.filter((c) => !c.ok).map((c) => c.name);
+
+    const [totalUsers, payingUsers, supportMessages, pendingOrders] = await Promise.all([
+      supabaseRpc("admin_user_count", {}, req.user.token).catch(() => null),
+      supabaseRpc("admin_paying_users_count", {}, req.user.token).catch(() => null),
+      supabaseRpc("admin_list_support_messages", {}, req.user.token).catch(() => []),
+      CREDITS_READY
+        ? supabaseRpc("list_pending_orders", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY).catch(() => [])
+        : Promise.resolve([])
+    ]);
+    const openTickets = Array.isArray(supportMessages)
+      ? supportMessages.filter((m) => m.status === "open").length
+      : 0;
+
+    const data = {
+      healthPercent,
+      failingChecks,
+      totalUsers: typeof totalUsers === "number" ? totalUsers : null,
+      payingUsers: typeof payingUsers === "number" ? payingUsers : null,
+      openTickets,
+      pendingOrders: Array.isArray(pendingOrders) ? pendingOrders.length : 0
+    };
+
+    const aiText = await aiBriefing(data);
+    res.json({ text: aiText || fallbackBriefing(data), source: aiText ? "ai" : "fallback" });
+  } catch (err) {
+    console.error("Admin briefing error:", err.message);
+    res.status(502).json({ error: "Could not build briefing." });
+  }
+});
+
 // --- Support ---------------------------------------------------------------
 app.post("/api/support", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
