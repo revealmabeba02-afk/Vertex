@@ -105,6 +105,7 @@
     <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
     <a class="navpill" href="#how" data-view="how" role="tab" aria-selected="false" aria-controls="view-how" id="tab-how">How it works</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
+    <a class="navpill" href="#help" data-view="help" role="tab" aria-selected="false" aria-controls="view-help" id="tab-help">Help</a>
     <a class="navpill" href="#settings" data-view="settings" role="tab" aria-selected="false" aria-controls="view-settings" id="tab-settings">Settings</a>
   </nav>
 
@@ -121,6 +122,7 @@
 
     <div class="account" id="account" hidden>
       <span class="account__email" id="account-email"></span>
+      <a href="/admin" class="btn btn--ghost" id="admin-link" hidden>Admin</a>
       <button type="button" class="btn btn--ghost" id="logout-btn">Log out</button>
     </div>
   </div>
@@ -418,6 +420,31 @@
     </div>
 
     <p class="disclaimer-note">Credits never expire. Payments are matched automatically within about a minute — if yours is slower, it'll still land, just check back here.</p>
+  </section>
+
+  <!-- ============ HELP (own tab) ============ -->
+  <section class="view help" id="view-help" role="tabpanel" aria-labelledby="tab-help" hidden>
+    <p class="eyebrow">
+      <span class="eyebrow__dot" aria-hidden="true"></span>
+      Support
+    </p>
+    <h1 class="hero__title">Help</h1>
+    <p class="hero__lede">Stuck on something, or found a bug? Send a message — it goes straight to the team.</p>
+
+    <form id="help-form" class="settings-card" style="padding: 22px 24px;">
+      <label class="field__label" for="help-message">Your message</label>
+      <textarea id="help-message" class="input" rows="6" maxlength="4000" placeholder="Tell us what's going on…" style="margin-top: 8px; resize: vertical; font-family: inherit;" required></textarea>
+      <button type="submit" id="help-submit-btn" class="scan-btn" style="margin-top: 16px;">
+        <span class="scan-btn__label">Send message</span>
+        <span class="scan-btn__spinner" aria-hidden="true"></span>
+      </button>
+      <p id="help-status" class="credits-status" hidden></p>
+    </form>
+
+    <div id="help-history" style="margin-top: 24px;" hidden>
+      <p class="settings-row__title" style="margin-bottom: 12px;">Your messages</p>
+      <div id="help-history-list"></div>
+    </div>
   </section>
 
   <!-- ============ SETTINGS (own tab) ============ -->

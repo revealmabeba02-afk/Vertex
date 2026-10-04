@@ -109,6 +109,99 @@
     color: var(--text-faint);
     font-size: 13.5px;
   }
+
+  .health-card {
+    margin-top: 28px;
+    padding: 22px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .health-card__percent {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 44px;
+    color: var(--bull);
+    min-width: 110px;
+  }
+  .health-card__percent.is-warn { color: var(--accent); }
+  .health-card__percent.is-bad { color: var(--bear); }
+  .health-card__checks {
+    flex: 1;
+    min-width: 240px;
+    display: grid;
+    gap: 8px;
+  }
+  .health-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .health-check__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--text-faint);
+  }
+  .health-check__dot.is-ok { background: var(--bull); }
+  .health-check__dot.is-bad { background: var(--bear); }
+  .health-check__name { color: var(--text); font-weight: 600; }
+  .health-check__detail { color: var(--text-faint); }
+
+  .support-card {
+    margin-top: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .support-item {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .support-item:last-child { border-bottom: 0; }
+  .support-item__body { flex: 1; min-width: 0; }
+  .support-item__meta {
+    font-size: 12px;
+    color: var(--text-faint);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .support-item__tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .support-item__tag--open { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+  .support-item__tag--resolved { background: color-mix(in srgb, var(--bull) 20%, transparent); color: var(--bull); }
+  .support-item__text {
+    margin-top: 6px;
+    font-size: 13.5px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .support-item__actions { display: flex; gap: 8px; flex: none; }
 </style>
 </head>
 <body>
@@ -154,6 +247,13 @@
   <h1 class="hero__title" style="font-size: clamp(28px, 4vw, 38px);">Vertex AI</h1>
   <p class="hero__lede" style="margin-bottom: 0;">Only you can see this page.</p>
 
+  <div class="health-card">
+    <div class="health-card__percent" id="health-percent">—</div>
+    <div class="health-card__checks" id="health-checks">
+      <div class="health-check">Loading health…</div>
+    </div>
+  </div>
+
   <div class="admin-stats">
     <div class="stat-card">
       <div class="stat-card__label">Total signed-up users</div>
@@ -185,6 +285,12 @@
       <div class="users-empty" id="users-empty">Loading…</div>
     </div>
   </div>
+
+  <div class="support-card">
+    <div class="users-card__head">Support messages</div>
+    <div id="support-list"></div>
+    <div class="users-empty" id="support-empty">Loading…</div>
+  </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
@@ -215,6 +321,11 @@
       return;
     }
     const authHeader = { Authorization: `Bearer ${session.access_token}` };
+
+    // Health and support load independently of the stats/users block below —
+    // a failure in one never blocks the other from showing.
+    loadHealth(authHeader);
+    loadSupport(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -282,6 +393,123 @@
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function loadHealth(authHeader) {
+      const percentEl = document.getElementById("health-percent");
+      const checksEl = document.getElementById("health-checks");
+      try {
+        const res = await fetch("/api/admin/health", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || typeof data.percent !== "number") {
+          percentEl.textContent = "—";
+          checksEl.innerHTML = `<div class="health-check">${escapeHtml((data && data.error) || "Could not load health.")}</div>`;
+          return;
+        }
+        percentEl.textContent = data.percent + "%";
+        percentEl.className = "health-card__percent " + (data.percent >= 100 ? "" : data.percent >= 50 ? "is-warn" : "is-bad");
+        checksEl.innerHTML = "";
+        (data.checks || []).forEach((c) => {
+          const row = document.createElement("div");
+          row.className = "health-check";
+          row.innerHTML = `
+            <span class="health-check__dot ${c.ok ? "is-ok" : "is-bad"}"></span>
+            <span class="health-check__name">${escapeHtml(c.name)}</span>
+            <span class="health-check__detail">— ${escapeHtml(c.detail || "")}</span>
+          `;
+          checksEl.appendChild(row);
+        });
+      } catch {
+        percentEl.textContent = "—";
+        checksEl.innerHTML = '<div class="health-check">Could not reach the server.</div>';
+      }
+    }
+
+    async function loadSupport(authHeader) {
+      const listEl = document.getElementById("support-list");
+      const emptyEl = document.getElementById("support-empty");
+      try {
+        const res = await fetch("/api/admin/support", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load support messages.";
+          return;
+        }
+        const messages = (data && Array.isArray(data.messages)) ? data.messages : [];
+        if (messages.length === 0) {
+          emptyEl.textContent = "No support messages yet.";
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = "";
+        messages.forEach((m) => {
+          const item = document.createElement("div");
+          item.className = "support-item";
+          item.style.flexDirection = "column";
+          item.style.alignItems = "stretch";
+          const when = (() => { try { return new Date(m.created_at).toLocaleString(); } catch { return ""; } })();
+          const isResolved = m.status === "resolved";
+
+          let bottomHtml;
+          if (isResolved) {
+            const byLabel = m.replied_by === "ai" ? "AI auto-reply" : "Your reply";
+            bottomHtml = `
+              <div class="support-item__reply-box" style="margin-top: 10px; padding: 12px 14px; border-left: 2px solid var(--bull); background: var(--panel-alt); border-radius: 0 10px 10px 0;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin-bottom: 4px;">${escapeHtml(byLabel)}</div>
+                <div style="font-size: 13.5px; color: var(--text-dim); white-space: pre-wrap;">${escapeHtml(m.reply || "")}</div>
+              </div>
+            `;
+          } else {
+            const draftNote = m.ai_suggestion
+              ? '<div style="font-size: 11.5px; color: var(--accent); margin-bottom: 6px;">AI drafted this — review before sending.</div>'
+              : "";
+            bottomHtml = `
+              <div style="margin-top: 10px;">
+                ${draftNote}
+                <textarea class="input" data-reply-box="${m.id}" rows="3" style="resize: vertical; font-family: inherit;" placeholder="Write a reply…">${escapeHtml(m.ai_suggestion || "")}</textarea>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                  <button type="button" class="btn btn--ghost" data-send-reply="${m.id}">Send reply</button>
+                  <a class="btn btn--ghost" href="mailto:${encodeURIComponent(m.email || "")}">Email instead</a>
+                </div>
+              </div>
+            `;
+          }
+
+          item.innerHTML = `
+            <div class="support-item__meta">
+              <span class="support-item__tag ${isResolved ? "support-item__tag--resolved" : "support-item__tag--open"}">${escapeHtml(m.status)}</span>
+              <span>${escapeHtml(m.email || "")}</span>
+              <span>· ${escapeHtml(when)}</span>
+            </div>
+            <div class="support-item__text">${escapeHtml(m.message)}</div>
+            ${bottomHtml}
+          `;
+          listEl.appendChild(item);
+        });
+
+        listEl.querySelectorAll("[data-send-reply]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.sendReply;
+            const box = listEl.querySelector(`[data-reply-box="${id}"]`);
+            const reply = box ? box.value.trim() : "";
+            if (!reply) { box && box.focus(); return; }
+            btn.disabled = true;
+            try {
+              const r = await fetch(`/api/admin/support/${id}/reply`, {
+                method: "POST",
+                headers: { ...authHeader, "Content-Type": "application/json" },
+                body: JSON.stringify({ reply })
+              });
+              if (r.ok) loadSupport(authHeader);
+              else btn.disabled = false;
+            } catch {
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
     }
   })();
 </script>

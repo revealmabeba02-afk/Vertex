@@ -33,6 +33,13 @@
           if (!session) return toLogin();
           document.getElementById("account-email").textContent = session.user.email || "";
           document.getElementById("account").hidden = false;
+          // Cosmetic only — the real gate is server-side (requireUser +
+          // ADMIN_EMAIL check on every /api/admin/* route). This just saves
+          // you typing /admin by hand.
+          const adminLink = document.getElementById("admin-link");
+          if (adminLink && (session.user.email || "").toLowerCase() === "revealmabeba02@gmail.com") {
+            adminLink.hidden = false;
+          }
           revealPage();
         })
         .catch(toLogin);
@@ -124,10 +131,11 @@
     credits: document.getElementById("view-credits"),
     how: document.getElementById("view-how"),
     history: document.getElementById("view-history"),
+    help: document.getElementById("view-help"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#credits": "credits", "#how": "how", "#history": "history", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#how": "how", "#history": "history", "#help": "help", "#settings": "settings" };
 
   function applyView() {
     const name = HASH_TO_VIEW[location.hash] || "scan";
@@ -140,6 +148,7 @@
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
     if (name === "credits") refreshBalance();
+    if (name === "help") loadHelpHistory();
   }
 
   window.addEventListener("hashchange", applyView);
@@ -931,4 +940,107 @@
   }
 
   window.__vertexRefreshCredits = refreshBalance;
+
+  // --------------------------------------------------------------
+  // Help / support form.
+  // --------------------------------------------------------------
+  const helpForm = document.getElementById("help-form");
+  const helpMessage = document.getElementById("help-message");
+  const helpStatus = document.getElementById("help-status");
+  const helpSubmitBtn = document.getElementById("help-submit-btn");
+
+  if (helpForm) {
+    helpForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = helpMessage.value.trim();
+      if (!text) return;
+
+      helpSubmitBtn.disabled = true;
+      helpSubmitBtn.classList.add("is-loading");
+      helpStatus.hidden = true;
+
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/support", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          helpStatus.textContent = (data && data.error) || "Could not send your message. Please try again.";
+          helpStatus.classList.add("credits-status--error");
+          helpStatus.hidden = false;
+          return;
+        }
+        helpMessage.value = "";
+        helpStatus.textContent = "Sent — thanks, we'll get back to you.";
+        helpStatus.classList.remove("credits-status--error");
+        helpStatus.hidden = false;
+        // A fast confident AI reply can land within a couple seconds, so
+        // check back shortly, then again a bit later in case it takes longer.
+        setTimeout(loadHelpHistory, 2500);
+        setTimeout(loadHelpHistory, 8000);
+      } catch {
+        helpStatus.textContent = "Could not reach the server. Please try again.";
+        helpStatus.classList.add("credits-status--error");
+        helpStatus.hidden = false;
+      } finally {
+        helpSubmitBtn.disabled = false;
+        helpSubmitBtn.classList.remove("is-loading");
+      }
+    });
+  }
+
+  const helpHistoryWrap = document.getElementById("help-history");
+  const helpHistoryList = document.getElementById("help-history-list");
+
+  async function loadHelpHistory() {
+    if (!helpHistoryWrap) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/support/mine", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (messages.length === 0) {
+        helpHistoryWrap.hidden = true;
+        return;
+      }
+      helpHistoryWrap.hidden = false;
+      helpHistoryList.innerHTML = "";
+      messages.forEach((m) => {
+        const item = document.createElement("div");
+        item.className = "help-item";
+        let when = "";
+        try { when = new Date(m.created_at).toLocaleString(); } catch {}
+        const tagClass = m.status === "resolved" ? "help-item__tag--resolved" : "help-item__tag--open";
+        const tagText = m.status === "resolved" ? "Answered" : "Open";
+        item.innerHTML = `
+          <div class="help-item__meta">
+            <span class="help-item__tag ${tagClass}">${tagText}</span>
+            <span>${when}</span>
+          </div>
+          <div class="help-item__text"></div>
+        `;
+        item.querySelector(".help-item__text").textContent = m.message;
+        if (m.reply) {
+          const replyEl = document.createElement("div");
+          replyEl.className = "help-item__reply";
+          replyEl.innerHTML = '<span class="help-item__reply-label">Reply</span>';
+          const replyText = document.createElement("span");
+          replyText.textContent = m.reply;
+          replyEl.appendChild(replyText);
+          item.appendChild(replyEl);
+        }
+        helpHistoryList.appendChild(item);
+      });
+    } catch {
+      // Best-effort — leave whatever was last shown.
+    }
+  }
 })();

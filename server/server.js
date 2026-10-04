@@ -92,6 +92,63 @@ if (!CREDITS_READY) {
   );
 }
 
+// --- Support AI triage -----------------------------------------------------
+// Optional: without this key, support messages still save and show up on
+// the admin page fine — they just sit as plain "open" messages with no AI
+// suggestion, same as before this feature existed. Get a key from
+// https://console.anthropic.com/settings/keys.
+const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+const SUPPORT_AI_MODEL = (process.env.SUPPORT_AI_MODEL || "claude-haiku-4-5-20251001").trim();
+
+const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Vertex Chart Scanner (vertex-9s4c.onrender.com), a forex chart analysis tool.
+
+What Vertex does: users upload a chart screenshot and pick a timeframe, and get back a technical read — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, and take-profit targets. It is a technical read, not financial advice.
+
+Billing: pay-per-scan credits, bought in one-time bundles via Binance Pay (Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans). Credits never expire. Payment is usually auto-detected and credited within about a minute of sending it. A failed scan automatically refunds its credit.
+
+Known quirk: this runs on a free hosting tier that goes to sleep after a few minutes of no traffic. The very first request after that can take up to ~50 seconds and may show "Could not reach the server" — simply retrying a few seconds later almost always works. This is not a bug.
+
+A user has submitted a support message. Decide: can you answer this confidently and completely using ONLY the information above, with a short, warm, helpful reply? Or does it need a human (account-specific issues, refund requests, bug reports, anything requiring looking something up, or anything outside what's described above)?
+
+Reply with ONLY a JSON object, no other text, in exactly this shape:
+{"confidence":"high","reply":"..."} — for a question you can fully answer from the information above
+{"confidence":"low","reply":"..."} — a best-effort DRAFT reply for a human to review and edit before sending; still write something useful, just don't claim certainty about anything you don't actually know
+
+Keep replies under 120 words, friendly, plain text (no markdown).`;
+
+async function aiTriageSupportMessage(message) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 400,
+        system: SUPPORT_AI_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: message }]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      console.error("Support AI error:", r.status, data);
+      return null;
+    }
+    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("") : "";
+    const parsed = JSON.parse(text.trim());
+    if (!parsed || typeof parsed.reply !== "string") return null;
+    return { confidence: parsed.confidence === "high" ? "high" : "low", reply: parsed.reply.trim() };
+  } catch (err) {
+    console.error("Support AI triage failed:", err.message);
+    return null;
+  }
+}
+
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.
 function jwtRole(token) {
@@ -744,6 +801,158 @@ app.get("/api/admin/users", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Admin users error:", err.message);
     res.status(502).json({ error: "Could not load users." });
+  }
+});
+
+// --- System health ---------------------------------------------------------
+// Four independent checks, each worth 25%, so the admin page can show one
+// plain percentage instead of a wall of technical detail. Every check has a
+// short timeout and is wrapped so one slow/broken check can never hang or
+// crash the others — a check that errors just counts as "down".
+async function checkAccounts(adminToken) {
+  if (!SUPABASE_READY) return { ok: false, detail: "Supabase keys not configured." };
+  try {
+    await supabaseRpc("admin_user_count", {}, adminToken);
+    return { ok: true, detail: "Accounts and database reachable." };
+  } catch (err) {
+    return { ok: false, detail: err.message || "Could not reach Supabase." };
+  }
+}
+
+async function checkScanProvider() {
+  if (!FXSYNAPSE_API_KEY) return { ok: false, detail: "FXSYNAPSE_API_KEY not configured." };
+  try {
+    // Network reachability only — this does not spend a scan or confirm the
+    // account has an active plan, just that the provider's server answers.
+    const r = await fetch(FXSYNAPSE_BASE_URL, { method: "GET", signal: AbortSignal.timeout(6000) });
+    return { ok: true, detail: `Reachable (HTTP ${r.status}). This does not confirm an active API plan.` };
+  } catch (err) {
+    return { ok: false, detail: `Could not reach ${FXSYNAPSE_BASE_URL}: ${err.message}` };
+  }
+}
+
+async function checkPaymentsConfigured() {
+  if (!CREDITS_READY) return { ok: false, detail: "Missing one of BINANCE_API_KEY/SECRET/CREDIT_FULFILL_SECRET." };
+  return { ok: true, detail: "Binance keys and fulfill secret are set." };
+}
+
+async function checkPaymentsReachable() {
+  try {
+    // A free, unsigned Binance endpoint — just checks the network path to
+    // Binance works at all, independent of whether our API key is valid.
+    const r = await fetch("https://api.binance.com/api/v3/ping", { signal: AbortSignal.timeout(6000) });
+    return { ok: r.ok, detail: r.ok ? "Binance API reachable." : `Binance responded with HTTP ${r.status}.` };
+  } catch (err) {
+    return { ok: false, detail: `Could not reach Binance: ${err.message}` };
+  }
+}
+
+app.get("/api/admin/health", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const [accounts, scanProvider, paymentsConfigured, paymentsReachable] = await Promise.all([
+      checkAccounts(req.user.token),
+      checkScanProvider(),
+      checkPaymentsConfigured(),
+      checkPaymentsReachable()
+    ]);
+    const checks = [
+      { name: "Accounts & database", ...accounts },
+      { name: "Scan provider (FXSynapse)", ...scanProvider },
+      { name: "Payments configured", ...paymentsConfigured },
+      { name: "Payments network (Binance)", ...paymentsReachable }
+    ];
+    const okCount = checks.filter((c) => c.ok).length;
+    res.json({ percent: Math.round((okCount / checks.length) * 100), checks });
+  } catch (err) {
+    console.error("Admin health error:", err.message);
+    res.status(502).json({ error: "Could not run health checks." });
+  }
+});
+
+// --- Support ---------------------------------------------------------------
+app.post("/api/support", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const message = String(req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ error: "Enter a message first." });
+  if (message.length > 4000) return res.status(400).json({ error: "That message is too long." });
+  try {
+    const row = await supabaseRpc("create_support_message", { p_message: message }, req.user.token);
+    res.json({ ok: true });
+
+    // Fire-and-forget: never make the user wait on the AI call, and never
+    // let an AI/network hiccup turn a successfully-saved message into an
+    // error response. If this fails, the message just sits as a normal
+    // open message with no suggestion, same as if AI wasn't configured.
+    if (row && row.id) {
+      aiTriageSupportMessage(message)
+        .then((result) => {
+          if (!result) return;
+          const args =
+            result.confidence === "high"
+              ? { p_id: row.id, p_reply: result.reply, p_suggestion: null, p_secret: CREDIT_FULFILL_SECRET }
+              : { p_id: row.id, p_reply: null, p_suggestion: result.reply, p_secret: CREDIT_FULFILL_SECRET };
+          return supabaseRpc("system_set_ai_reply", args, SUPABASE_ANON_KEY);
+        })
+        .catch((err) => console.error("Support AI reply save failed:", err.message));
+    }
+  } catch (err) {
+    console.error("Support message error:", err.message);
+    res.status(502).json({ error: "Could not send your message. Please try again." });
+  }
+});
+
+// A user's own support messages, with whatever reply they've gotten so far
+// (AI or admin) — shown in their Help tab. RLS already scopes this to the
+// caller's own rows regardless of filters, same pattern as /api/credits/orders.
+app.get("/api/support/mine", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/support_messages?select=id,message,status,reply,replied_by,created_at,replied_at&order=created_at.desc&limit=20`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) return res.json({ messages: [] });
+    const messages = await r.json();
+    res.json({ messages: Array.isArray(messages) ? messages : [] });
+  } catch (err) {
+    console.error("Support mine fetch error:", err.message);
+    res.json({ messages: [] });
+  }
+});
+
+app.get("/api/admin/support", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const messages = await supabaseRpc("admin_list_support_messages", {}, req.user.token);
+    res.json({ messages: Array.isArray(messages) ? messages : [] });
+  } catch (err) {
+    console.error("Admin support list error:", err.message);
+    res.status(502).json({ error: "Could not load support messages. Has supabase/support_setup.sql been run?" });
+  }
+});
+
+app.post("/api/admin/support/:id/reply", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const reply = String(req.body?.reply || "").trim();
+  if (!reply) return res.status(400).json({ error: "Reply cannot be empty." });
+  try {
+    await supabaseRpc("admin_reply_support_message", { p_id: req.params.id, p_reply: reply }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin reply support error:", err.message);
+    res.status(502).json({ error: "Could not send that reply." });
   }
 });
 
