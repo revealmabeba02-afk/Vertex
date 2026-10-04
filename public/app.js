@@ -591,7 +591,9 @@
     const type = document.createElement("span");
     const isLong = (entry.type || "").toLowerCase() === "long";
     type.className = "entry-card__type " + (isLong ? "entry-card__type--long" : "entry-card__type--short");
-    type.textContent = entry.type || "—";
+    // Match the Buy/Sell wording used in the headline signal tag, instead of
+    // the Long/Short wording FXSynapse's "side" maps to internally.
+    type.textContent = isLong ? "BUY" : "SELL";
 
     const zone = document.createElement("span");
     zone.className = "entry-card__zone";
@@ -601,23 +603,10 @@
     head.appendChild(zone);
     card.appendChild(head);
 
-    if (entry.trigger) {
-      const trigLabel = document.createElement("div");
-      trigLabel.className = "entry-card__label";
-      trigLabel.textContent = "TRIGGER";
-      const trig = document.createElement("p");
-      trig.className = "entry-card__trigger";
-      trig.textContent = entry.trigger;
-      card.appendChild(trigLabel);
-      card.appendChild(trig);
-    }
-
-    if (entry.rationale) {
-      const rationale = document.createElement("p");
-      rationale.className = "entry-card__rationale";
-      rationale.textContent = entry.rationale;
-      card.appendChild(rationale);
-    }
+    // Kept deliberately short: just the signal and the price. The full
+    // explanation used to run under here (trigger + rationale paragraphs) —
+    // cut per King's call, since the stop loss / take profit / invalidation
+    // cards below already carry the detail people actually act on.
 
     return card;
   }

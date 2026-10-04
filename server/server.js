@@ -481,18 +481,24 @@ app.get("/api/health", (req, res) => {
 // turns FXSynapse's own JSON (symbol, marketStructure, levels, plan,
 // concepts, topDown, ...) into that same shape, so the result UI didn't
 // need to be rebuilt from scratch.
-function fmtNum(n) {
-  return typeof n === "number" ? String(n) : n != null ? String(n) : "—";
+// FXSynapse's "digits" field tells us how many decimal places that symbol's
+// own price feed actually uses (e.g. 2 for XAUUSD/indices, 5 for most forex
+// majors) — using it instead of printing a float's raw length is what turns
+// "51073.46785714285" into "51,073.47".
+function fmtNum(n, digits) {
+  if (typeof n !== "number") return n != null ? String(n) : "—";
+  const places = typeof digits === "number" && digits >= 0 && digits <= 8 ? digits : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places });
 }
 
-function describeLevels(levels) {
+function describeLevels(levels, digits) {
   if (!Array.isArray(levels)) return [];
   return levels.slice(0, 6).map((lvl) => {
     const rej =
       lvl && lvl.rejections != null
         ? ` · ${lvl.rejections} rejection${lvl.rejections === 1 ? "" : "s"}`
         : "";
-    return `${fmtNum(lvl?.low)} – ${fmtNum(lvl?.high)}${rej}`;
+    return `${fmtNum(lvl?.low, digits)} – ${fmtNum(lvl?.high, digits)}${rej}`;
   });
 }
 
@@ -524,6 +530,7 @@ function conceptSummary(concepts) {
 function mapFxSynapseToAnalysis(fx) {
   const plan = fx.plan || {};
   const planOk = !!plan.ok;
+  const digits = typeof fx.digits === "number" ? fx.digits : null;
   const bias = planOk && plan.side
     ? (String(plan.side).toLowerCase() === "buy" ? "Bullish" : "Bearish")
     : biasFromStructure(fx.marketStructure);
@@ -531,14 +538,12 @@ function mapFxSynapseToAnalysis(fx) {
   const entries = planOk
     ? [{
         type: String(plan.side || "").toLowerCase() === "buy" ? "Long" : "Short",
-        entry_zone: fmtNum(plan.entry),
-        trigger: "Rule-based structure entry, calculated from live price bars.",
-        rationale: "Derived from detected market structure, levels and order flow — not a visual read of a screenshot."
+        entry_zone: fmtNum(plan.entry, digits)
       }]
     : [];
 
   const targets = Array.isArray(plan.targets)
-    ? plan.targets.map((t) => ({ target: fmtNum(t), rationale: "" }))
+    ? plan.targets.map((t, i) => ({ target: fmtNum(t, digits), rationale: `Target ${i + 1}` }))
     : [];
 
   const firstTarget = Array.isArray(plan.targets) && typeof plan.targets[0] === "number" ? plan.targets[0] : null;
@@ -551,7 +556,11 @@ function mapFxSynapseToAnalysis(fx) {
   if (!fx.symbol) {
     notesParts.push("Could not confirm the pair from FXSynapse's price source — double-check the symbol and try again.");
   } else if (!planOk) {
-    notesParts.push("No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting.");
+    notesParts.push(
+      plan.reason
+        ? `No trade right now: ${plan.reason}`
+        : "No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting."
+    );
   }
 
   const structureLabel = (fx.marketStructure || "range").replace(/^\w/, (c) => c.toUpperCase());
@@ -562,19 +571,19 @@ function mapFxSynapseToAnalysis(fx) {
     confidence: null,
     bars: typeof fx.bars === "number" ? fx.bars : null,
     market_structure: {
-      trend: `${structureLabel} market structure, measured directly from live price bars (no screenshot involved).`,
-      key_levels: describeLevels(fx.levels),
+      trend: `${structureLabel} market structure, measured directly from live price bars.`,
+      key_levels: describeLevels(fx.levels, digits),
       chart_pattern: null
     },
     potential_entries: entries,
     stop_loss: {
-      suggestion: planOk ? fmtNum(plan.stop) : "—",
+      suggestion: planOk ? fmtNum(plan.stop, digits) : "—",
       rationale: planOk ? "Calculated from the nearest invalidating structure." : ""
     },
     take_profit: targets,
-    risk_reward_estimate: rr,
+    risk_reward_estimate: rr || (planOk ? "No clean target to measure against yet." : "No active trade to estimate."),
     invalidation: planOk
-      ? `Plan is invalidated if price closes back through ${fmtNum(plan.stop)}.`
+      ? `Plan is invalidated if price closes back through ${fmtNum(plan.stop, digits)}.`
       : "No directional plan right now, so nothing to invalidate.",
     notes: notesParts.join(" "),
     disclaimer: "This is a rule-based technical read calculated from live price data, not financial advice. Always confirm with your own analysis and risk management.",
