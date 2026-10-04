@@ -1033,24 +1033,39 @@ body.scanning .scan-hud {
   text-align: center;
 }
 
-.scan-hud__eye {
+/* A small bank of candles ticking up and down in place, standing in for
+   "reading live price bars" rather than a generic AI-eye icon. */
+.scan-hud__ticker {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  width: 56px;
+  gap: 7px;
   height: 56px;
-  border-radius: 50%;
-  color: var(--bull);
-  border: 1px solid color-mix(in srgb, var(--bull) 45%, transparent);
-  background: color-mix(in srgb, var(--bull) 12%, transparent);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 45%, transparent);
-  animation: hud-eye-pulse 1.8s ease-out infinite;
 }
 
-@keyframes hud-eye-pulse {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 45%, transparent); }
-  70%  { box-shadow: 0 0 0 14px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+.scan-hud__candle {
+  width: 7px;
+  border-radius: 3px;
+  transform-origin: bottom center;
+  animation: hud-candle-tick 1.6s ease-in-out infinite;
+}
+
+.scan-hud__candle--up { background: var(--bull); }
+.scan-hud__candle--down { background: var(--bear); }
+
+.scan-hud__candle:nth-child(1) { height: 22px; animation-delay: 0s; }
+.scan-hud__candle:nth-child(2) { height: 38px; animation-delay: 0.12s; }
+.scan-hud__candle:nth-child(3) { height: 52px; animation-delay: 0.24s; }
+.scan-hud__candle:nth-child(4) { height: 30px; animation-delay: 0.36s; }
+.scan-hud__candle:nth-child(5) { height: 44px; animation-delay: 0.48s; }
+
+@keyframes hud-candle-tick {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-hud__candle { animation: none; opacity: 0.85; }
 }
 
 .scan-hud__title {
@@ -1360,19 +1375,122 @@ body.scanning .scan-hud {
   letter-spacing: 0.08em;
 }
 
-.levelline {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 8px;
+/* ===========================================================
+   Trade plan: entry card(s) + a price ladder + a compact stat row,
+   replacing four separate boxes with one read-top-to-bottom panel.
+   =========================================================== */
+.trade-plan .entry-list { margin-bottom: 24px; }
+
+.trade-ladder {
+  margin: 8px 0 44px;
+  padding: 0 6px;
 }
 
-.levelline--sl { color: var(--bear); }
-.levelline--tp { color: var(--bull); margin-bottom: 4px; }
+.trade-ladder__track {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-soft);
+}
 
-.tp-item { margin-bottom: 14px; }
-.tp-item:last-child { margin-bottom: 0; }
-.tp-item .result-section__body { color: var(--text-dim); font-size: 14px; }
+.trade-ladder__fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.trade-ladder__fill--risk { background: color-mix(in srgb, var(--bear) 55%, transparent); }
+.trade-ladder__fill--reward { background: color-mix(in srgb, var(--bull) 55%, transparent); }
+
+.trade-ladder__point {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.trade-ladder__dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.trade-ladder__point--sl .trade-ladder__dot { background: var(--bear); }
+.trade-ladder__point--tp .trade-ladder__dot { background: var(--bull); }
+.trade-ladder__point--entry .trade-ladder__dot {
+  width: 13px;
+  height: 13px;
+  background: var(--text);
+}
+
+.trade-ladder__point--sl,
+.trade-ladder__point--tp { flex-direction: column-reverse; top: 100%; }
+
+.trade-ladder__tag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.trade-ladder__tag strong {
+  color: var(--text);
+  font-weight: 700;
+  margin-right: 5px;
+}
+
+.trade-ladder__point--sl .trade-ladder__tag strong { color: var(--bear); }
+.trade-ladder__point--tp .trade-ladder__tag strong { color: var(--bull); }
+
+.trade-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.trade-stat {
+  background: var(--panel);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trade-stat__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.trade-stat__value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.trade-stat--sl .trade-stat__value { color: var(--bear); }
+.trade-stat--tp .trade-stat__value { color: var(--bull); }
+
+.trade-plan__invalidation {
+  margin: 16px 2px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
 
 .result__disclaimer {
   margin: 22px 0 0;
@@ -1723,6 +1841,8 @@ body.scanning .scan-hud {
   .result__grid { grid-template-columns: 1fr; }
   .how__steps { grid-template-columns: 1fr; }
   .br-desktop { display: none; }
+  .trade-stats { grid-template-columns: 1fr; }
+  .trade-ladder { margin: 8px 0 56px; }
 }
 
 @media (max-width: 560px) {

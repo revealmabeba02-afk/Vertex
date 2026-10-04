@@ -508,32 +508,15 @@
     }
 
     const sl = a.stop_loss || {};
-    document.getElementById("res-sl-value").textContent = sl.suggestion || "Not specified";
-    document.getElementById("res-sl-rationale").textContent = sl.rationale || "";
-
-    const tpListEl = document.getElementById("res-tp-list");
-    tpListEl.innerHTML = "";
     const targets = Array.isArray(a.take_profit) ? a.take_profit : [];
-    if (targets.length === 0) {
-      tpListEl.innerHTML = '<p class="result-section__body">No clear target identified.</p>';
-    } else {
-      targets.forEach((tp) => {
-        const div = document.createElement("div");
-        div.className = "tp-item";
-        const line = document.createElement("p");
-        line.className = "levelline levelline--tp";
-        line.textContent = tp.target || "—";
-        const rationale = document.createElement("p");
-        rationale.className = "result-section__body";
-        rationale.textContent = tp.rationale || "";
-        div.appendChild(line);
-        div.appendChild(rationale);
-        tpListEl.appendChild(div);
-      });
-    }
 
+    document.getElementById("res-sl-value").textContent = sl.suggestion || "—";
+    document.getElementById("res-tp-value").textContent =
+      targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "No clear target yet";
     document.getElementById("res-rr").textContent = a.risk_reward_estimate || "Not enough information to estimate reliably.";
-    document.getElementById("res-invalidation").textContent = a.invalidation || "—";
+    document.getElementById("res-invalidation").textContent = a.invalidation || "";
+
+    buildTradeLadder(firstEntry, sl, targets, side);
 
     const notesWrap = document.getElementById("res-notes-wrap");
     if (a.notes) {
@@ -609,6 +592,82 @@
     // cards below already carry the detail people actually act on.
 
     return card;
+  }
+
+  // ----------------------------------------------------------------
+  // Trade ladder: a horizontal price line plotting stop, entry and
+  // target(s) in their real proportions, so the risk and the reward
+  // are something you can see, not just read as three separate numbers.
+  // ----------------------------------------------------------------
+  function buildTradeLadder(entry, sl, targets, side) {
+    const wrap = document.getElementById("res-ladder-wrap");
+    const track = document.getElementById("res-ladder-track");
+    track.innerHTML = "";
+
+    const entryVal = entry && typeof entry.entry_raw === "number" ? entry.entry_raw : null;
+    const slVal = sl && typeof sl.value_raw === "number" ? sl.value_raw : null;
+    const targetVals = targets
+      .map((t) => t.target_raw)
+      .filter((v) => typeof v === "number");
+
+    if (entryVal === null || slVal === null) {
+      wrap.hidden = true;
+      return;
+    }
+
+    const isLong = side === "long";
+    const values = [slVal, entryVal, ...targetVals];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = max - min || 1;
+    const pct = (v) => ((v - min) / span) * 100;
+
+    // Risk zone: entry back to stop. Reward zone: entry out to the nearest
+    // target, when there is one.
+    const riskFrom = Math.min(pct(entryVal), pct(slVal));
+    const riskTo = Math.max(pct(entryVal), pct(slVal));
+    const riskFill = document.createElement("div");
+    riskFill.className = "trade-ladder__fill trade-ladder__fill--risk";
+    riskFill.style.left = riskFrom + "%";
+    riskFill.style.width = (riskTo - riskFrom) + "%";
+    track.appendChild(riskFill);
+
+    if (targetVals.length > 0) {
+      const nearest = isLong ? Math.min(...targetVals) : Math.max(...targetVals);
+      const rewardFrom = Math.min(pct(entryVal), pct(nearest));
+      const rewardTo = Math.max(pct(entryVal), pct(nearest));
+      const rewardFill = document.createElement("div");
+      rewardFill.className = "trade-ladder__fill trade-ladder__fill--reward";
+      rewardFill.style.left = rewardFrom + "%";
+      rewardFill.style.width = (rewardTo - rewardFrom) + "%";
+      track.appendChild(rewardFill);
+    }
+
+    function addPoint(value, label, text, modifier) {
+      const point = document.createElement("div");
+      point.className = "trade-ladder__point trade-ladder__point--" + modifier;
+      point.style.left = pct(value) + "%";
+      const dot = document.createElement("span");
+      dot.className = "trade-ladder__dot";
+      const tag = document.createElement("span");
+      tag.className = "trade-ladder__tag";
+      tag.innerHTML = `<strong>${label}</strong> ${text}`;
+      point.appendChild(dot);
+      point.appendChild(tag);
+      track.appendChild(point);
+    }
+
+    addPoint(slVal, "SL", sl.suggestion || fmtRaw(slVal), "sl");
+    targetVals.forEach((v, i) => {
+      addPoint(v, targets.length > 1 ? `TP${i + 1}` : "TP", targets[i].target || fmtRaw(v), "tp");
+    });
+    addPoint(entryVal, isLong ? "BUY" : "SELL", entry.entry_zone || fmtRaw(entryVal), "entry");
+
+    wrap.hidden = false;
+  }
+
+  function fmtRaw(n) {
+    return typeof n === "number" ? n.toLocaleString("en-US", { maximumFractionDigits: 5 }) : "—";
   }
 
   function biasClass(bias) {

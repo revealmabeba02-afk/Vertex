@@ -214,11 +214,12 @@
         <span class="scan-hud__corner scan-hud__corner--br" aria-hidden="true"></span>
 
         <div class="scan-hud__center">
-          <div class="scan-hud__eye" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
+          <div class="scan-hud__ticker" aria-hidden="true">
+            <span class="scan-hud__candle scan-hud__candle--up"></span>
+            <span class="scan-hud__candle scan-hud__candle--down"></span>
+            <span class="scan-hud__candle scan-hud__candle--up"></span>
+            <span class="scan-hud__candle scan-hud__candle--up"></span>
+            <span class="scan-hud__candle scan-hud__candle--down"></span>
           </div>
           <p class="scan-hud__title">Analyzing</p>
           <p class="scan-hud__status" id="scan-hud-status">Reading price structure…</p>
@@ -264,30 +265,30 @@
           <ul id="res-levels" class="level-list"></ul>
         </section>
 
-        <section class="result-section result-section--wide">
-          <h2 class="result-section__title">Potential entries</h2>
+        <section class="result-section result-section--wide trade-plan">
+          <h2 class="result-section__title">Trade plan</h2>
           <div id="res-entries" class="entry-list"></div>
-        </section>
 
-        <section class="result-section">
-          <h2 class="result-section__title">Stop loss</h2>
-          <p id="res-sl-value" class="levelline levelline--sl"></p>
-          <p id="res-sl-rationale" class="result-section__body result-section__body--dim"></p>
-        </section>
+          <div id="res-ladder-wrap" class="trade-ladder" hidden>
+            <div class="trade-ladder__track" id="res-ladder-track"></div>
+          </div>
 
-        <section class="result-section">
-          <h2 class="result-section__title">Take profit</h2>
-          <div id="res-tp-list"></div>
-        </section>
+          <div class="trade-stats">
+            <div class="trade-stat trade-stat--sl">
+              <span class="trade-stat__label">Stop loss</span>
+              <span id="res-sl-value" class="trade-stat__value"></span>
+            </div>
+            <div class="trade-stat trade-stat--tp">
+              <span class="trade-stat__label">Take profit</span>
+              <span id="res-tp-value" class="trade-stat__value"></span>
+            </div>
+            <div class="trade-stat trade-stat--rr">
+              <span class="trade-stat__label">Risk / reward</span>
+              <span id="res-rr" class="trade-stat__value"></span>
+            </div>
+          </div>
 
-        <section class="result-section">
-          <h2 class="result-section__title">Risk / reward</h2>
-          <p id="res-rr" class="result-section__body"></p>
-        </section>
-
-        <section class="result-section">
-          <h2 class="result-section__title">Invalidation</h2>
-          <p id="res-invalidation" class="result-section__body"></p>
+          <p id="res-invalidation" class="trade-plan__invalidation"></p>
         </section>
 
         <section class="result-section result-section--wide" id="res-notes-wrap">

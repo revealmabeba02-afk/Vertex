@@ -538,12 +538,17 @@ function mapFxSynapseToAnalysis(fx) {
   const entries = planOk
     ? [{
         type: String(plan.side || "").toLowerCase() === "buy" ? "Long" : "Short",
-        entry_zone: fmtNum(plan.entry, digits)
+        entry_zone: fmtNum(plan.entry, digits),
+        entry_raw: typeof plan.entry === "number" ? plan.entry : null
       }]
     : [];
 
   const targets = Array.isArray(plan.targets)
-    ? plan.targets.map((t, i) => ({ target: fmtNum(t, digits), rationale: `Target ${i + 1}` }))
+    ? plan.targets.map((t, i) => ({
+        target: fmtNum(t, digits),
+        target_raw: typeof t === "number" ? t : null,
+        rationale: `Target ${i + 1}`
+      }))
     : [];
 
   const firstTarget = Array.isArray(plan.targets) && typeof plan.targets[0] === "number" ? plan.targets[0] : null;
@@ -578,6 +583,7 @@ function mapFxSynapseToAnalysis(fx) {
     potential_entries: entries,
     stop_loss: {
       suggestion: planOk ? fmtNum(plan.stop, digits) : "—",
+      value_raw: planOk && typeof plan.stop === "number" ? plan.stop : null,
       rationale: planOk ? "Calculated from the nearest invalidating structure." : ""
     },
     take_profit: targets,
