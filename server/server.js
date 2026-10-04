@@ -1,4 +1,5 @@
 const path = require("path");
+const crypto = require("crypto");
 
 // Load server/.env by absolute path, so it is found no matter which folder the
 // server is started from (project root, server/, a process manager, ...).
@@ -90,6 +91,101 @@ if (!CREDITS_READY) {
     "BINANCE_API_SECRET, CREDIT_FULFILL_SECRET. Buying credits and the payment\n" +
     "poller will be disabled until all three are set. See supabase/credits_setup.sql.\n"
   );
+}
+
+// --- Credits / Whop --------------------------------------------------------
+// Replaces Binance Pay as the primary way to buy credits (Binance's API
+// blocks requests from Render's server region with HTTP 451 — see the
+// pollBinancePayments code below). The Binance code stays in place as a
+// fallback but the /credits page now sends people to these Whop checkout
+// links instead.
+//
+// How a Whop payment gets credited: Whop sends a payment.succeeded webhook
+// to /api/webhooks/whop. We verify it's really from Whop (Standard
+// Webhooks-style HMAC signature, per Whop's docs), then match the payment
+// to a bundle by the amount paid (same trick used for Binance) and to a
+// Vertex account by the buyer's email, via the whop_credit_by_email()
+// Postgres function (supabase/whop_setup.sql).
+//
+// NOTE ON FIELD NAMES: Whop's exact webhook payload field names for the
+// buyer's email weren't fully confirmed from their public docs at the time
+// this was built — the handler below tries several likely locations and
+// logs the full raw payload either way, so the first real test payment can
+// be checked against Render's logs and the extraction adjusted if needed.
+const WHOP_WEBHOOK_SECRET = (process.env.WHOP_WEBHOOK_SECRET || "").trim();
+const WHOP_API_KEY = (process.env.WHOP_API_KEY || "").trim();
+const WHOP_READY = Boolean(WHOP_WEBHOOK_SECRET);
+
+const WHOP_CHECKOUT_LINKS = {
+  starter: process.env.WHOP_CHECKOUT_STARTER || "https://whop.com/shadowfx-1eca/starter-20-scans",
+  trader: process.env.WHOP_CHECKOUT_TRADER || "https://whop.com/shadowfx-1eca/trader-60-scans",
+  pro: process.env.WHOP_CHECKOUT_PRO || "https://whop.com/shadowfx-1eca/pro-150-scans"
+};
+
+if (!WHOP_READY) {
+  console.warn(
+    "\n[WARN] WHOP_WEBHOOK_SECRET is not set. Whop checkout links will still\n" +
+    "show on the credits page, but payments won't auto-credit until this is set.\n"
+  );
+}
+
+// Matches a paid amount to one of the 3 bundles, same ±$0.02 tolerance used
+// for Binance.
+function bundleByAmount(amountUsd) {
+  const entries = Object.entries(CREDIT_BUNDLES);
+  for (const [key, bundle] of entries) {
+    if (Math.abs(bundle.amount - amountUsd) < 0.02) return { key, ...bundle };
+  }
+  return null;
+}
+
+// Verifies a Whop webhook per the Standard Webhooks pattern their docs
+// describe: HMAC-SHA256 over "{webhook-id}.{webhook-timestamp}.{raw body}",
+// signed with the webhook secret (the "ws_..." value), base64-encoded, sent
+// as "v1,<signature>" in the webhook-signature header.
+function verifyWhopSignature(rawBody, headers) {
+  if (!WHOP_READY) return false;
+  const id = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+  const signatureHeader = headers["webhook-signature"];
+  if (!id || !timestamp || !signatureHeader) return false;
+
+  // Reject anything older than 5 minutes, per Whop's docs.
+  const ts = Number(timestamp);
+  if (!ts || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+
+  const signedContent = `${id}.${timestamp}.${rawBody}`;
+  const expected = crypto.createHmac("sha256", WHOP_WEBHOOK_SECRET).update(signedContent).digest("base64");
+
+  // The header can carry multiple "v1,<sig>" values space-separated; match
+  // against any of them.
+  const candidates = String(signatureHeader)
+    .split(" ")
+    .map((s) => s.split(",")[1])
+    .filter(Boolean);
+  return candidates.some((sig) => {
+    try {
+      return crypto.timingSafeEqual(Buffer.from(sig, "base64"), Buffer.from(expected, "base64"));
+    } catch {
+      return false;
+    }
+  });
+}
+
+// Best-effort extraction — see the NOTE above on unconfirmed field names.
+function extractWhopPaymentFields(data) {
+  const email =
+    data?.email ||
+    data?.user?.email ||
+    data?.member?.email ||
+    data?.buyer?.email ||
+    data?.customer?.email ||
+    null;
+  const amountRaw =
+    data?.final_amount ?? data?.amount ?? data?.subtotal ?? data?.total ?? null;
+  const amount = amountRaw !== null ? Number(amountRaw) : null;
+  const id = data?.id || data?.payment_id || null;
+  return { email, amount, id };
 }
 
 // --- Support AI triage -----------------------------------------------------
@@ -238,6 +334,62 @@ app.use(
     methods: ["GET", "POST"]
   })
 );
+
+// Mounted BEFORE express.json() because the signature must be verified
+// against the exact raw request bytes, not a re-serialized copy.
+app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
+  const rawBody = req.body instanceof Buffer ? req.body.toString("utf8") : "";
+  if (!verifyWhopSignature(rawBody, req.headers)) {
+    console.error("Whop webhook: signature verification failed.");
+    return res.status(401).json({ error: "Invalid signature." });
+  }
+
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return res.status(400).json({ error: "Invalid JSON." });
+  }
+
+  // Logged regardless of outcome — this is what lets us confirm/adjust the
+  // field names in extractWhopPaymentFields() against a real payment.
+  console.log("Whop webhook received:", JSON.stringify(event).slice(0, 2000));
+
+  // Acknowledge immediately; do the actual crediting after. Whop only cares
+  // about getting a 2xx within 5 seconds.
+  res.status(200).json({ ok: true });
+
+  if (event?.type !== "payment.succeeded") return;
+  if (!SUPABASE_READY || !WHOP_READY) return;
+
+  try {
+    const { email, amount, id } = extractWhopPaymentFields(event.data || {});
+    if (!email || amount === null || !id) {
+      console.error("Whop webhook: could not extract email/amount/id from payload.", { email: Boolean(email), amount, id });
+      return;
+    }
+    const bundle = bundleByAmount(amount);
+    if (!bundle) {
+      console.error(`Whop webhook: paid amount $${amount} doesn't match any known bundle.`);
+      return;
+    }
+    const result = await supabaseRpc(
+      "whop_credit_by_email",
+      {
+        p_email: email,
+        p_bundle: bundle.key,
+        p_scans: bundle.scans,
+        p_amount_usd: bundle.amount,
+        p_external_id: String(id),
+        p_secret: CREDIT_FULFILL_SECRET
+      },
+      SUPABASE_ANON_KEY
+    );
+    console.log("Whop webhook: credited", result);
+  } catch (err) {
+    console.error("Whop webhook: crediting failed:", err.message);
+  }
+});
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -583,7 +735,6 @@ app.post("/api/credits/order", requireUser, async (req, res) => {
 // through it so far) — this is built strictly from Binance's published API
 // docs, so if it turns out the field names differ, this will need a real
 // payment to compare the raw response against and adjust.
-const crypto = require("crypto");
 
 async function binanceSignedGet(urlPath, params) {
   const query = new URLSearchParams({ ...params, timestamp: String(Date.now()), recvWindow: "10000" });

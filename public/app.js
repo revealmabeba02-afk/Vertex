@@ -839,35 +839,53 @@
     creditsStatus.classList.toggle("credits-status--error", Boolean(isError));
   }
 
+  // Checkout now happens on Whop instead of the old Binance Pay flow below
+  // (kept in place but unused — Binance's API blocks Render's server
+  // region). Clicking a bundle opens its Whop checkout in a new tab; once
+  // paid, Whop's webhook credits the account automatically within about a
+  // minute, so we just poll the balance for a bit and tell the user when it
+  // lands.
+  const WHOP_CHECKOUT_LINKS = {
+    starter: "https://whop.com/shadowfx-1eca/starter-20-scans",
+    trader: "https://whop.com/shadowfx-1eca/trader-60-scans",
+    pro: "https://whop.com/shadowfx-1eca/pro-150-scans"
+  };
+
   if (bundleGrid) {
-    bundleGrid.addEventListener("click", async (e) => {
+    bundleGrid.addEventListener("click", (e) => {
       const btn = e.target.closest(".bundle-card__btn");
       if (!btn) return;
       const bundle = btn.dataset.bundle;
-      btn.disabled = true;
-      showCreditsStatus("Starting your order…", false);
-
-      try {
-        const session = await Auth.getSession();
-        if (!session) return toLogin();
-        const res = await fetch("/api/credits/order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ bundle })
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) {
-          showCreditsStatus((data && data.error) || "Could not start that order. Please try again.", true);
-          return;
-        }
-        showCreditsStatus("", false);
-        openPayPanel(data);
-      } catch {
-        showCreditsStatus("Could not reach the server. Please try again.", true);
-      } finally {
-        btn.disabled = false;
-      }
+      const link = WHOP_CHECKOUT_LINKS[bundle];
+      if (!link) return;
+      window.open(link, "_blank", "noopener");
+      showCreditsStatus(
+        "Checkout opened in a new tab. Important: use the same email there as your Vertex login — your credits land here automatically, usually within a minute of paying.",
+        false
+      );
+      startBalanceWatch();
     });
+  }
+
+  let balanceWatchTimer = null;
+  function startBalanceWatch() {
+    const startingBalance = currentBalance;
+    if (balanceWatchTimer) clearInterval(balanceWatchTimer);
+    let ticks = 0;
+    balanceWatchTimer = setInterval(async () => {
+      ticks += 1;
+      await refreshBalance();
+      if (startingBalance !== null && currentBalance !== null && currentBalance > startingBalance) {
+        showCreditsStatus(`Credits added! You now have ${currentBalance}.`, false);
+        clearInterval(balanceWatchTimer);
+        balanceWatchTimer = null;
+      } else if (ticks >= 24) {
+        // ~2 minutes at 5s intervals — stop polling quietly, balance still
+        // refreshes normally elsewhere.
+        clearInterval(balanceWatchTimer);
+        balanceWatchTimer = null;
+      }
+    }, 5000);
   }
 
   function openPayPanel(data) {
