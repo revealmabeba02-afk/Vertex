@@ -404,7 +404,7 @@
       finishScanHud(false);
       if (err.code === "no_credits") {
         errorText.innerHTML = "";
-        errorText.appendChild(document.createTextNode("You're out of scan credits. "));
+        errorText.appendChild(document.createTextNode("You're out of free scans for today and have no credits left. "));
         const link = document.createElement("a");
         link.href = "#credits";
         link.className = "error-link";
@@ -767,6 +767,7 @@
   // --------------------------------------------------------------
   const creditPillText = document.getElementById("credit-pill-text");
   const creditBalanceValue = document.getElementById("credit-balance-value");
+  const freeScansValue = document.getElementById("free-scans-value");
   const creditsStatus = document.getElementById("credits-status");
   const bundleGrid = document.getElementById("bundle-grid");
   const payPanel = document.getElementById("pay-panel");
@@ -782,10 +783,12 @@
   let orderPollTimer = null;
   let activeOrderId = null;
 
-  function setCreditPill(balance) {
+  function setCreditPill(balance, freeRemaining) {
     if (!creditPillText) return;
     if (balance === null) {
       creditPillText.textContent = "— credits";
+    } else if (balance === 0 && freeRemaining > 0) {
+      creditPillText.textContent = `${freeRemaining} free scan${freeRemaining === 1 ? "" : "s"} today`;
     } else if (balance === 0) {
       creditPillText.textContent = "0 credits — buy more";
     } else {
@@ -803,8 +806,10 @@
       if (!res.ok) return;
       const data = await res.json();
       currentBalance = typeof data.balance === "number" ? data.balance : null;
-      setCreditPill(currentBalance);
+      const freeRemaining = typeof data.freeRemaining === "number" ? data.freeRemaining : null;
+      setCreditPill(currentBalance, freeRemaining);
       if (creditBalanceValue) creditBalanceValue.textContent = currentBalance === null ? "—" : String(currentBalance);
+      if (freeScansValue) freeScansValue.textContent = freeRemaining === null ? "—" : `${freeRemaining} / 4`;
     } catch {
       // Best-effort — leave whatever was last shown.
     }

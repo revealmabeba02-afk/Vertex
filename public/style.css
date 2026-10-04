@@ -1899,7 +1899,11 @@ body.scanning .scan-hud {
   background: color-mix(in srgb, var(--panel) 65%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
 }
+.credit-balance-card > div { flex: 1; min-width: 140px; }
 .credit-balance-card__value {
   margin-top: 6px;
   font-family: var(--font-display);

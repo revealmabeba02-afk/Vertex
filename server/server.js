@@ -699,20 +699,29 @@ async function supabaseRpc(fnName, args, token) {
 // Best-effort refund: a failed scan should never cost a credit, but if the
 // refund call itself fails, we log it rather than blocking the error
 // response the user is already waiting on.
-async function refundIfSpent(user, wasSpent) {
-  if (!wasSpent) return;
+async function refundIfSpent(user, source) {
+  if (!source) return;
   try {
-    await supabaseRpc("refund_credit", {}, user.token);
+    await supabaseRpc("refund_scan", { p_source: source }, user.token);
   } catch (err) {
-    console.error("Credit refund failed:", err.message);
+    console.error("Scan refund failed:", err.message);
   }
 }
 
 app.get("/api/credits/balance", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   try {
-    const balance = await supabaseRpc("my_credit_balance", {}, req.user.token);
-    res.json({ balance: typeof balance === "number" ? balance : 0 });
+    const [balance, freeRemaining] = await Promise.all([
+      supabaseRpc("my_credit_balance", {}, req.user.token),
+      // Added 2026-10-05 alongside free daily scans. Fails soft to null (not
+      // 0) on an old deployment that hasn't run supabase/free_scans.sql yet,
+      // so the UI can tell "no free scans configured" apart from "0 left".
+      supabaseRpc("free_scans_remaining", {}, req.user.token).catch(() => null)
+    ]);
+    res.json({
+      balance: typeof balance === "number" ? balance : 0,
+      freeRemaining: typeof freeRemaining === "number" ? freeRemaining : null
+    });
   } catch (err) {
     console.error("Credit balance error:", err.message);
     res.status(502).json({ error: "Could not load your credit balance." });
@@ -1313,18 +1322,20 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
     return res.status(400).json({ error: "Pick a timeframe." });
   }
 
-  // Spend one credit up front. If the user has none left, stop here — never
-  // call FXSynapse (which costs real money) for a request that can't be
-  // charged. If the scan itself fails below, the credit is refunded, so a
-  // failed scan never costs the user anything.
-  let creditSpent = false;
+  // Spend one scan up front — today's free allowance first (4/day), then
+  // paid credits (use_scan() in supabase/free_scans.sql handles the split).
+  // If both are exhausted, stop here — never call FXSynapse (which costs
+  // real money) for a request that can't be charged. If the scan itself
+  // fails below, whatever was spent gets refunded, so a failed scan never
+  // costs the user anything.
+  let scanSource = null;
   if (CREDITS_READY) {
     try {
-      await supabaseRpc("spend_credit", {}, req.user.token);
-      creditSpent = true;
+      const result = await supabaseRpc("use_scan", {}, req.user.token);
+      scanSource = result?.source || "paid";
     } catch (err) {
       return res.status(402).json({
-        error: "You're out of scan credits. Buy more to keep scanning.",
+        error: "You're out of free scans for today and have no credits left. Buy more to keep scanning.",
         code: "no_credits"
       });
     }
@@ -1349,7 +1360,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
       fxData = JSON.parse(rawBody);
     } catch {
       console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
-      await refundIfSpent(req.user, creditSpent);
+      await refundIfSpent(req.user, scanSource);
       saveScanFailure(req.user, symbol, timeframe, "Unreadable response from FXSynapse");
       return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
     }
@@ -1373,7 +1384,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
           : fxRes.status === 503
           ? "Prices are temporarily unavailable from the analysis provider. Please try again shortly."
           : fxData?.error || fxData?.message || "Something went wrong while analyzing that chart.";
-      await refundIfSpent(req.user, creditSpent);
+      await refundIfSpent(req.user, scanSource);
       saveScanFailure(req.user, symbol, timeframe, `FXSynapse ${fxRes.status}: ${message}`);
       return res.status(502).json({ error: message });
     }
@@ -1383,7 +1394,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
     saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
   } catch (err) {
     console.error("Analysis error:", err);
-    await refundIfSpent(req.user, creditSpent);
+    await refundIfSpent(req.user, scanSource);
     saveScanFailure(req.user, symbol, timeframe, err.message || "Unknown server error");
     res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
   }
