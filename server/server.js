@@ -640,6 +640,33 @@ async function saveHistoryRow(user, analysis, timeframe) {
   }
 }
 
+// One row per failed scan, same RLS pattern as scan history — written with
+// the user's own token so Supabase decides who can insert, never read by
+// anyone but the admin (via admin_scan_failure_summary). Best-effort: a
+// logging failure must never affect the error response the user is waiting
+// on, so this is fire-and-forget and only ever logs to the console on error.
+async function saveScanFailure(user, pair, timeframe, reason) {
+  if (!SUPABASE_READY || !user?.token) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/scan_failures`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({ user_id: user.id, pair: pair || null, timeframe: timeframe || null, reason: reason || null }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not save scan failure:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Scan failure save error:", err.message);
+  }
+}
+
 // --- Credits ---------------------------------------------------------------
 // Thin helper around Supabase's RPC endpoint. `token` is the caller's own
 // access token for user-facing functions, or just SUPABASE_ANON_KEY for the
@@ -1082,7 +1109,7 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
 // same real data as the health card, user stats and support inbox. Uses the
 // same ANTHROPIC_API_KEY as support AI triage; falls back to a plain
 // templated summary (no AI, but still real numbers) if that key isn't set.
-const BRIEFING_AI_SYSTEM_PROMPT = `You are a loyal, sharp AI assistant giving the owner of "Vertex Chart Scanner" a short status briefing, in the style of a calm, capable aide reporting to their commander. Always address them as "sir". Open with a short "Welcome back, sir" style greeting, then report the real numbers you're given in plain, confident language. If something needs attention (a failing system check, open support tickets, pending payments), flag it clearly and say what to do about it. If everything looks good, say so and keep it short. Never invent numbers you weren't given — only use what's in the data. Keep it under 90 words, plain text, no markdown, no bullet points, written as natural spoken sentences.`;
+const BRIEFING_AI_SYSTEM_PROMPT = `You are a loyal, sharp AI assistant giving the owner of "Vertex Chart Scanner" a short status briefing, in the style of a calm, capable aide reporting to their commander. Always address them as "sir". Open with a short "Welcome back, sir" style greeting, then report the real numbers you're given in plain, confident language. If something needs attention (a failing system check, open support tickets, pending payments, failed scans), flag it clearly and say what to do about it. When failedScans is greater than 0, always mention the count and, if failedScanReasons is non-empty, name the top reason — this is the kind of thing sir specifically wants surfaced, not buried. If everything looks good, say so and keep it short. Never invent numbers you weren't given — only use what's in the data. Keep it under 90 words, plain text, no markdown, no bullet points, written as natural spoken sentences.`;
 
 async function aiBriefing(data) {
   if (!ANTHROPIC_API_KEY) return null;
@@ -1129,6 +1156,10 @@ function fallbackBriefing(data) {
   if (data.pendingOrders > 0) {
     bits.push(`${data.pendingOrders} payment${data.pendingOrders === 1 ? "" : "s"} still awaiting confirmation.`);
   }
+  if (data.failedScans) {
+    const reasonBit = data.failedScanReasons.length ? ` — mostly ${data.failedScanReasons[0]}` : "";
+    bits.push(`${data.failedScans} scan${data.failedScans === 1 ? "" : "s"} failed in the last 48 hours${reasonBit}.`);
+  }
   return bits.join(" ");
 }
 
@@ -1152,13 +1183,15 @@ app.get("/api/admin/briefing", requireUser, async (req, res) => {
     const healthPercent = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
     const failingChecks = checks.filter((c) => !c.ok).map((c) => c.name);
 
-    const [totalUsers, payingUsers, supportMessages, pendingOrders] = await Promise.all([
+    const [totalUsers, payingUsers, supportMessages, pendingOrders, failureSummary] = await Promise.all([
       supabaseRpc("admin_user_count", {}, req.user.token).catch(() => null),
       supabaseRpc("admin_paying_users_count", {}, req.user.token).catch(() => null),
       supabaseRpc("admin_list_support_messages", {}, req.user.token).catch(() => []),
       CREDITS_READY
         ? supabaseRpc("list_pending_orders", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY).catch(() => [])
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      // 48h window: added 2026-10-05. Requires supabase/scan_failures.sql.
+      supabaseRpc("admin_scan_failure_summary", { p_hours: 48 }, req.user.token).catch(() => null)
     ]);
     const openTickets = Array.isArray(supportMessages)
       ? supportMessages.filter((m) => m.status === "open").length
@@ -1170,7 +1203,11 @@ app.get("/api/admin/briefing", requireUser, async (req, res) => {
       totalUsers: typeof totalUsers === "number" ? totalUsers : null,
       payingUsers: typeof payingUsers === "number" ? payingUsers : null,
       openTickets,
-      pendingOrders: Array.isArray(pendingOrders) ? pendingOrders.length : 0
+      pendingOrders: Array.isArray(pendingOrders) ? pendingOrders.length : 0,
+      failedScans: failureSummary?.total ?? null,
+      failedScanReasons: Array.isArray(failureSummary?.top_reasons)
+        ? failureSummary.top_reasons.map((r) => `${r.reason} (${r.count}×)`)
+        : []
     };
 
     const aiText = await aiBriefing(data);
@@ -1313,6 +1350,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
     } catch {
       console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
       await refundIfSpent(req.user, creditSpent);
+      saveScanFailure(req.user, symbol, timeframe, "Unreadable response from FXSynapse");
       return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
     }
 
@@ -1336,6 +1374,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
           ? "Prices are temporarily unavailable from the analysis provider. Please try again shortly."
           : fxData?.error || fxData?.message || "Something went wrong while analyzing that chart.";
       await refundIfSpent(req.user, creditSpent);
+      saveScanFailure(req.user, symbol, timeframe, `FXSynapse ${fxRes.status}: ${message}`);
       return res.status(502).json({ error: message });
     }
 
@@ -1345,6 +1384,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
   } catch (err) {
     console.error("Analysis error:", err);
     await refundIfSpent(req.user, creditSpent);
+    saveScanFailure(req.user, symbol, timeframe, err.message || "Unknown server error");
     res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
   }
 });
