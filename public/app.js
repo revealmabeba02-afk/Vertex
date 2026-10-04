@@ -835,6 +835,7 @@
   // minute, so we just poll the balance for a bit and tell the user when it
   // lands.
   const WHOP_CHECKOUT_LINKS = {
+    quick: "https://whop.com/shadowfx-1eca/quick-5e/",
     starter: "https://whop.com/shadowfx-1eca/starter-20-scans",
     trader: "https://whop.com/shadowfx-1eca/trader-60-scans",
     pro: "https://whop.com/shadowfx-1eca/pro-150-scans"

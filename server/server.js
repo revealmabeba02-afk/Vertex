@@ -77,6 +77,7 @@ const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
 const CREDIT_BUNDLES = {
+  quick: { scans: 10, amount: 4.99, label: "Quick" },
   starter: { scans: 20, amount: 8.99, label: "Starter" },
   trader: { scans: 60, amount: 12.99, label: "Trader" },
   pro: { scans: 150, amount: 19.99, label: "Pro" }
@@ -114,6 +115,7 @@ const WHOP_API_KEY = (process.env.WHOP_API_KEY || "").trim();
 const WHOP_READY = Boolean(WHOP_WEBHOOK_SECRET);
 
 const WHOP_CHECKOUT_LINKS = {
+  quick: process.env.WHOP_CHECKOUT_QUICK || "https://whop.com/shadowfx-1eca/quick-5e/",
   starter: process.env.WHOP_CHECKOUT_STARTER || "https://whop.com/shadowfx-1eca/starter-20-scans",
   trader: process.env.WHOP_CHECKOUT_TRADER || "https://whop.com/shadowfx-1eca/trader-60-scans",
   pro: process.env.WHOP_CHECKOUT_PRO || "https://whop.com/shadowfx-1eca/pro-150-scans"
@@ -195,9 +197,9 @@ const SUPPORT_AI_MODEL = (process.env.SUPPORT_AI_MODEL || "claude-haiku-4-5-2025
 
 const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Vertex Chart Scanner (vertex-9s4c.onrender.com), a forex chart analysis tool.
 
-What Vertex does: users upload a chart screenshot and pick a timeframe, and get back a technical read — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, and take-profit targets. It is a technical read, not financial advice.
+What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick a timeframe, and get back a technical read calculated from live price bars — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, and take-profit targets. No chart screenshot is needed or accepted. It is a technical read, not financial advice.
 
-Billing: pay-per-scan credits, bought in one-time bundles via Binance Pay (Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans). Credits never expire. Payment is usually auto-detected and credited within about a minute of sending it. A failed scan automatically refunds its credit.
+Billing: every signed-in user gets 4 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought in one-time bundles via Whop (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans). Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
 
 Known quirk: this runs on a free hosting tier that goes to sleep after a few minutes of no traffic. The very first request after that can take up to ~50 seconds and may show "Could not reach the server" — simply retrying a few seconds later almost always works. This is not a bug.
 
