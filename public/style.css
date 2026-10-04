@@ -1035,37 +1035,22 @@ body.scanning .scan-hud {
 
 /* A small bank of candles ticking up and down in place, standing in for
    "reading live price bars" rather than a generic AI-eye icon. */
-.scan-hud__ticker {
+.scan-hud__logo {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  gap: 7px;
   height: 56px;
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--bull) 55%, transparent));
+  animation: hud-logo-pulse 1.8s ease-in-out infinite;
 }
 
-.scan-hud__candle {
-  width: 7px;
-  border-radius: 3px;
-  transform-origin: bottom center;
-  animation: hud-candle-tick 1.6s ease-in-out infinite;
-}
-
-.scan-hud__candle--up { background: var(--bull); }
-.scan-hud__candle--down { background: var(--bear); }
-
-.scan-hud__candle:nth-child(1) { height: 22px; animation-delay: 0s; }
-.scan-hud__candle:nth-child(2) { height: 38px; animation-delay: 0.12s; }
-.scan-hud__candle:nth-child(3) { height: 52px; animation-delay: 0.24s; }
-.scan-hud__candle:nth-child(4) { height: 30px; animation-delay: 0.36s; }
-.scan-hud__candle:nth-child(5) { height: 44px; animation-delay: 0.48s; }
-
-@keyframes hud-candle-tick {
-  0%, 100% { transform: scaleY(0.55); opacity: 0.6; }
-  50% { transform: scaleY(1); opacity: 1; }
+@keyframes hud-logo-pulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.75; }
+  50% { transform: scale(1.05); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scan-hud__candle { animation: none; opacity: 0.85; }
+  .scan-hud__logo { animation: none; opacity: 1; }
 }
 
 .scan-hud__title {
