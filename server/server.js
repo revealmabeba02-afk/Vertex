@@ -804,6 +804,38 @@ app.get("/api/admin/users", requireUser, async (req, res) => {
   }
 });
 
+// Manual payment confirmation — a fallback for when the automatic Binance
+// Pay poller can't reach Binance at all (some Render server regions get a
+// 451 "restricted location" error from Binance). The admin sees the
+// payment land in their own Binance app and clicks "Mark as Paid" here.
+app.get("/api/admin/orders", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const orders = await supabaseRpc("admin_list_pending_orders", {}, req.user.token);
+    res.json({ orders: Array.isArray(orders) ? orders : [] });
+  } catch (err) {
+    console.error("Admin orders error:", err.message);
+    res.status(502).json({ error: "Could not load pending orders. Has the latest supabase/credits_setup.sql been run?" });
+  }
+});
+
+app.post("/api/admin/orders/:id/mark-paid", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    await supabaseRpc("admin_mark_order_paid", { p_order_id: req.params.id }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin mark paid error:", err.message);
+    res.status(502).json({ error: "Could not mark that order paid." });
+  }
+});
+
 // --- System health ---------------------------------------------------------
 // Four independent checks, each worth 25%, so the admin page can show one
 // plain percentage instead of a wall of technical detail. Every check has a

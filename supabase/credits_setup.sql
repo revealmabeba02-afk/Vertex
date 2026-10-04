@@ -308,3 +308,76 @@ end;
 $$;
 revoke all on function public.admin_paid_summary() from public;
 grant execute on function public.admin_paid_summary() to authenticated;
+
+-- Lists pending orders with the buyer's email, so the admin can manually
+-- confirm a payment they see land in their own Binance app and credit it
+-- with one click — a fallback for when the automatic Binance Pay poller
+-- can't reach Binance at all (e.g. Render's server region gets blocked
+-- with a 451 "restricted location" error).
+create or replace function public.admin_list_pending_orders()
+returns table (
+  id uuid,
+  user_id uuid,
+  email text,
+  bundle text,
+  scans integer,
+  amount_usd numeric,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'revealmabeba02@gmail.com' then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+    select co.id, co.user_id, u.email, co.bundle, co.scans, co.amount_usd, co.created_at
+    from public.credit_orders co
+    join auth.users u on u.id = co.user_id
+    where co.status = 'pending'
+    order by co.created_at asc;
+end;
+$$;
+revoke all on function public.admin_list_pending_orders() from public;
+grant execute on function public.admin_list_pending_orders() to authenticated;
+
+-- Same crediting logic as admin_credit_order() above, but gated by the
+-- admin's own login (like the other admin_* functions) instead of the
+-- shared secret, since this is a button the admin clicks themselves.
+create or replace function public.admin_mark_order_paid(p_order_id uuid)
+returns public.credit_orders
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.credit_orders;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'revealmabeba02@gmail.com' then
+    raise exception 'Not authorized';
+  end if;
+
+  select * into v_order from public.credit_orders where id = p_order_id and status = 'pending';
+  if not found then
+    raise exception 'Order not found or already processed';
+  end if;
+
+  update public.credit_orders
+    set status = 'paid', paid_at = now()
+    where id = p_order_id
+    returning * into v_order;
+
+  insert into public.credit_balances (user_id, balance, updated_at)
+  values (v_order.user_id, v_order.scans, now())
+  on conflict (user_id) do update
+    set balance = public.credit_balances.balance + v_order.scans,
+        updated_at = now();
+
+  return v_order;
+end;
+$$;
+revoke all on function public.admin_mark_order_paid(uuid) from public;
+grant execute on function public.admin_mark_order_paid(uuid) to authenticated;

@@ -194,6 +194,29 @@
   .health-check__name { color: var(--text); font-weight: 600; }
   .health-check__detail { color: var(--text-faint); }
 
+  .orders-card {
+    margin-top: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .order-item {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .order-item:last-child { border-bottom: 0; }
+  .order-item__info { font-size: 13.5px; color: var(--text-dim); }
+  .order-item__amount { color: var(--text); font-weight: 700; }
+  .order-item__meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+
   .support-card {
     margin-top: 28px;
     border: 1px solid var(--border);
@@ -296,6 +319,12 @@
     </div>
   </div>
 
+  <div class="orders-card">
+    <div class="users-card__head">Pending payments</div>
+    <div id="orders-list"></div>
+    <div class="users-empty" id="orders-empty">Loading…</div>
+  </div>
+
   <div class="admin-stats">
     <div class="stat-card">
       <div class="stat-card__label">Total signed-up users</div>
@@ -369,6 +398,7 @@
     loadBriefing(authHeader);
     loadHealth(authHeader);
     loadSupport(authHeader);
+    loadOrders(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -436,6 +466,58 @@
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function loadOrders(authHeader) {
+      const listEl = document.getElementById("orders-list");
+      const emptyEl = document.getElementById("orders-empty");
+      try {
+        const res = await fetch("/api/admin/orders", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load pending payments.";
+          return;
+        }
+        const orders = (data && Array.isArray(data.orders)) ? data.orders : [];
+        if (orders.length === 0) {
+          emptyEl.textContent = "No pending payments.";
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = "";
+        orders.forEach((o) => {
+          const when = (() => { try { return new Date(o.created_at).toLocaleString(); } catch { return ""; } })();
+          const row = document.createElement("div");
+          row.className = "order-item";
+          row.innerHTML = `
+            <div class="order-item__info">
+              <span class="order-item__amount">$${Number(o.amount_usd).toFixed(2)}</span> — ${escapeHtml(o.bundle)} (${o.scans} scans)
+              <div class="order-item__meta">${escapeHtml(o.email || "")} · ${escapeHtml(when)}</div>
+            </div>
+            <button type="button" class="btn btn--ghost" data-mark-paid="${o.id}">Mark as paid</button>
+          `;
+          listEl.appendChild(row);
+        });
+        listEl.querySelectorAll("[data-mark-paid]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            btn.textContent = "Crediting…";
+            try {
+              const r = await fetch(`/api/admin/orders/${btn.dataset.markPaid}/mark-paid`, {
+                method: "POST",
+                headers: authHeader
+              });
+              if (r.ok) loadOrders(authHeader);
+              else { btn.disabled = false; btn.textContent = "Mark as paid"; }
+            } catch {
+              btn.disabled = false;
+              btn.textContent = "Mark as paid";
+            }
+          });
+        });
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
     }
 
     async function loadBriefing(authHeader) {
