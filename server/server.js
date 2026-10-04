@@ -16,27 +16,24 @@ const multer = require("multer");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
-// FXSynapse AI provides the actual chart analysis. The confirmed/documented
-// endpoint analyzes a symbol+timeframe from live price bars (no screenshot).
-// There is also an IMAGE-upload endpoint that showed up in FXSynapse's
-// dashboard "Quick Start" box, but it has never been confirmed by FXSynapse
-// (it even used a different domain, fxsynapse.com vs fxsynapseai.com). We are
-// going with it here because that's what the UI needs, but treat its
-// response shape as a best guess until it's confirmed — and note that
-// nothing will actually call through successfully until the FXSynapse
-// account has an active API plan (it currently does not).
+// FXSynapse AI provides the actual chart analysis. Confirmed 2026-10-04
+// straight from their own API reference (fxsynapseai.com/dashboard ->
+// Docs): one real endpoint, POST /api/v1/chart, which takes a symbol +
+// timeframe and reads live price bars itself — there is no image-upload
+// endpoint at all. The earlier image-based flow was hitting a guessed,
+// never-confirmed path and failing almost every call.
 const FXSYNAPSE_API_KEY = (process.env.FXSYNAPSE_API_KEY || "").trim();
 const FXSYNAPSE_BASE_URL = (process.env.FXSYNAPSE_BASE_URL || "https://fxsynapseai.com")
   .trim()
   .replace(/\/+$/, "");
-// Override if your brother confirms a different path/domain for the image endpoint.
-const FXSYNAPSE_IMAGE_PATH = (process.env.FXSYNAPSE_IMAGE_PATH || "/api/v1/analyze").trim();
+const FXSYNAPSE_CHART_PATH = (process.env.FXSYNAPSE_CHART_PATH || "/api/v1/chart").trim();
 
-const VALID_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
+// Confirmed set from FXSynapse's docs — they do not support MN1 (monthly).
+const VALID_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"];
 const TIMEFRAME_LABELS = {
   M1: "1 minute", M5: "5 minutes", M15: "15 minutes", M30: "30 minutes",
   H1: "1 hour", H4: "4 hours",
-  D1: "1 day", W1: "1 week", MN1: "1 month"
+  D1: "1 day", W1: "1 week"
 };
 function isValidTimeframe(tf) {
   return VALID_TIMEFRAMES.includes(tf);
@@ -552,7 +549,7 @@ function mapFxSynapseToAnalysis(fx) {
   if (cs) notesParts.push(cs);
   if (typeof fx.bars === "number") notesParts.push(`Measured over the last ${fx.bars} bars.`);
   if (!fx.symbol) {
-    notesParts.push("Could not read the pair from this screenshot — crop it so the symbol name (e.g. EURUSD) is clearly visible, then rescan.");
+    notesParts.push("Could not confirm the pair from FXSynapse's price source — double-check the symbol and try again.");
   } else if (!planOk) {
     notesParts.push("No clean directional plan on this pair/timeframe right now — structure is unclear or conflicting.");
   }
@@ -1253,96 +1250,88 @@ app.post("/api/admin/support/:id/reply", requireUser, async (req, res) => {
   }
 });
 
-app.post("/api/analyze", requireUser, analyzeLimiter, (req, res) => {
-  upload.single("image")(req, res, async (uploadErr) => {
-    if (uploadErr) {
-      const msg =
-        uploadErr.code === "LIMIT_FILE_SIZE"
-          ? "That image is too large. Keep it under 7MB."
-          : uploadErr.message || "Could not read the uploaded image.";
-      return res.status(400).json({ error: msg });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: "Upload a chart screenshot first." });
-    }
+app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
+  const symbol = String(req.body?.symbol || "").trim().toUpperCase();
+  const timeframe = String(req.body?.timeframe || "").trim().toUpperCase();
 
-    const timeframe = String(req.body.timeframe || "").trim().toUpperCase();
-    if (timeframe && !isValidTimeframe(timeframe)) {
-      return res.status(400).json({ error: "Invalid timeframe." });
-    }
+  if (!symbol) {
+    return res.status(400).json({ error: "Enter a pair or symbol (e.g. EURUSD, XAUUSD, US30)." });
+  }
+  if (!timeframe || !isValidTimeframe(timeframe)) {
+    return res.status(400).json({ error: "Pick a timeframe." });
+  }
 
-    // Spend one credit up front. If the user has none left, stop here —
-    // never call FXSynapse (which costs real money) for a request that
-    // can't be charged. If the scan itself fails below, the credit is
-    // refunded, so a failed scan never costs the user anything.
-    let creditSpent = false;
-    if (CREDITS_READY) {
-      try {
-        await supabaseRpc("spend_credit", {}, req.user.token);
-        creditSpent = true;
-      } catch (err) {
-        return res.status(402).json({
-          error: "You're out of scan credits. Buy more to keep scanning.",
-          code: "no_credits"
-        });
-      }
-    }
-
+  // Spend one credit up front. If the user has none left, stop here — never
+  // call FXSynapse (which costs real money) for a request that can't be
+  // charged. If the scan itself fails below, the credit is refunded, so a
+  // failed scan never costs the user anything.
+  let creditSpent = false;
+  if (CREDITS_READY) {
     try {
-      const form = new FormData();
-      form.append(
-        "image",
-        new Blob([req.file.buffer], { type: req.file.mimetype }),
-        req.file.originalname || "chart.png"
-      );
-      if (timeframe) form.append("timeframe", timeframe);
-
-      const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_IMAGE_PATH}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${FXSYNAPSE_API_KEY}` },
-        body: form,
-        // 55s gives slow image analysis room to finish without railing past
-        // Render's own ~60s request ceiling.
-        signal: AbortSignal.timeout(55000)
-      });
-
-      const rawBody = await fxRes.text();
-      let fxData;
-      try {
-        fxData = JSON.parse(rawBody);
-      } catch {
-        console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
-        await refundIfSpent(req.user, creditSpent);
-        return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
-      }
-
-      if (!fxRes.ok) {
-        console.error("FXSynapse error:", fxRes.status, fxData);
-        // Reply with our own HTTP status here, never the provider's. In
-        // particular, never send back a bare 401: the browser treats a 401
-        // from this endpoint as "your login session was rejected" and signs
-        // you out (see the 401 handling in app.js). A bad or expired
-        // FXSYNAPSE_API_KEY, or no active API plan, is a server-side/provider
-        // problem, not a user auth problem, and must not log the user out.
-        const message =
-          fxRes.status === 401 || fxRes.status === 403
-            ? "Analysis provider rejected the request (no active API plan or invalid key)."
-            : fxRes.status === 429
-            ? "Rate limited by the analysis provider. Please try again shortly."
-            : fxData?.error || "Something went wrong while analyzing that chart.";
-        await refundIfSpent(req.user, creditSpent);
-        return res.status(502).json({ error: message });
-      }
-
-      const analysis = mapFxSynapseToAnalysis(fxData);
-      res.json({ analysis, timeframe: timeframe || null });
-      saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
+      await supabaseRpc("spend_credit", {}, req.user.token);
+      creditSpent = true;
     } catch (err) {
-      console.error("Analysis error:", err);
-      await refundIfSpent(req.user, creditSpent);
-      res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
+      return res.status(402).json({
+        error: "You're out of scan credits. Buy more to keep scanning.",
+        code: "no_credits"
+      });
     }
-  });
+  }
+
+  try {
+    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_CHART_PATH}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${FXSYNAPSE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ symbol, timeframe, top_down: true }),
+      // 55s gives slow analysis room to finish without railing past Render's
+      // own ~60s request ceiling.
+      signal: AbortSignal.timeout(55000)
+    });
+
+    const rawBody = await fxRes.text();
+    let fxData;
+    try {
+      fxData = JSON.parse(rawBody);
+    } catch {
+      console.error("FXSynapse returned non-JSON response:", rawBody.slice(0, 500));
+      await refundIfSpent(req.user, creditSpent);
+      return res.status(502).json({ error: "The analysis provider sent back something unreadable. Please try again." });
+    }
+
+    if (!fxRes.ok) {
+      console.error("FXSynapse error:", fxRes.status, fxData);
+      // Reply with our own HTTP status here, never the provider's. In
+      // particular, never send back a bare 401: the browser treats a 401
+      // from this endpoint as "your login session was rejected" and signs
+      // you out (see the 401 handling in app.js). A bad or expired
+      // FXSYNAPSE_API_KEY, no active API plan, or an unlisted pair is a
+      // server-side/provider problem, not a user auth problem, and must not
+      // log the user out.
+      const message =
+        fxRes.status === 401 || fxRes.status === 403
+          ? "Analysis provider rejected the request (no active API plan or invalid key)."
+          : fxRes.status === 404
+          ? `FXSynapse doesn't carry prices for "${symbol}". Try a major pair, metal or index (e.g. EURUSD, XAUUSD, US30, NAS100).`
+          : fxRes.status === 429
+          ? "Rate limited by the analysis provider. Please try again shortly."
+          : fxRes.status === 503
+          ? "Prices are temporarily unavailable from the analysis provider. Please try again shortly."
+          : fxData?.error || fxData?.message || "Something went wrong while analyzing that chart.";
+      await refundIfSpent(req.user, creditSpent);
+      return res.status(502).json({ error: message });
+    }
+
+    const analysis = mapFxSynapseToAnalysis(fxData);
+    res.json({ analysis, timeframe: timeframe || null });
+    saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
+  } catch (err) {
+    console.error("Analysis error:", err);
+    await refundIfSpent(req.user, creditSpent);
+    res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
+  }
 });
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.

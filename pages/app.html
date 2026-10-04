@@ -19,7 +19,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0E0B12" />
 <title>Vertex Chart Scanner · Forex Structure &amp; Bias Reader</title>
-<meta name="description" content="Upload a forex chart screenshot and get an AI read of bias, market structure, key levels and trade zones." />
+<meta name="description" content="Type a pair and get an AI read of bias, market structure, key levels and trade zones." />
 <meta name="robots" content="noindex, follow" />
 <link rel="canonical" href="https://vertex-9s4c.onrender.com/app" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -93,7 +93,7 @@
       <span class="brand__mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3.5" y="14" width="2.6" height="6" rx="0.6" fill="#3FBF8A"/><line x1="4.8" y1="12.5" x2="4.8" y2="21" stroke="#3FBF8A" stroke-width="1"/>   <rect x="8.2" y="10.5" width="2.6" height="7.5" rx="0.6" fill="#3FBF8A"/><line x1="9.5" y1="9" x2="9.5" y2="19" stroke="#3FBF8A" stroke-width="1"/>   <rect x="12.9" y="6.5" width="2.6" height="8.5" rx="0.6" fill="#3FBF8A"/><line x1="14.2" y1="5" x2="14.2" y2="16" stroke="#3FBF8A" stroke-width="1"/>   <rect x="17.6" y="3" width="2.6" height="8" rx="0.6" fill="#3FBF8A"/><line x1="18.9" y1="1.5" x2="18.9" y2="12" stroke="#3FBF8A" stroke-width="1"/>   <line x1="3" y1="20.5" x2="21" y2="2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </span>
-      <span class="brand__name">Vertex AI</span>
+      <span class="brand__name">Vertex Scanner</span>
     </a>
     <button type="button" id="sidebar-close-btn" class="sidebar-close-btn" aria-label="Collapse menu">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -138,34 +138,29 @@
       <span class="eyebrow__dot" aria-hidden="true"></span>
       AI-powered analysis
     </p>
-    <h1 class="hero__title">Upload your chart</h1>
-    <p class="hero__lede">Annotated in about 30 seconds.</p>
+    <h1 class="hero__title">Scan a pair</h1>
+    <p class="hero__lede">Live structure, levels and a trade plan in about 30 seconds.</p>
 
     <p class="setup-notice" id="setup-notice" hidden>Accounts are not connected yet, so scanning is switched off. Add the Supabase keys to <code>server/.env</code> and restart. See SUPABASE_SETUP.md.</p>
 
     <form id="scan-form" class="scanform" novalidate>
 
-      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload chart screenshot" aria-describedby="dropzone-hint">
-        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" hidden />
-        <span class="corner corner--tl" aria-hidden="true"></span>
-        <span class="corner corner--tr" aria-hidden="true"></span>
-        <span class="corner corner--bl" aria-hidden="true"></span>
-        <span class="corner corner--br" aria-hidden="true"></span>
-        <div id="dropzone-empty" class="dropzone__empty">
-          <span class="dropzone__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
-          </span>
-          <span class="dropzone__text">Drop your chart to scan</span>
-          <span id="dropzone-hint" class="dropzone__hint">or tap to choose a chart · PNG · JPG · 7MB</span>
-        </div>
-        <div id="dropzone-preview" class="dropzone__preview" hidden>
-          <img id="preview-img" alt="Uploaded chart preview" />
-          <button type="button" id="remove-file" class="dropzone__remove" aria-label="Remove image">Replace</button>
-        </div>
-      </div>
+      <label class="symbol-field" for="symbol-input">
+        <span class="symbol-field__label">Pair or symbol</span>
+        <input
+          type="text"
+          id="symbol-input"
+          class="symbol-field__input"
+          placeholder="e.g. EURUSD, XAUUSD, US30, NAS100"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+        />
+        <span class="symbol-field__hint">Major pairs, metals and indices — FXSynapse reads live price bars, no screenshot needed.</span>
+      </label>
 
       <fieldset class="tf">
-        <legend class="tf__legend">Timeframe (optional)</legend>
+        <legend class="tf__legend">Timeframe</legend>
         <div class="tf__chips" id="tf-chips">
           <label class="chip-tf"><input type="radio" name="tf" value="M1" /><span>M1</span></label>
           <label class="chip-tf"><input type="radio" name="tf" value="M5" /><span>M5</span></label>
@@ -175,7 +170,6 @@
           <label class="chip-tf"><input type="radio" name="tf" value="H4" /><span>H4</span></label>
           <label class="chip-tf"><input type="radio" name="tf" value="D1" /><span>D1</span></label>
           <label class="chip-tf"><input type="radio" name="tf" value="W1" /><span>W1</span></label>
-          <label class="chip-tf"><input type="radio" name="tf" value="MN1" /><span>MN</span></label>
         </div>
 
         <!-- The chips drive this select. app.js reads its value, so it stays in the DOM. -->
@@ -189,7 +183,6 @@
           <option value="H4">4 hours</option>
           <option value="D1">1 day</option>
           <option value="W1">1 week</option>
-          <option value="MN1">1 month</option>
         </select>
       </fieldset>
 
@@ -202,7 +195,7 @@
     </form>
 
     <p class="platforms">MT4 · MT5 · TradingView · cTrader</p>
-    <p class="disclaimer-note disclaimer-note--hero">Technical, AI generated analysis of the image only. Not financial advice.</p>
+    <p class="disclaimer-note disclaimer-note--hero">Technical, AI generated analysis of live price data. Not financial advice.</p>
   </section>
 
   <!-- ============ OUTPUT ============ -->
@@ -212,7 +205,7 @@
 
     <div id="state-loading" class="state state--loading" hidden>
       <div class="scan-hud">
-        <img id="scan-hud-bg" class="scan-hud__bg" alt="" aria-hidden="true" />
+        <img id="scan-hud-bg" class="scan-hud__bg" alt="" aria-hidden="true" hidden />
         <div class="scan-hud__scrim" aria-hidden="true"></div>
         <div class="scan-hud__grid" aria-hidden="true"></div>
         <span class="scan-hud__corner scan-hud__corner--tl" aria-hidden="true"></span>
@@ -330,28 +323,28 @@
       Three steps · seconds per scan
     </p>
     <h1 class="hero__title">How it works</h1>
-    <p class="hero__lede">From a screenshot to a structure read without leaving the page.</p>
+    <p class="hero__lede">From a pair to a structure read without leaving the page.</p>
     <ol class="how__steps">
       <li class="how__step">
         <span class="how__num">01</span>
-        <h3>Screenshot</h3>
-        <p>Grab the chart from MT4, MT5, TradingView or cTrader. Keep the price axis in shot.</p>
+        <h3>Enter the pair</h3>
+        <p>Type the symbol — EURUSD, XAUUSD, US30, NAS100, and more. No screenshot needed.</p>
       </li>
       <li class="how__step">
         <span class="how__num">02</span>
         <h3>Pick the timeframe</h3>
-        <p>Tell the scanner which candles it is looking at so the read is scaled right.</p>
+        <p>Tell the scanner which candles it is reading so the read is scaled right.</p>
       </li>
       <li class="how__step">
         <span class="how__num">03</span>
         <h3>Get the read</h3>
-        <p>Bias, structure, levels, entries, stop, targets and what would prove it wrong.</p>
+        <p>Bias, structure, levels, entries, stop, targets and what would prove it wrong — calculated from live price bars.</p>
       </li>
     </ol>
 
-    <a class="scan-btn how__cta" href="#scan" data-view="scan">Scan a chart</a>
+    <a class="scan-btn how__cta" href="#scan" data-view="scan">Scan a pair</a>
 
-    <p class="disclaimer-note">Output is technical, AI generated analysis of the image only. It is not financial advice and not a guarantee of any market outcome.</p>
+    <p class="disclaimer-note">Output is technical, AI generated analysis of live price data. It is not financial advice and not a guarantee of any market outcome.</p>
   </section>
 
   <!-- ============ CREDITS (own tab) ============ -->
@@ -454,7 +447,7 @@
       Preferences
     </p>
     <h1 class="hero__title">Settings</h1>
-    <p class="hero__lede">Make Vertex AI look the way you want.</p>
+    <p class="hero__lede">Make Vertex Scanner look the way you want.</p>
 
     <div class="settings-card">
       <div class="settings-row">
@@ -476,7 +469,7 @@
       <div class="settings-row settings-row--column">
         <div>
           <p class="settings-row__title">Accent color</p>
-          <p class="settings-row__desc">Pick the color used for highlights and the Vertex AI mark.</p>
+          <p class="settings-row__desc">Pick the color used for highlights and the Vertex Scanner mark.</p>
         </div>
         <div class="swatch-row" id="accent-swatches" role="radiogroup" aria-label="Accent color">
           <button type="button" class="swatch" data-accent="" style="--sw:#E8A840" aria-label="Amber (default)" role="radio" aria-checked="true"></button>
