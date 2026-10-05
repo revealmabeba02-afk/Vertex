@@ -1205,11 +1205,11 @@ body.scanning .scan-hud {
    the softer bias-tag so it reads as the actionable signal, not just mood. */
 .signal-tag {
   font-family: var(--font-display);
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 9px 16px;
+  padding: 12px 22px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -1217,12 +1217,21 @@ body.scanning .scan-hud {
 .signal-tag--buy {
   color: #0C1F16;
   background: var(--bull);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--bull) 45%, transparent);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--bull) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--bull) 70%, transparent) inset;
+  animation: signal-pulse 2.2s ease-in-out infinite;
 }
 .signal-tag--sell {
   color: #2A0E10;
   background: var(--bear);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--bear) 45%, transparent);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--bear) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--bear) 70%, transparent) inset;
+  animation: signal-pulse 2.2s ease-in-out infinite;
+}
+@keyframes signal-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signal-tag--buy, .signal-tag--sell { animation: none; }
 }
 .signal-tag--none { display: none; }
 .signal-tag--wait {
@@ -1324,22 +1333,30 @@ body.scanning .scan-hud {
 }
 
 .entry-card__type {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 4px 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 6px 14px;
   border-radius: 999px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.entry-card__type--long { color: var(--bull); background: color-mix(in srgb, var(--bull) 12%, transparent); }
-.entry-card__type--short { color: var(--bear); background: color-mix(in srgb, var(--bear) 12%, transparent); }
+.entry-card__type--long {
+  color: #0C1F16;
+  background: var(--bull);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--bull) 50%, transparent);
+}
+.entry-card__type--short {
+  color: #2A0E10;
+  background: var(--bear);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--bear) 50%, transparent);
+}
 
 .entry-card__zone {
   font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text);
 }
 
@@ -1452,23 +1469,29 @@ body.scanning .scan-hud {
   min-width: 0;
 }
 
+.trade-stat--sl { background: color-mix(in srgb, var(--bear) 10%, var(--panel)); }
+.trade-stat--tp { background: color-mix(in srgb, var(--bull) 10%, var(--panel)); }
+
 .trade-stat__label {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--text-faint);
+  font-weight: 700;
 }
 
 .trade-stat__value {
   font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
-.trade-stat--sl .trade-stat__value { color: var(--bear); }
-.trade-stat--tp .trade-stat__value { color: var(--bull); }
+.trade-stat--sl .trade-stat__label { color: color-mix(in srgb, var(--bear) 75%, var(--text-faint)); }
+.trade-stat--tp .trade-stat__label { color: color-mix(in srgb, var(--bull) 75%, var(--text-faint)); }
+.trade-stat--sl .trade-stat__value { color: var(--bear); text-shadow: 0 0 18px color-mix(in srgb, var(--bear) 40%, transparent); }
+.trade-stat--tp .trade-stat__value { color: var(--bull); text-shadow: 0 0 18px color-mix(in srgb, var(--bull) 40%, transparent); }
 
 .trade-plan__invalidation {
   margin: 16px 2px 0;
