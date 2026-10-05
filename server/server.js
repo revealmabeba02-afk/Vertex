@@ -1000,6 +1000,20 @@ app.get("/api/history", requireUser, async (req, res) => {
 // before anything is built around it. Safe to delete once that's confirmed.
 const FOREXNEWS_API_KEY = (process.env.FOREXNEWS_API_KEY || "").trim();
 
+// Tries several date-format/window guesses in one go (since the trial only
+// has 100 total calls, better to burn 5 finding the right shape in one test
+// run than go back and forth). /economic_calendar 404s; /api/v1/economic-calendar
+// is the one that actually resolves and returns real JSON, just empty so
+// far — this narrows down whether that's the date format or the trial
+// plan not including the Beta calendar at all.
+const NEWS_TEST_ATTEMPTS = [
+  { label: "today, no filter", date: "today", importance: "" },
+  { label: "last7days, no filter", date: "last7days", importance: "" },
+  { label: "last30days, no filter", date: "last30days", importance: "" },
+  { label: "dash date 10-01-2026", date: "10-01-2026", importance: "" },
+  { label: "ISO date 2026-10-01", date: "2026-10-01", importance: "" }
+];
+
 app.get("/api/admin/news-test", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
@@ -1007,27 +1021,35 @@ app.get("/api/admin/news-test", requireUser, async (req, res) => {
   if (!FOREXNEWS_API_KEY) {
     return res.status(503).json({ error: "FOREXNEWS_API_KEY is not set in Render yet." });
   }
-  try {
-    // /economic_calendar 404s; /api/v1/economic-calendar is what their own
-    // homepage example shows and is the one that actually resolves.
-    // importance accepts both "high" and numeric "3" per testing.
-    const date = String(req.query.date || "today");
-    const importance = req.query.importance === "" ? "" : String(req.query.importance || "high");
-    const params = new URLSearchParams({ date, token: FOREXNEWS_API_KEY });
-    if (importance) params.set("importance", importance);
-    const url = `https://forexnewsapi.com/api/v1/economic-calendar?${params.toString()}`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    const raw = await r.text();
-    let data;
+
+  // A specific ?date=...&importance=... still works for a one-off check;
+  // with no query at all, runs the whole batch of guesses instead.
+  const attempts =
+    req.query.date !== undefined
+      ? [{ label: "manual", date: String(req.query.date), importance: req.query.importance === "" ? "" : String(req.query.importance || "high") }]
+      : NEWS_TEST_ATTEMPTS;
+
+  const results = [];
+  for (const attempt of attempts) {
     try {
-      data = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ error: "Non-JSON response from ForexNewsAPI.", status: r.status, raw: raw.slice(0, 1500) });
+      const params = new URLSearchParams({ date: attempt.date, token: FOREXNEWS_API_KEY });
+      if (attempt.importance) params.set("importance", attempt.importance);
+      const url = `https://forexnewsapi.com/api/v1/economic-calendar?${params.toString()}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      const raw = await r.text();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        results.push({ label: attempt.label, date: attempt.date, status: r.status, error: "non-JSON response", raw: raw.slice(0, 300) });
+        continue;
+      }
+      results.push({ label: attempt.label, date: attempt.date, status: r.status, total: data?.total ?? null, sample: Array.isArray(data?.data) ? data.data.slice(0, 2) : data });
+    } catch (err) {
+      results.push({ label: attempt.label, date: attempt.date, error: err.message });
     }
-    res.status(r.ok ? 200 : 502).json({ status: r.status, data });
-  } catch (err) {
-    res.status(502).json({ error: "Could not reach ForexNewsAPI.", message: err.message });
   }
+  res.json({ results });
 });
 
 // --- Admin ---------------------------------------------------------------
