@@ -1102,7 +1102,7 @@
       referralLoaded = true;
       referralLinkInput.value = data.link;
       if (referralStats) {
-        referralStats.textContent = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.creditsEarned || 0} credits earned`;
+        referralStats.textContent = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.paidCount || 0} bought credits · ${data.creditsEarned || 0} credits earned`;
       }
     } catch (err) {
       referralLinkInput.value = "Could not load your link.";

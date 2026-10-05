@@ -21,7 +21,7 @@
   else {
     try {
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: true }
       });
     } catch {
       reason = "client";

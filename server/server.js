@@ -431,6 +431,20 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
       SUPABASE_ANON_KEY
     );
     console.log("Whop webhook: credited", result);
+
+    // Real money just changed hands — if this buyer was referred by someone
+    // and hasn't triggered a reward yet, pay the referrer now. Best-effort:
+    // never block or fail the purchase over this.
+    try {
+      const rewardResult = await supabaseRpc(
+        "reward_referral_on_purchase",
+        { p_email: email, p_secret: CREDIT_FULFILL_SECRET },
+        SUPABASE_ANON_KEY
+      );
+      if (rewardResult?.rewarded) console.log("Referral reward paid:", rewardResult);
+    } catch (refErr) {
+      console.error("Referral reward check failed:", refErr.message);
+    }
   } catch (err) {
     console.error("Whop webhook: crediting failed:", err.message);
   }
@@ -788,6 +802,7 @@ app.get("/api/referral/mine", requireUser, async (req, res) => {
       code,
       link: `${origin}/signup?ref=${code}`,
       referredCount: stats?.referred_count ?? 0,
+      paidCount: stats?.paid_count ?? 0,
       creditsEarned: stats?.credits_earned ?? 0
     });
   } catch (err) {
