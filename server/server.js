@@ -994,62 +994,135 @@ app.get("/api/history", requireUser, async (req, res) => {
   }
 });
 
-// --- News calendar (ForexNewsAPI) — test only, not a real feature yet -----
-// Temporary: lets the admin confirm the ForexNewsAPI key/trial actually
-// returns economic calendar data (NFP, CPI, etc. with real released values)
-// before anything is built around it. Safe to delete once that's confirmed.
+// --- News calendar + signals (ForexNewsAPI) --------------------------------
+// Small/medium-importance events (PMI, retail sales, etc.) are free and
+// unlimited — full forecast/previous/actual always shown. Big ("High"
+// importance) events like NFP/CPI/FOMC are free to see on the calendar
+// (time, forecast, previous) but the actual-vs-forecast bias signal, once
+// the event has released, costs one of 2 free monthly unlocks per user
+// until a paid tier exists (supabase/news_signals.sql). This is a
+// statistical bias, not a trade call or guarantee — same framing as the
+// chart scanner.
 const FOREXNEWS_API_KEY = (process.env.FOREXNEWS_API_KEY || "").trim();
+const FOREXNEWS_READY = Boolean(FOREXNEWS_API_KEY);
 
-// Tries several date-format/window guesses in one go (since the trial only
-// has 100 total calls, better to burn 5 finding the right shape in one test
-// run than go back and forth). /economic_calendar 404s; /api/v1/economic-calendar
-// is the one that actually resolves and returns real JSON, just empty so
-// far — this narrows down whether that's the date format or the trial
-// plan not including the Beta calendar at all.
-const NEWS_TEST_ATTEMPTS = [
-  { label: "today, no filter", date: "today", importance: "" },
-  { label: "last7days, no filter", date: "last7days", importance: "" },
-  { label: "last30days, no filter", date: "last30days", importance: "" },
-  { label: "dash date 10-01-2026", date: "10-01-2026", importance: "" },
-  { label: "ISO date 2026-10-01", date: "2026-10-01", importance: "" }
-];
+// One shared cache across all users, refreshed at most every 2 minutes —
+// the calendar is the same for everyone, no reason to burn API quota (or,
+// later, Render's outbound calls) per request.
+let newsCalendarCache = { ts: 0, events: [] };
+const NEWS_CACHE_MS = 2 * 60 * 1000;
 
-app.get("/api/admin/news-test", requireUser, async (req, res) => {
-  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Not authorized." });
+function newsEventKey(ev) {
+  return `${ev.event_name}|${ev.country}|${ev.date}`;
+}
+
+// "High" importance events are the ones worth gating; everything else is
+// free forever — this is what "big news costs, small news doesn't" means
+// in code.
+function isBigNewsEvent(ev) {
+  return String(ev.importance || "").toLowerCase() === "high";
+}
+
+async function fetchNewsCalendar() {
+  if (Date.now() - newsCalendarCache.ts < NEWS_CACHE_MS) return newsCalendarCache.events;
+  const params = new URLSearchParams({ date: "today", token: FOREXNEWS_API_KEY });
+  const url = `https://forexnewsapi.com/api/v1/economic-calendar?${params.toString()}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const raw = await r.text();
+  const data = JSON.parse(raw); // let a bad response throw — caller handles it
+  const events = Array.isArray(data?.data) ? data.data : [];
+  newsCalendarCache = { ts: Date.now(), events };
+  return events;
+}
+
+// What a logged-in user is allowed to see without unlocking anything: full
+// data for small/medium events, schedule-only (no actual) for big ones.
+function publicNewsEvent(ev) {
+  const big = isBigNewsEvent(ev);
+  const base = {
+    event_key: newsEventKey(ev),
+    event_name: ev.event_name,
+    country: ev.country,
+    currency: ev.currency,
+    date: ev.date,
+    importance: ev.importance,
+    forecast: ev.forecast ?? null,
+    previous: ev.previous ?? null,
+    big
+  };
+  const released = ev.actual !== undefined && ev.actual !== null && ev.actual !== "";
+  if (!big) {
+    return { ...base, released, actual: released ? ev.actual : null, locked: false };
   }
-  if (!FOREXNEWS_API_KEY) {
-    return res.status(503).json({ error: "FOREXNEWS_API_KEY is not set in Render yet." });
+  // Big event: actual is withheld until unlocked, even though we have it.
+  return { ...base, released, actual: null, locked: released };
+}
+
+function newsBias(ev) {
+  const actual = parseFloat(ev.actual);
+  const forecast = parseFloat(ev.forecast);
+  if (!Number.isFinite(actual) || !Number.isFinite(forecast)) {
+    return { bias: "unclear", note: "Actual or forecast wasn't a plain number — no automatic read for this one." };
   }
+  if (actual > forecast) return { bias: "bullish", note: `Beat forecast (${ev.actual} vs ${ev.forecast}) — historically a bullish bias for ${ev.currency}.` };
+  if (actual < forecast) return { bias: "bearish", note: `Missed forecast (${ev.actual} vs ${ev.forecast}) — historically a bearish bias for ${ev.currency}.` };
+  return { bias: "neutral", note: `Came in in line with forecast (${ev.actual}) — no strong bias either way.` };
+}
 
-  // A specific ?date=...&importance=... still works for a one-off check;
-  // with no query at all, runs the whole batch of guesses instead.
-  const attempts =
-    req.query.date !== undefined
-      ? [{ label: "manual", date: String(req.query.date), importance: req.query.importance === "" ? "" : String(req.query.importance || "high") }]
-      : NEWS_TEST_ATTEMPTS;
+app.get("/api/news/calendar", requireUser, async (req, res) => {
+  if (!FOREXNEWS_READY) {
+    return res.status(503).json({ error: "News signals aren't set up on this server yet." });
+  }
+  try {
+    const events = await fetchNewsCalendar();
+    const freeRemaining = await supabaseRpc("news_signals_remaining", {}, req.user.token).catch(() => null);
+    res.json({ events: events.map(publicNewsEvent), freeRemaining });
+  } catch (err) {
+    console.error("News calendar fetch failed:", err.message);
+    res.status(502).json({ error: "Could not reach the news provider right now. Please try again shortly." });
+  }
+});
 
-  const results = [];
-  for (const attempt of attempts) {
-    try {
-      const params = new URLSearchParams({ date: attempt.date, token: FOREXNEWS_API_KEY });
-      if (attempt.importance) params.set("importance", attempt.importance);
-      const url = `https://forexnewsapi.com/api/v1/economic-calendar?${params.toString()}`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      const raw = await r.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        results.push({ label: attempt.label, date: attempt.date, status: r.status, error: "non-JSON response", raw: raw.slice(0, 300) });
-        continue;
-      }
-      results.push({ label: attempt.label, date: attempt.date, status: r.status, total: data?.total ?? null, sample: Array.isArray(data?.data) ? data.data.slice(0, 2) : data });
-    } catch (err) {
-      results.push({ label: attempt.label, date: attempt.date, error: err.message });
+app.post("/api/news/unlock", requireUser, async (req, res) => {
+  if (!FOREXNEWS_READY) {
+    return res.status(503).json({ error: "News signals aren't set up on this server yet." });
+  }
+  const eventKey = String(req.body?.event_key || "");
+  if (!eventKey) return res.status(400).json({ error: "Missing event." });
+
+  try {
+    const events = await fetchNewsCalendar();
+    const ev = events.find((e) => newsEventKey(e) === eventKey);
+    if (!ev) return res.status(404).json({ error: "That event isn't on today's calendar anymore." });
+    if (!isBigNewsEvent(ev)) {
+      // Small/medium events are never gated — just hand back the data.
+      return res.json({ unlocked: true, already: true, remaining: null, event: { ...publicNewsEvent(ev), actual: ev.actual ?? null }, ...(ev.actual ? newsBias(ev) : {}) });
     }
+    const released = ev.actual !== undefined && ev.actual !== null && ev.actual !== "";
+    if (!released) {
+      return res.status(409).json({ error: "This event hasn't released yet — nothing to unlock." });
+    }
+
+    const result = await supabaseRpc("can_unlock_news_signal", { p_event_key: eventKey }, req.user.token);
+    if (!result?.unlocked) {
+      return res.status(402).json({
+        error: "You've used your 2 free big-event signals this month. More scans and a paid news tier are coming soon.",
+        code: "no_news_unlocks",
+        remaining: 0
+      });
+    }
+    const bias = newsBias(ev);
+    res.json({
+      unlocked: true,
+      already: Boolean(result.already),
+      remaining: result.remaining ?? null,
+      event: { ...publicNewsEvent(ev), actual: ev.actual, locked: false },
+      ...bias
+    });
+  } catch (err) {
+    console.error("News unlock failed:", err.message);
+    res.status(502).json({ error: "Could not unlock that signal right now. Please try again." });
   }
-  res.json({ results });
 });
 
 // --- Admin ---------------------------------------------------------------

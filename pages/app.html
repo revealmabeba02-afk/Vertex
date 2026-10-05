@@ -103,6 +103,7 @@
   <nav class="sidenav" role="tablist" aria-label="Sections">
     <a class="navpill is-active" href="#scan" data-view="scan" role="tab" aria-selected="true" aria-controls="view-scan" id="tab-scan">Scanner</a>
     <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
+    <a class="navpill" href="#news" data-view="news" role="tab" aria-selected="false" aria-controls="view-news" id="tab-news">News</a>
     <a class="navpill" href="#how" data-view="how" role="tab" aria-selected="false" aria-controls="view-how" id="tab-how">How it works</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
     <a class="navpill" href="#help" data-view="help" role="tab" aria-selected="false" aria-controls="view-help" id="tab-help">Help</a>
@@ -432,6 +433,31 @@
     </div>
 
     <p class="disclaimer-note">Credits never expire. Payments are matched automatically within about a minute — if yours is slower, it'll still land, just check back here.</p>
+  </section>
+
+  <!-- ============ NEWS (own tab) ============ -->
+  <section class="view news" id="view-news" role="tabpanel" aria-labelledby="tab-news" hidden>
+    <p class="eyebrow">
+      <span class="eyebrow__dot" aria-hidden="true"></span>
+      Economic calendar
+    </p>
+    <h1 class="hero__title">Today's news</h1>
+    <p class="hero__lede">Small releases are free and unlimited. Big ones (NFP, CPI, FOMC) are free to see on the calendar — unlocking the actual-vs-forecast read costs one of your 2 free big-event signals this month.</p>
+
+    <div class="credit-balance-card">
+      <div>
+        <p class="settings-row__title">Free big-event signals left this month</p>
+        <p class="credit-balance-card__value" id="news-remaining-value">—</p>
+      </div>
+    </div>
+
+    <p class="credits-status" id="news-status" hidden></p>
+
+    <div class="news-list" id="news-list">
+      <p class="news-empty" id="news-empty" hidden>No economic events scheduled for today.</p>
+    </div>
+
+    <p class="disclaimer-note">Big-event signals are a statistical read (actual vs forecast), not a trade call or guarantee. Not financial advice.</p>
   </section>
 
   <!-- ============ HELP (own tab) ============ -->

@@ -120,13 +120,14 @@
   const views = {
     scan: document.getElementById("view-scan"),
     credits: document.getElementById("view-credits"),
+    news: document.getElementById("view-news"),
     how: document.getElementById("view-how"),
     history: document.getElementById("view-history"),
     help: document.getElementById("view-help"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#credits": "credits", "#how": "how", "#history": "history", "#help": "help", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#help": "help", "#settings": "settings" };
 
   function applyView() {
     const name = HASH_TO_VIEW[location.hash] || "scan";
@@ -140,6 +141,7 @@
     if (name === "history") loadHistory();
     if (name === "credits") refreshBalance();
     if (name === "help") loadHelpHistory();
+    if (name === "news") loadNewsCalendar();
   }
 
   window.addEventListener("hashchange", applyView);
@@ -906,6 +908,119 @@
         customAmountBtn.textContent = "Get scans";
       }
     });
+  }
+
+  // --------------------------------------------------------------
+  // News: today's economic calendar, free small/medium events shown in
+  // full, big events (NFP/CPI/FOMC) locked until unlocked (2 free/month).
+  // --------------------------------------------------------------
+  const newsList = document.getElementById("news-list");
+  const newsEmpty = document.getElementById("news-empty");
+  const newsRemainingValue = document.getElementById("news-remaining-value");
+  const newsStatus = document.getElementById("news-status");
+  let newsLoaded = false;
+
+  function showNewsStatus(msg, isError) {
+    if (!newsStatus) return;
+    newsStatus.textContent = msg;
+    newsStatus.hidden = !msg;
+    newsStatus.classList.toggle("credits-status--error", Boolean(isError));
+  }
+
+  function newsEventCard(ev) {
+    const card = document.createElement("div");
+    card.className = "news-card" + (ev.big ? " news-card--big" : "");
+    card.dataset.eventKey = ev.event_key;
+
+    const head = document.createElement("div");
+    head.className = "news-card__head";
+    const name = document.createElement("p");
+    name.className = "news-card__name";
+    name.textContent = ev.event_name;
+    head.appendChild(name);
+    const badge = document.createElement("span");
+    badge.className = "news-card__badge news-card__badge--" + String(ev.importance || "").toLowerCase();
+    badge.textContent = ev.importance || "—";
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    const meta = document.createElement("p");
+    meta.className = "news-card__meta";
+    const time = ev.date ? new Date(ev.date).toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" }) : "";
+    meta.textContent = [ev.currency, ev.country, time].filter(Boolean).join(" · ");
+    card.appendChild(meta);
+
+    const stats = document.createElement("div");
+    stats.className = "news-card__stats";
+    stats.innerHTML = `
+      <div><span>Forecast</span><strong>${ev.forecast ?? "—"}</strong></div>
+      <div><span>Previous</span><strong>${ev.previous ?? "—"}</strong></div>
+      <div class="news-card__actual"><span>Actual</span><strong>${ev.locked ? "🔒" : ev.actual ?? (ev.released ? "—" : "Not out yet")}</strong></div>
+    `;
+    card.appendChild(stats);
+
+    if (ev.locked) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "scan-btn news-card__unlock";
+      btn.textContent = "Unlock signal";
+      btn.addEventListener("click", () => unlockNewsEvent(ev.event_key, card, btn));
+      card.appendChild(btn);
+    } else if (ev.big && ev.released) {
+      const bias = document.createElement("p");
+      bias.className = "news-card__bias";
+      bias.textContent = ev.note || "";
+      card.appendChild(bias);
+    }
+
+    return card;
+  }
+
+  async function unlockNewsEvent(eventKey, card, btn) {
+    btn.disabled = true;
+    btn.textContent = "Unlocking…";
+    try {
+      const session = await Auth.getSession();
+      if (!session) throw new Error("Please log in first.");
+      const res = await fetch("/api/news/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ event_key: eventKey })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw Object.assign(new Error(data?.error || "Could not unlock that signal."), { code: data?.code });
+      const fresh = newsEventCard({ ...data.event, note: data.note });
+      card.replaceWith(fresh);
+      if (typeof data.remaining === "number" && newsRemainingValue) newsRemainingValue.textContent = String(data.remaining);
+      showNewsStatus("", false);
+    } catch (err) {
+      showNewsStatus(err.message || "Could not unlock that signal.", true);
+      btn.disabled = false;
+      btn.textContent = "Unlock signal";
+    }
+  }
+
+  async function loadNewsCalendar(force) {
+    if (newsLoaded && !force) return;
+    if (!newsList) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/news/calendar", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not load today's news.");
+      newsLoaded = true;
+      if (newsRemainingValue) newsRemainingValue.textContent = typeof data.freeRemaining === "number" ? String(data.freeRemaining) : "—";
+      newsList.querySelectorAll(".news-card").forEach((el) => el.remove());
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (newsEmpty) newsEmpty.hidden = events.length > 0;
+      // Big events first, then by scheduled time.
+      events
+        .sort((a, b) => (b.big - a.big) || new Date(a.date) - new Date(b.date))
+        .forEach((ev) => newsList.appendChild(newsEventCard(ev)));
+    } catch (err) {
+      showNewsStatus(err.message || "Could not load today's news.", true);
+    }
   }
 
   let balanceWatchTimer = null;
