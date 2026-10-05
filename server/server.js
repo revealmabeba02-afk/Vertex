@@ -630,6 +630,66 @@ function isBullishSide(side) {
   return false;
 }
 
+// FXSynapse's /api/v1/chart response carries the raw price bars it used for
+// analysis, but the exact field name/shape isn't nailed down from their docs
+// yet. Try every plausible shape rather than betting on one, so the live
+// candlestick chart lights up as soon as a real response comes back instead
+// of needing a code change once we see the real field name.
+const CANDLE_ARRAY_KEYS = ["candles", "bars_data", "barsData", "ohlc", "ohlcv", "history", "priceData", "price_data", "data", "series"];
+function toUnixSeconds(t) {
+  if (typeof t === "number") return t > 1e12 ? Math.round(t / 1000) : Math.round(t);
+  if (typeof t === "string") {
+    const n = Number(t);
+    if (!Number.isNaN(n)) return toUnixSeconds(n);
+    const ms = Date.parse(t);
+    if (!Number.isNaN(ms)) return Math.round(ms / 1000);
+  }
+  return null;
+}
+function normalizeCandle(raw) {
+  if (!raw) return null;
+  // Object shape: {time|t|timestamp|date, open|o, high|h, low|l, close|c}
+  if (!Array.isArray(raw)) {
+    const time = toUnixSeconds(raw.time ?? raw.t ?? raw.timestamp ?? raw.date);
+    const open = Number(raw.open ?? raw.o);
+    const high = Number(raw.high ?? raw.h);
+    const low = Number(raw.low ?? raw.l);
+    const close = Number(raw.close ?? raw.c);
+    if (time == null || [open, high, low, close].some(Number.isNaN)) return null;
+    return { time, open, high, low, close };
+  }
+  // Array shape: [time, open, high, low, close, ...]
+  if (raw.length >= 5) {
+    const time = toUnixSeconds(raw[0]);
+    const [open, high, low, close] = raw.slice(1, 5).map(Number);
+    if (time == null || [open, high, low, close].some(Number.isNaN)) return null;
+    return { time, open, high, low, close };
+  }
+  return null;
+}
+function extractCandles(fx) {
+  let found = null;
+  for (const key of CANDLE_ARRAY_KEYS) {
+    if (Array.isArray(fx?.[key]) && fx[key].length) {
+      found = fx[key];
+      break;
+    }
+  }
+  if (!found) return [];
+  const candles = found.map(normalizeCandle).filter(Boolean);
+  // Chart libraries require strictly ascending, deduplicated timestamps.
+  candles.sort((a, b) => a.time - b.time);
+  const deduped = [];
+  for (const c of candles) {
+    if (deduped.length && deduped[deduped.length - 1].time === c.time) {
+      deduped[deduped.length - 1] = c;
+    } else {
+      deduped.push(c);
+    }
+  }
+  return deduped;
+}
+
 function mapFxSynapseToAnalysis(fx) {
   const plan = fx.plan || {};
   const planOk = !!plan.ok;
@@ -681,6 +741,8 @@ function mapFxSynapseToAnalysis(fx) {
     market_bias: bias,
     confidence: computeConfidence({ planOk, rrRatio, topDown: fx.topDown, bias, structureLabel }),
     bars: typeof fx.bars === "number" ? fx.bars : null,
+    digits,
+    candles: extractCandles(fx),
     market_structure: {
       trend: `${structureLabel} market structure, measured directly from live price bars.`,
       key_levels: describeLevels(fx.levels, digits),

@@ -483,7 +483,115 @@
     D1: "1 day", W1: "1 week", MN1: "1 month"
   };
 
+  // --------------------------------------------------------------
+  // Live candlestick chart. Built on the bars the scan itself read, so it
+  // always matches what the analysis below it is talking about — not a
+  // separately-polled "live" feed running on its own.
+  // --------------------------------------------------------------
+  let liveChart = null;
+  let liveCandleSeries = null;
+  let chartResizeObserver = null;
+
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  function ensureChart(container) {
+    if (liveChart) return liveChart;
+    const LWC = window.LightweightCharts;
+    if (!LWC) return null;
+
+    liveChart = LWC.createChart(container, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: "transparent" },
+        textColor: cssVar("--text-faint", "#8A8199"),
+        fontFamily: "Inter, sans-serif",
+        fontSize: 11
+      },
+      grid: {
+        vertLines: { color: cssVar("--border-soft", "rgba(255,255,255,0.06)") },
+        horzLines: { color: cssVar("--border-soft", "rgba(255,255,255,0.06)") }
+      },
+      rightPriceScale: { borderColor: cssVar("--border-soft", "rgba(255,255,255,0.08)") },
+      timeScale: { borderColor: cssVar("--border-soft", "rgba(255,255,255,0.08)"), timeVisible: true, secondsVisible: false },
+      crosshair: { mode: LWC.CrosshairMode.Normal }
+    });
+
+    liveCandleSeries = liveChart.addCandlestickSeries({
+      upColor: cssVar("--bull", "#3FBF8A"),
+      downColor: cssVar("--bear", "#E25C63"),
+      borderUpColor: cssVar("--bull", "#3FBF8A"),
+      borderDownColor: cssVar("--bear", "#E25C63"),
+      wickUpColor: cssVar("--bull", "#3FBF8A"),
+      wickDownColor: cssVar("--bear", "#E25C63")
+    });
+
+    if (!chartResizeObserver && window.ResizeObserver) {
+      chartResizeObserver = new ResizeObserver(() => liveChart && liveChart.timeScale().fitContent());
+      chartResizeObserver.observe(container);
+    }
+
+    return liveChart;
+  }
+
+  function priceLine(series, value, color, title) {
+    if (typeof value !== "number" || Number.isNaN(value)) return;
+    series.createPriceLine({
+      price: value,
+      color,
+      lineWidth: 1,
+      lineStyle: window.LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title
+    });
+  }
+
+  function renderChart(a) {
+    const wrap = document.getElementById("res-chart-wrap");
+    const candles = Array.isArray(a.candles) ? a.candles : [];
+
+    if (!window.LightweightCharts || candles.length < 2) {
+      wrap.hidden = true;
+      return;
+    }
+
+    const container = document.getElementById("res-chart");
+    const chart = ensureChart(container);
+    if (!chart) {
+      wrap.hidden = true;
+      return;
+    }
+
+    wrap.hidden = false;
+    liveCandleSeries.setData(candles);
+
+    // Clear old price lines by rebuilding the series rather than tracking
+    // handles — simplest thing that can't leak stale lines across scans.
+    liveChart.removeSeries(liveCandleSeries);
+    liveCandleSeries = liveChart.addCandlestickSeries({
+      upColor: cssVar("--bull", "#3FBF8A"),
+      downColor: cssVar("--bear", "#E25C63"),
+      borderUpColor: cssVar("--bull", "#3FBF8A"),
+      borderDownColor: cssVar("--bear", "#E25C63"),
+      wickUpColor: cssVar("--bull", "#3FBF8A"),
+      wickDownColor: cssVar("--bear", "#E25C63")
+    });
+    liveCandleSeries.setData(candles);
+
+    const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+    const firstTarget = Array.isArray(a.take_profit) ? a.take_profit[0] : null;
+
+    priceLine(liveCandleSeries, firstEntry?.entry_raw, cssVar("--accent", "#E0618F"), "Entry");
+    priceLine(liveCandleSeries, a.stop_loss?.value_raw, cssVar("--bear", "#E25C63"), "Stop");
+    priceLine(liveCandleSeries, firstTarget?.target_raw, cssVar("--bull", "#3FBF8A"), "Target");
+
+    liveChart.timeScale().fitContent();
+  }
+
   function renderResult(a, timeframe) {
+    renderChart(a);
     document.getElementById("res-pair").textContent = a.pair_guess || "Symbol unclear";
     document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";
 

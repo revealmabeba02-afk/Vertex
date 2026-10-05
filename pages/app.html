@@ -281,6 +281,18 @@
         </div>
       </div>
 
+      <div id="res-chart-wrap" class="chart-wrap" hidden>
+        <div class="chart-wrap__head">
+          <span class="chart-wrap__title">Live chart</span>
+          <span class="chart-wrap__legend">
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--entry"></i>Entry</span>
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--sl"></i>Stop</span>
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--tp"></i>Target</span>
+          </span>
+        </div>
+        <div id="res-chart" class="chart-wrap__canvas"></div>
+      </div>
+
       <div class="result__grid">
         <section class="result-section result-section--wide">
           <h2 class="result-section__title">Market structure</h2>
@@ -590,6 +602,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="/config.js"></script>
 <script src="/auth-client.js"></script>
 <script src="/app.js"></script>
