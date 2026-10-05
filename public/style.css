@@ -2349,3 +2349,57 @@ body.scanning .scan-hud {
   font-family: var(--font-mono);
   font-size: 13px;
 }
+
+.confidence-badge {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.confidence-badge__ring {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+}
+.confidence-badge__track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 3;
+}
+.confidence-badge__fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 97.4;
+  stroke-dashoffset: 97.4;
+  transition: stroke-dashoffset 1.1s cubic-bezier(.3,.9,.3,1);
+}
+.confidence-badge__pct {
+  position: absolute;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.trade-stat--confidence {
+  display: flex;
+  flex-direction: column;
+}
+.confidence-bar {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.confidence-bar__fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 1.1s cubic-bezier(.3,.9,.3,1);
+}

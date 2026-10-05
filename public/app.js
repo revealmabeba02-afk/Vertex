@@ -485,6 +485,8 @@
 
     document.getElementById("res-confidence").textContent = a.bars ? String(a.bars) : "—";
 
+    renderConfidence(typeof a.confidence === "number" ? a.confidence : null);
+
     const structure = a.market_structure || {};
     document.getElementById("res-trend").textContent = structure.trend || "Not enough data to describe trend.";
 
@@ -957,6 +959,46 @@
     newsStatus.textContent = msg;
     newsStatus.hidden = !msg;
     newsStatus.classList.toggle("credits-status--error", Boolean(isError));
+  }
+
+  // Shows the scan's confidence read in two places at once: the small ring
+  // badge up by the pair name, and the bigger animated bar down in the
+  // trade stats. Both start at 0 and fill in on a frame delay so the CSS
+  // transition actually plays instead of snapping straight to the value.
+  function renderConfidence(pct) {
+    const badge = document.getElementById("res-confidence-badge");
+    const ring = document.getElementById("res-confidence-ring");
+    const pctLabel = document.getElementById("res-confidence-pct");
+    const stat = document.getElementById("res-confidence-stat");
+    const value2 = document.getElementById("res-confidence-value2");
+    const fill = document.getElementById("res-confidence-fill");
+    if (typeof pct !== "number") {
+      if (badge) badge.hidden = true;
+      if (stat) stat.hidden = true;
+      return;
+    }
+    const clamped = Math.max(0, Math.min(100, pct));
+    const circumference = 97.4; // 2 * pi * r(15.5), matches the SVG ring
+    if (badge && ring && pctLabel) {
+      badge.hidden = false;
+      pctLabel.textContent = `${clamped}%`;
+      ring.style.strokeDashoffset = String(circumference);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          ring.style.strokeDashoffset = String(circumference - (clamped / 100) * circumference);
+        });
+      });
+    }
+    if (stat && value2 && fill) {
+      stat.hidden = false;
+      value2.textContent = `${clamped}%`;
+      fill.style.width = "0%";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fill.style.width = `${clamped}%`;
+        });
+      });
+    }
   }
 
   function newsSignalTag(ev) {

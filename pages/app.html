@@ -247,6 +247,13 @@
           </div>
         </div>
         <div class="result__head-right">
+          <div id="res-confidence-badge" class="confidence-badge" hidden>
+            <svg class="confidence-badge__ring" viewBox="0 0 36 36" aria-hidden="true">
+              <circle class="confidence-badge__track" cx="18" cy="18" r="15.5"></circle>
+              <circle id="res-confidence-ring" class="confidence-badge__fill" cx="18" cy="18" r="15.5"></circle>
+            </svg>
+            <span id="res-confidence-pct" class="confidence-badge__pct"></span>
+          </div>
           <div id="res-signal" class="signal-tag signal-tag--none" hidden></div>
           <div id="res-bias" class="bias-tag bias-tag--neutral">Neutral</div>
         </div>
@@ -282,6 +289,11 @@
             <div class="trade-stat trade-stat--rr">
               <span class="trade-stat__label">Risk / reward</span>
               <span id="res-rr" class="trade-stat__value"></span>
+            </div>
+            <div class="trade-stat trade-stat--confidence" id="res-confidence-stat" hidden>
+              <span class="trade-stat__label">Confidence</span>
+              <span id="res-confidence-value2" class="trade-stat__value"></span>
+              <div class="confidence-bar"><div id="res-confidence-fill" class="confidence-bar__fill"></div></div>
             </div>
           </div>
 

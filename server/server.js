@@ -581,6 +581,30 @@ function computeRR(entry, stop, target) {
   return `~1:${(reward / risk).toFixed(1)}`;
 }
 
+// A 0-100 read of how much the pieces of this scan agree with each other —
+// not a win-rate promise, just "how aligned is the evidence". Built from
+// things we actually have: whether a clean plan exists, how many higher
+// timeframes agree with the call, the risk/reward on offer, and whether the
+// market is actually trending vs just ranging. Clamped to 35-95 so it never
+// reads as a guarantee (100%) or as "don't bother" (near 0%).
+function computeConfidence({ planOk, rrRatio, topDown, bias, structureLabel }) {
+  let score = 50;
+  if (planOk) score += 12;
+  if (typeof rrRatio === "number") {
+    if (rrRatio >= 3) score += 15;
+    else if (rrRatio >= 2) score += 10;
+    else if (rrRatio >= 1) score += 4;
+    else score -= 6;
+  }
+  if (Array.isArray(topDown) && topDown.length) {
+    const aligned = topDown.filter((td) => td?.bias && bias && String(td.bias).toLowerCase() === String(bias).toLowerCase()).length;
+    score += Math.round((aligned / topDown.length) * 18) - 4;
+  }
+  if (structureLabel && !/range/i.test(structureLabel)) score += 6;
+  if (!planOk) score -= 10;
+  return Math.max(35, Math.min(95, Math.round(score)));
+}
+
 function conceptSummary(concepts) {
   if (!concepts || typeof concepts !== "object") return "";
   const parts = Object.entries(concepts)
@@ -615,6 +639,9 @@ function mapFxSynapseToAnalysis(fx) {
 
   const firstTarget = Array.isArray(plan.targets) && typeof plan.targets[0] === "number" ? plan.targets[0] : null;
   const rr = planOk ? computeRR(plan.entry, plan.stop, firstTarget) : null;
+  const rrRatio = planOk && typeof plan.entry === "number" && typeof plan.stop === "number" && typeof firstTarget === "number" && plan.entry !== plan.stop
+    ? Math.abs(firstTarget - plan.entry) / Math.abs(plan.entry - plan.stop)
+    : null;
 
   const notesParts = [];
   const cs = conceptSummary(fx.concepts);
@@ -635,7 +662,7 @@ function mapFxSynapseToAnalysis(fx) {
   return {
     pair_guess: fx.symbol || null,
     market_bias: bias,
-    confidence: null,
+    confidence: computeConfidence({ planOk, rrRatio, topDown: fx.topDown, bias, structureLabel }),
     bars: typeof fx.bars === "number" ? fx.bars : null,
     market_structure: {
       trend: `${structureLabel} market structure, measured directly from live price bars.`,
