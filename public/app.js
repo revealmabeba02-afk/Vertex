@@ -270,6 +270,11 @@
   // --------------------------------------------------------------
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    // Guards against a double-submit (Enter key + a click landing in the
+    // same tick, or a fast double-click before the button visually
+    // disables) sending two /api/analyze requests — and so spending two
+    // scans — for what the person did once.
+    if (scanInFlight) return;
     clearFormError();
 
     const symbol = symbolInput.value.trim().toUpperCase();
@@ -286,6 +291,7 @@
   });
 
   retryBtn.addEventListener("click", () => {
+    if (scanInFlight) return;
     const symbol = symbolInput.value.trim().toUpperCase();
     if (symbol && timeframeSelect.value) {
       runScan(symbol, timeframeSelect.value);

@@ -1400,6 +1400,13 @@ app.post("/api/admin/support/:id/reply", requireUser, async (req, res) => {
   }
 });
 
+// Belt-and-braces against two /api/analyze requests for the same user
+// landing back-to-back (a double-click, a retried network request, etc.)
+// each spending their own scan. Only one request per user id is allowed to
+// be mid-flight at a time; a second one is told to wait rather than
+// charged. Cleared in a `finally` below so it never gets stuck.
+const scansInFlight = new Set();
+
 app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
   const symbol = String(req.body?.symbol || "").trim().toUpperCase();
   const timeframe = String(req.body?.timeframe || "").trim().toUpperCase();
@@ -1411,6 +1418,19 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
     return res.status(400).json({ error: "Pick a timeframe." });
   }
 
+  if (scansInFlight.has(req.user.id)) {
+    return res.status(429).json({ error: "A scan is already running for your account. Please wait for it to finish." });
+  }
+  scansInFlight.add(req.user.id);
+
+  try {
+    return await runAnalyze(req, res, symbol, timeframe);
+  } finally {
+    scansInFlight.delete(req.user.id);
+  }
+});
+
+async function runAnalyze(req, res, symbol, timeframe) {
   // Spend one scan up front — today's free allowance first (4/day), then
   // paid credits (use_scan() in supabase/free_scans.sql handles the split).
   // If both are exhausted, stop here — never call FXSynapse (which costs
@@ -1487,7 +1507,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
     saveScanFailure(req.user, symbol, timeframe, err.message || "Unknown server error");
     res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
   }
-});
+}
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.
 app.use("/api", (req, res) => res.status(404).json({ error: "Not found." }));
