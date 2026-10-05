@@ -169,6 +169,17 @@
   }
   .health-card__percent.is-warn { color: var(--accent); }
   .health-card__percent.is-bad { color: var(--bear); }
+  .health-card__status {
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+  }
+  .health-card__status.is-ok { color: var(--bull); }
+  .health-card__status.is-warn { color: var(--accent); }
+  .health-card__status.is-bad { color: var(--bear); }
   .health-card__checks {
     flex: 1;
     min-width: 240px;
@@ -313,7 +324,10 @@
   </div>
 
   <div class="health-card">
-    <div class="health-card__percent" id="health-percent">—</div>
+    <div>
+      <div class="health-card__percent" id="health-percent">—</div>
+      <div class="health-card__status" id="health-status"></div>
+    </div>
     <div class="health-card__checks" id="health-checks">
       <div class="health-check">Loading health…</div>
     </div>
@@ -544,19 +558,41 @@
       }
     }
 
+    // Counts the health percent up from 0 instead of just snapping to the
+    // number, so it's obviously "live" rather than a static label — same
+    // idea as the confidence ring on the scan results page.
+    function animateHealthPercent(el, target) {
+      const duration = 800;
+      const start = performance.now();
+      function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = Math.round(eased * target) + "%";
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
     async function loadHealth(authHeader) {
       const percentEl = document.getElementById("health-percent");
+      const statusEl = document.getElementById("health-status");
       const checksEl = document.getElementById("health-checks");
       try {
         const res = await fetch("/api/admin/health", { headers: authHeader });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data || typeof data.percent !== "number") {
           percentEl.textContent = "—";
+          if (statusEl) statusEl.textContent = "";
           checksEl.innerHTML = `<div class="health-check">${escapeHtml((data && data.error) || "Could not load health.")}</div>`;
           return;
         }
-        percentEl.textContent = data.percent + "%";
-        percentEl.className = "health-card__percent " + (data.percent >= 100 ? "" : data.percent >= 50 ? "is-warn" : "is-bad");
+        const level = data.percent >= 100 ? "ok" : data.percent >= 50 ? "warn" : "bad";
+        animateHealthPercent(percentEl, data.percent);
+        percentEl.className = "health-card__percent " + (level === "ok" ? "" : "is-" + level);
+        if (statusEl) {
+          statusEl.textContent = level === "ok" ? "Healthy" : level === "warn" ? "Needs attention" : "Critical";
+          statusEl.className = "health-card__status is-" + level;
+        }
         checksEl.innerHTML = "";
         (data.checks || []).forEach((c) => {
           const row = document.createElement("div");
