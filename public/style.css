@@ -1982,6 +1982,57 @@ body.scanning .scan-hud {
   width: 100%;
 }
 
+.custom-amount-card {
+  position: relative;
+  margin-top: 16px;
+  padding: 22px 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.custom-amount-card__row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.custom-amount-card__prefix {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-dim);
+}
+.custom-amount-card__input {
+  flex: 1;
+  min-width: 100px;
+  max-width: 140px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+.custom-amount-card__input:focus { outline: none; border-color: var(--accent); }
+.custom-amount-card__btn,
+.custom-amount-card .bundle-card__btn {
+  margin-top: 0;
+  width: auto;
+  flex: 1;
+  min-width: 140px;
+}
+.custom-amount-card__hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--bear);
+  min-height: 1em;
+}
+
 .pay-panel {
   margin-top: 24px;
   padding: 22px 24px;

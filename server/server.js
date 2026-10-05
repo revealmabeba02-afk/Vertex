@@ -128,6 +128,39 @@ if (!WHOP_READY) {
   );
 }
 
+// --- Credits / Whop custom amount -----------------------------------------
+// "Name your price" top-up, on top of the 4 fixed bundles. Unlike those
+// (static checkout links created once by hand in the Whop dashboard), a
+// custom amount has to be priced at the moment the person picks it, so this
+// calls Whop's API to create a one-off plan for that exact price and sends
+// the person to the purchase_url it returns. Needs a Whop API key
+// (dashboard > Settings > API Keys) and one Whop product to attach these
+// one-off plans to (any existing product works, or a plain hidden one made
+// just for this) — set WHOP_API_KEY and WHOP_CUSTOM_PRODUCT_ID in Render to
+// turn this on; until then the custom-amount box just says so.
+//
+// NOTE ON FIELD NAMES: same caveat as the webhook extraction above — Whop's
+// exact plan-creation response field for the checkout link wasn't fully
+// confirmed from their public docs. The code below checks the few likely
+// field names and logs the full response if none match, so the first real
+// attempt can be checked against Render's logs and adjusted if needed.
+const WHOP_CUSTOM_PRODUCT_ID = (process.env.WHOP_CUSTOM_PRODUCT_ID || "").trim();
+const WHOP_CUSTOM_READY = Boolean(WHOP_API_KEY && WHOP_CUSTOM_PRODUCT_ID);
+const CUSTOM_PRICE_PER_SCAN = 0.5; // same per-scan rate as the Quick bundle ($4.99 / 10)
+const CUSTOM_MIN_AMOUNT = 5;
+const CUSTOM_MAX_AMOUNT = 500;
+
+function scansForCustomAmount(amountUsd) {
+  return Math.max(1, Math.round(amountUsd / CUSTOM_PRICE_PER_SCAN));
+}
+
+if (!WHOP_CUSTOM_READY) {
+  console.warn(
+    "\n[WARN] WHOP_API_KEY and/or WHOP_CUSTOM_PRODUCT_ID not set. The \"name\n" +
+    "your price\" custom amount box will show but tell people it's not ready yet.\n"
+  );
+}
+
 // Matches a paid amount to one of the 3 bundles, same ±$0.02 tolerance used
 // for Binance.
 function bundleByAmount(amountUsd) {
@@ -199,7 +232,7 @@ const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Verte
 
 What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick a timeframe, and get back a technical read calculated from live price bars — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, and take-profit targets. No chart screenshot is needed or accepted. It is a technical read, not financial advice.
 
-Billing: every signed-in user gets 4 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought in one-time bundles via Whop (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans). Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
+Billing: every signed-in user gets 4 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought via Whop, either as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, credited at the same ~$0.50/scan rate. Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
 
 Known quirk: this runs on a free hosting tier that goes to sleep after a few minutes of no traffic. The very first request after that can take up to ~50 seconds and may show "Could not reach the server" — simply retrying a few seconds later almost always works. This is not a bug.
 
@@ -368,7 +401,18 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
       return;
     }
     const bundle = bundleByAmount(amount);
-    if (!bundle) {
+    let p_bundle, p_scans, p_amount_usd;
+    if (bundle) {
+      p_bundle = bundle.key;
+      p_scans = bundle.scans;
+      p_amount_usd = bundle.amount;
+    } else if (amount >= CUSTOM_MIN_AMOUNT) {
+      // Doesn't match a fixed bundle's price — treat it as a custom-amount
+      // purchase and credit scans at the same rate used to sell it.
+      p_bundle = "custom";
+      p_scans = scansForCustomAmount(amount);
+      p_amount_usd = amount;
+    } else {
       console.error(`Whop webhook: paid amount $${amount} doesn't match any known bundle.`);
       return;
     }
@@ -376,9 +420,9 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
       "whop_credit_by_email",
       {
         p_email: email,
-        p_bundle: bundle.key,
-        p_scans: bundle.scans,
-        p_amount_usd: bundle.amount,
+        p_bundle,
+        p_scans,
+        p_amount_usd,
         p_external_id: String(id),
         p_secret: CREDIT_FULFILL_SECRET
       },
@@ -773,6 +817,49 @@ app.post("/api/credits/order", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Create order error:", err.message);
     res.status(502).json({ error: "Could not start that order. Please try again." });
+  }
+});
+
+app.post("/api/credits/custom-checkout", requireUser, async (req, res) => {
+  if (!WHOP_CUSTOM_READY) {
+    return res.status(503).json({ error: "Custom amounts aren't turned on yet — grab one of the bundles below for now." });
+  }
+
+  const amount = Number(req.body?.amount);
+  if (!Number.isFinite(amount) || amount < CUSTOM_MIN_AMOUNT || amount > CUSTOM_MAX_AMOUNT) {
+    return res.status(400).json({ error: `Enter an amount between $${CUSTOM_MIN_AMOUNT} and $${CUSTOM_MAX_AMOUNT}.` });
+  }
+  const amountRounded = Math.round(amount * 100) / 100;
+
+  try {
+    const r = await fetch("https://api.whop.com/api/v2/plans", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${WHOP_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        product_id: WHOP_CUSTOM_PRODUCT_ID,
+        plan_type: "one_time",
+        base_currency: "usd",
+        initial_price: amountRounded
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      console.error("Whop create-plan failed:", r.status, JSON.stringify(data).slice(0, 1000));
+      return res.status(502).json({ error: "Could not start checkout for that amount. Try a bundle instead, or try again shortly." });
+    }
+    const checkoutUrl = data?.purchase_url || data?.direct_link || data?.checkout_url || data?.data?.purchase_url || null;
+    if (!checkoutUrl) {
+      console.error("Whop create-plan: no checkout URL in response:", JSON.stringify(data).slice(0, 1000));
+      return res.status(502).json({ error: "Could not start checkout for that amount. Try a bundle instead, or try again shortly." });
+    }
+    res.json({ checkoutUrl, scans: scansForCustomAmount(amountRounded) });
+  } catch (err) {
+    console.error("Whop create-plan error:", err.message);
+    res.status(502).json({ error: "Could not reach Whop right now. Please try again in a moment." });
   }
 });
 

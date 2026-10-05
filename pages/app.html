@@ -398,6 +398,17 @@
       </div>
     </div>
 
+    <div class="custom-amount-card" id="custom-amount-card">
+      <p class="bundle-card__name">Name your price</p>
+      <p class="bundle-card__desc">Any amount from $5, credited at the same rate as Quick (~$0.50 per scan).</p>
+      <div class="custom-amount-card__row">
+        <span class="custom-amount-card__prefix">$</span>
+        <input type="number" id="custom-amount-input" class="custom-amount-card__input" min="5" max="500" step="1" placeholder="5" inputmode="decimal" />
+        <button type="button" class="scan-btn bundle-card__btn" id="custom-amount-btn">Get scans</button>
+      </div>
+      <p class="custom-amount-card__hint" id="custom-amount-hint"></p>
+    </div>
+
     <div class="pay-panel" id="pay-panel" hidden>
       <div class="pay-panel__head">
         <p class="settings-row__title">Complete your payment</p>

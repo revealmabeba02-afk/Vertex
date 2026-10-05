@@ -857,6 +857,51 @@
     });
   }
 
+  // "Name your price" — unlike the fixed bundles, this price is only known
+  // once typed in, so the server creates a one-off Whop checkout for that
+  // exact amount and hands back the link to open.
+  const customAmountInput = document.getElementById("custom-amount-input");
+  const customAmountBtn = document.getElementById("custom-amount-btn");
+  const customAmountHint = document.getElementById("custom-amount-hint");
+
+  if (customAmountBtn) {
+    customAmountBtn.addEventListener("click", async () => {
+      const amount = Number(customAmountInput?.value);
+      if (!Number.isFinite(amount) || amount < 5) {
+        if (customAmountHint) customAmountHint.textContent = "Enter at least $5.";
+        return;
+      }
+      customAmountBtn.disabled = true;
+      customAmountBtn.textContent = "Starting…";
+      if (customAmountHint) customAmountHint.textContent = "";
+      try {
+        const session = await Auth.getSession();
+        if (!session) throw new Error("Please log in first.");
+        const res = await fetch("/api/credits/custom-checkout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ amount })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Could not start checkout.");
+        window.open(data.checkoutUrl, "_blank", "noopener");
+        showCreditsStatus(
+          `Checkout opened in a new tab for ${data.scans} scans. Use the same email there as your Vertex login — your credits land here automatically, usually within a minute of paying.`,
+          false
+        );
+        startBalanceWatch();
+      } catch (err) {
+        if (customAmountHint) customAmountHint.textContent = err.message || "Something went wrong. Please try again.";
+      } finally {
+        customAmountBtn.disabled = false;
+        customAmountBtn.textContent = "Get scans";
+      }
+    });
+  }
+
   let balanceWatchTimer = null;
   function startBalanceWatch() {
     const startingBalance = currentBalance;
