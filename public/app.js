@@ -986,7 +986,7 @@
       btn.type = "button";
       btn.className = "scan-btn news-card__unlock";
       btn.textContent = "Unlock signal";
-      btn.addEventListener("click", () => unlockNewsEvent(ev.event_key, card, btn));
+      btn.onclick = () => unlockNewsEvent(ev.event_key, card, btn, false);
       card.appendChild(btn);
     } else if (ev.big && ev.released) {
       const bias = document.createElement("p");
@@ -998,29 +998,44 @@
     return card;
   }
 
-  async function unlockNewsEvent(eventKey, card, btn) {
+  async function unlockNewsEvent(eventKey, card, btn, pay) {
     btn.disabled = true;
-    btn.textContent = "Unlocking…";
+    btn.textContent = pay ? "Paying…" : "Unlocking…";
     try {
       const session = await Auth.getSession();
       if (!session) throw new Error("Please log in first.");
       const res = await fetch("/api/news/unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ event_key: eventKey })
+        body: JSON.stringify({ event_key: eventKey, pay: Boolean(pay) })
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw Object.assign(new Error(data?.error || "Could not unlock that signal."), { code: data?.code });
+      if (!res.ok) {
+        if (data?.code === "no_news_unlocks" && data?.canPay) {
+          showNewsStatus(data.error, true);
+          btn.disabled = false;
+          btn.textContent = `Pay ${data.creditsRequired} credits to unlock`;
+          btn.onclick = () => unlockNewsEvent(eventKey, card, btn, true);
+          return;
+        }
+        throw Object.assign(new Error(data?.error || "Could not unlock that signal."), { code: data?.code });
+      }
       const fresh = newsEventCard({ ...data.event, note: data.note, bias: data.bias });
       card.replaceWith(fresh);
       if (typeof data.remaining === "number" && newsRemainingValue) newsRemainingValue.textContent = String(data.remaining);
-      showNewsStatus("", false);
+      if (data.paid) {
+        showNewsStatus(`Unlocked for ${NEWS_PAID_UNLOCK_CREDITS_LABEL} credits.`, false);
+        refreshBalance();
+      } else {
+        showNewsStatus("", false);
+      }
     } catch (err) {
       showNewsStatus(err.message || "Could not unlock that signal.", true);
       btn.disabled = false;
       btn.textContent = "Unlock signal";
     }
   }
+  const NEWS_PAID_UNLOCK_CREDITS_LABEL = 2;
 
   async function loadNewsCalendar(force) {
     if (newsLoaded && !force) return;

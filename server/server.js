@@ -1013,6 +1013,7 @@ const FOREXNEWS_READY = Boolean(FOREXNEWS_API_KEY);
 // later, Render's outbound calls) per request.
 let newsCalendarCache = { ts: 0, events: [] };
 const NEWS_CACHE_MS = 2 * 60 * 1000;
+const NEWS_PAID_UNLOCK_CREDITS = 2; // ~$1 at the $0.50/credit rate, once free unlocks run out
 
 function newsEventKey(ev) {
   return `${ev.event_name}|${ev.country}|${ev.date}`;
@@ -1108,21 +1109,47 @@ app.post("/api/news/unlock", requireUser, async (req, res) => {
     }
 
     const result = await supabaseRpc("can_unlock_news_signal", { p_event_key: eventKey }, req.user.token);
-    if (!result?.unlocked) {
-      return res.status(402).json({
-        error: "You've used your 2 free big-event signals this month. More scans and a paid news tier are coming soon.",
-        code: "no_news_unlocks",
-        remaining: 0
+    if (result?.unlocked) {
+      const bias = newsBias(ev);
+      return res.json({
+        unlocked: true,
+        already: Boolean(result.already),
+        paid: false,
+        remaining: result.remaining ?? null,
+        event: { ...publicNewsEvent(ev), actual: ev.actual, locked: false },
+        ...bias
       });
     }
-    const bias = newsBias(ev);
-    res.json({
-      unlocked: true,
-      already: Boolean(result.already),
-      remaining: result.remaining ?? null,
-      event: { ...publicNewsEvent(ev), actual: ev.actual, locked: false },
-      ...bias
-    });
+
+    // Free allowance used up — fall back to paying with credits.
+    if (req.body?.pay !== true) {
+      return res.status(402).json({
+        error: `You've used your 2 free big-event signals this month. Unlock this one for ${NEWS_PAID_UNLOCK_CREDITS} credits instead?`,
+        code: "no_news_unlocks",
+        remaining: 0,
+        canPay: true,
+        creditsRequired: NEWS_PAID_UNLOCK_CREDITS
+      });
+    }
+    try {
+      const paidResult = await supabaseRpc("spend_credits_for_news_unlock", { p_event_key: eventKey, p_amount: NEWS_PAID_UNLOCK_CREDITS }, req.user.token);
+      const bias = newsBias(ev);
+      res.json({
+        unlocked: true,
+        already: Boolean(paidResult?.already),
+        paid: true,
+        remaining: 0,
+        remainingCredits: paidResult?.remaining_credits ?? null,
+        event: { ...publicNewsEvent(ev), actual: ev.actual, locked: false },
+        ...bias
+      });
+    } catch (payErr) {
+      return res.status(402).json({
+        error: "Not enough credits to unlock this signal. Top up on the Credits tab.",
+        code: "insufficient_credits",
+        creditsRequired: NEWS_PAID_UNLOCK_CREDITS
+      });
+    }
   } catch (err) {
     console.error("News unlock failed:", err.message);
     res.status(502).json({ error: "Could not unlock that signal right now. Please try again." });
