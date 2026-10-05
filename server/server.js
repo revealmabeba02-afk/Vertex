@@ -994,6 +994,35 @@ app.get("/api/history", requireUser, async (req, res) => {
   }
 });
 
+// --- News calendar (ForexNewsAPI) — test only, not a real feature yet -----
+// Temporary: lets the admin confirm the ForexNewsAPI key/trial actually
+// returns economic calendar data (NFP, CPI, etc. with real released values)
+// before anything is built around it. Safe to delete once that's confirmed.
+const FOREXNEWS_API_KEY = (process.env.FOREXNEWS_API_KEY || "").trim();
+
+app.get("/api/admin/news-test", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  if (!FOREXNEWS_API_KEY) {
+    return res.status(503).json({ error: "FOREXNEWS_API_KEY is not set in Render yet." });
+  }
+  try {
+    const url = `https://forexnewsapi.com/api/v1/economic-calendar?date=today&importance=high&token=${encodeURIComponent(FOREXNEWS_API_KEY)}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const raw = await r.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return res.status(502).json({ error: "Non-JSON response from ForexNewsAPI.", status: r.status, raw: raw.slice(0, 1500) });
+    }
+    res.status(r.ok ? 200 : 502).json({ status: r.status, data });
+  } catch (err) {
+    res.status(502).json({ error: "Could not reach ForexNewsAPI.", message: err.message });
+  }
+});
+
 // --- Admin ---------------------------------------------------------------
 // Only the configured ADMIN_EMAIL gets anything back. The real security
 // boundary is in Postgres (admin_user_count() checks the caller's own
