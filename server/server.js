@@ -613,17 +613,30 @@ function conceptSummary(concepts) {
   return parts.length ? `Detected: ${parts.join(", ")}.` : "";
 }
 
+// FXSynapse's docs say plan.side is "buy"/"sell", but we were seeing every
+// single scan come back Sell — turns out some responses use "long"/"short"
+// instead, and the old code only ever matched the literal string "buy", so
+// anything else (including a real "long") silently fell through to Short.
+// Recognize both conventions instead of trusting one literal string.
+function isBullishSide(side) {
+  const s = String(side || "").toLowerCase();
+  if (s === "buy" || s === "long") return true;
+  if (s === "sell" || s === "short") return false;
+  console.error(`FXSynapse returned an unrecognized plan.side value: ${JSON.stringify(side)} — treating as not-bullish.`);
+  return false;
+}
+
 function mapFxSynapseToAnalysis(fx) {
   const plan = fx.plan || {};
   const planOk = !!plan.ok;
   const digits = typeof fx.digits === "number" ? fx.digits : null;
   const bias = planOk && plan.side
-    ? (String(plan.side).toLowerCase() === "buy" ? "Bullish" : "Bearish")
+    ? (isBullishSide(plan.side) ? "Bullish" : "Bearish")
     : biasFromStructure(fx.marketStructure);
 
   const entries = planOk
     ? [{
-        type: String(plan.side || "").toLowerCase() === "buy" ? "Long" : "Short",
+        type: isBullishSide(plan.side) ? "Long" : "Short",
         entry_zone: fmtNum(plan.entry, digits),
         entry_raw: typeof plan.entry === "number" ? plan.entry : null
       }]
