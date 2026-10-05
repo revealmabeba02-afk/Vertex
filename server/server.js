@@ -1008,11 +1008,14 @@ app.get("/api/admin/news-test", requireUser, async (req, res) => {
     return res.status(503).json({ error: "FOREXNEWS_API_KEY is not set in Render yet." });
   }
   try {
+    // Real endpoint + param shapes per forexnewsapi.com/documentation:
+    // date is MMDDYYYY or a preset ("today", "last7days", ...); importance
+    // is numeric 1=low 2=medium 3=high (comma-separated), not a word.
     const date = String(req.query.date || "today");
-    const importance = String(req.query.importance || "high");
+    const importance = String(req.query.importance ?? "3");
     const params = new URLSearchParams({ date, token: FOREXNEWS_API_KEY });
     if (importance) params.set("importance", importance);
-    const url = `https://forexnewsapi.com/api/v1/economic-calendar?${params.toString()}`;
+    const url = `https://forexnewsapi.com/economic_calendar?${params.toString()}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
     const raw = await r.text();
     let data;
