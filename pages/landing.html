@@ -3,6 +3,10 @@
 <head>
 <script>
   try {
+    var ref = new URLSearchParams(location.search).get("ref");
+    if (ref) localStorage.setItem("vertex_ref", ref.trim());
+  } catch (e) { /* localStorage unavailable — skip quietly */ }
+  try {
     if (localStorage.getItem("vertex-theme") === "light") {
       document.documentElement.setAttribute("data-theme", "light");
     }

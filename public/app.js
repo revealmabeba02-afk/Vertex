@@ -142,6 +142,7 @@
     if (name === "credits") refreshBalance();
     if (name === "help") loadHelpHistory();
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
+    if (name === "settings") loadReferral();
   }
 
   window.addEventListener("hashchange", applyView);
@@ -826,7 +827,30 @@
   // Balance shows up as soon as the page is ready to scan, not just when
   // the Credits tab is opened, so the sidebar pill is accurate right away.
   if (Auth.ready) {
-    Auth.getSession().then((session) => { if (session) refreshBalance(); });
+    Auth.getSession().then((session) => {
+      if (session) { refreshBalance(); claimStoredReferral(session); }
+    });
+  }
+
+  // If the person arrived via someone's referral link, signup.html/landing
+  // stashed the code in localStorage (claiming needs a session, which
+  // didn't exist on those pages yet). Claim it once here, then forget it.
+  async function claimStoredReferral(session) {
+    let code = null;
+    try { code = localStorage.getItem("vertex_ref"); } catch (_) { return; }
+    if (!code) return;
+    try {
+      const res = await fetch("/api/referral/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json().catch(() => ({}));
+      try { localStorage.removeItem("vertex_ref"); } catch (_) {}
+      if (res.ok && data.claimed) refreshBalance();
+    } catch (_) {
+      // Best-effort — not worth bothering the person about.
+    }
   }
 
   function showCreditsStatus(msg, isError) {
@@ -1058,6 +1082,46 @@
     } catch (err) {
       showNewsStatus(err.message || "Could not load today's news.", true);
     }
+  }
+
+  const referralLinkInput = document.getElementById("referral-link-input");
+  const referralCopyBtn = document.getElementById("referral-copy-btn");
+  const referralStats = document.getElementById("referral-stats");
+  const referralCopyStatus = document.getElementById("referral-copy-status");
+  let referralLoaded = false;
+
+  async function loadReferral(force) {
+    if (!referralLinkInput) return;
+    if (referralLoaded && !force) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/referral/mine", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not load your referral link.");
+      referralLoaded = true;
+      referralLinkInput.value = data.link;
+      if (referralStats) {
+        referralStats.textContent = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.creditsEarned || 0} credits earned`;
+      }
+    } catch (err) {
+      referralLinkInput.value = "Could not load your link.";
+    }
+  }
+
+  if (referralCopyBtn) {
+    referralCopyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(referralLinkInput.value);
+        if (referralCopyStatus) {
+          referralCopyStatus.textContent = "Copied!";
+          referralCopyStatus.hidden = false;
+          setTimeout(() => { referralCopyStatus.hidden = true; }, 2000);
+        }
+      } catch (_) {
+        referralLinkInput.select();
+      }
+    });
   }
 
   let balanceWatchTimer = null;

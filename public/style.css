@@ -2329,10 +2329,23 @@ body.scanning .scan-hud {
 }
 
 .news-clock {
-  margin-top: 6px;
+  margin-top: 8px;
   font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 800;
   color: var(--accent);
   letter-spacing: 0.04em;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.referral-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.referral-row .input {
+  flex: 1;
+  min-width: 200px;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }

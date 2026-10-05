@@ -776,6 +776,39 @@ app.get("/api/credits/balance", requireUser, async (req, res) => {
   }
 });
 
+app.get("/api/referral/mine", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const [code, stats] = await Promise.all([
+      supabaseRpc("my_referral_code", {}, req.user.token),
+      supabaseRpc("my_referral_stats", {}, req.user.token).catch(() => null)
+    ]);
+    const origin = `${req.protocol}://${req.get("host")}`;
+    res.json({
+      code,
+      link: `${origin}/signup?ref=${code}`,
+      referredCount: stats?.referred_count ?? 0,
+      creditsEarned: stats?.credits_earned ?? 0
+    });
+  } catch (err) {
+    console.error("Referral code error:", err.message);
+    res.status(502).json({ error: "Could not load your referral link." });
+  }
+});
+
+app.post("/api/referral/claim", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const code = String(req.body?.code || "").trim();
+  if (!code) return res.status(400).json({ error: "Missing code." });
+  try {
+    const result = await supabaseRpc("claim_referral_code", { p_code: code }, req.user.token);
+    res.json(result || { claimed: false });
+  } catch (err) {
+    console.error("Referral claim error:", err.message);
+    res.status(502).json({ error: "Could not claim that referral code." });
+  }
+});
+
 app.get("/api/credits/orders", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   try {

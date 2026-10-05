@@ -6,6 +6,14 @@
   const alertEl = document.getElementById("form-alert");
   const submitBtn = document.getElementById("submit-btn");
 
+  // Referral capture: remember ?ref=CODE from a shared link so it can be
+  // claimed once the person is actually signed in (claiming needs a
+  // session, which doesn't exist yet on this page).
+  try {
+    const ref = new URLSearchParams(location.search).get("ref");
+    if (ref) localStorage.setItem("vertex_ref", ref.trim());
+  } catch (_) { /* localStorage unavailable (private mode etc.) — skip quietly */ }
+
   // Show / hide password buttons.
   document.querySelectorAll("[data-toggle]").forEach((btn) => {
     const input = document.getElementById(btn.dataset.toggle);
