@@ -2327,3 +2327,12 @@ body.scanning .scan-hud {
   font-size: 12.5px;
   color: var(--text-faint);
 }
+
+.news-clock {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}

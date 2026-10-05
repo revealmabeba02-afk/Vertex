@@ -141,7 +141,7 @@
     if (name === "history") loadHistory();
     if (name === "credits") refreshBalance();
     if (name === "help") loadHelpHistory();
-    if (name === "news") loadNewsCalendar();
+    if (name === "news") { loadNewsCalendar(); startNewsClock(); }
   }
 
   window.addEventListener("hashchange", applyView);
@@ -918,13 +918,31 @@
   const newsEmpty = document.getElementById("news-empty");
   const newsRemainingValue = document.getElementById("news-remaining-value");
   const newsStatus = document.getElementById("news-status");
+  const newsClock = document.getElementById("news-clock");
   let newsLoaded = false;
+  let newsClockTimer = null;
+  function startNewsClock() {
+    if (!newsClock || newsClockTimer) return;
+    const tick = () => { newsClock.textContent = new Date().toLocaleTimeString(); };
+    tick();
+    newsClockTimer = setInterval(tick, 1000);
+  }
 
   function showNewsStatus(msg, isError) {
     if (!newsStatus) return;
     newsStatus.textContent = msg;
     newsStatus.hidden = !msg;
     newsStatus.classList.toggle("credits-status--error", Boolean(isError));
+  }
+
+  function newsSignalTag(ev) {
+    if (!ev.bias || ev.bias === "neutral" || ev.bias === "unclear") return null;
+    const tag = document.createElement("span");
+    const dir = ev.bias === "bullish" ? "buy" : "sell";
+    tag.className = "signal-tag signal-tag--" + dir;
+    const ccy = ev.currency ? ev.currency + " " : "";
+    tag.textContent = `${ccy}${dir === "buy" ? "BUY" : "SELL"}`;
+    return tag;
   }
 
   function newsEventCard(ev) {
@@ -942,6 +960,10 @@
     badge.className = "news-card__badge news-card__badge--" + String(ev.importance || "").toLowerCase();
     badge.textContent = ev.importance || "—";
     head.appendChild(badge);
+
+    const signalTag = newsSignalTag(ev);
+    if (signalTag) head.appendChild(signalTag);
+
     card.appendChild(head);
 
     const meta = document.createElement("p");
@@ -989,7 +1011,7 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw Object.assign(new Error(data?.error || "Could not unlock that signal."), { code: data?.code });
-      const fresh = newsEventCard({ ...data.event, note: data.note });
+      const fresh = newsEventCard({ ...data.event, note: data.note, bias: data.bias });
       card.replaceWith(fresh);
       if (typeof data.remaining === "number" && newsRemainingValue) newsRemainingValue.textContent = String(data.remaining);
       showNewsStatus("", false);
