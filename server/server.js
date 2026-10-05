@@ -234,6 +234,8 @@ What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick 
 
 Billing: every signed-in user gets 4 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought via Whop, either as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, credited at the same ~$0.50/scan rate. Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
 
+News tab: a live economic calendar (NFP, CPI, PMIs, etc.). Small/medium events are fully free, including a BUY/SELL read once released. Big ("High" importance) events are free to see on the calendar (time, forecast, previous) but the actual-vs-forecast result and its BUY/SELL read only unlock after the event releases, and unlocking costs one of 2 free monthly unlocks per user — after that, more unlocks aren't available yet (a paid tier is planned).
+
 Known quirk: this runs on a free hosting tier that goes to sleep after a few minutes of no traffic. The very first request after that can take up to ~50 seconds and may show "Could not reach the server" — simply retrying a few seconds later almost always works. This is not a bug.
 
 A user has submitted a support message. Decide: can you answer this confidently and completely using ONLY the information above, with a short, warm, helpful reply? Or does it need a human (account-specific issues, refund requests, bug reports, anything requiring looking something up, or anything outside what's described above)?
@@ -1052,9 +1054,11 @@ function publicNewsEvent(ev) {
   };
   const released = ev.actual !== undefined && ev.actual !== null && ev.actual !== "";
   if (!big) {
-    return { ...base, released, actual: released ? ev.actual : null, locked: false };
+    // Small/medium events are fully free, so the buy/sell read comes for free too.
+    const bias = released ? newsBias(ev) : null;
+    return { ...base, released, actual: released ? ev.actual : null, locked: false, ...(bias || {}) };
   }
-  // Big event: actual is withheld until unlocked, even though we have it.
+  // Big event: actual (and the bias it drives) is withheld until unlocked.
   return { ...base, released, actual: null, locked: released };
 }
 

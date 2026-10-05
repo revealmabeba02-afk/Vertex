@@ -2238,6 +2238,16 @@ body.scanning .scan-hud {
   gap: 12px;
   flex-wrap: wrap;
 }
+.news-card__head .signal-tag {
+  font-size: 13px;
+  padding: 7px 14px;
+}
+.news-card__head .signal-tag--buy {
+  box-shadow: 0 0 40px color-mix(in srgb, var(--bull) 80%, transparent), 0 0 0 1px color-mix(in srgb, var(--bull) 85%, white 15%) inset;
+}
+.news-card__head .signal-tag--sell {
+  box-shadow: 0 0 40px color-mix(in srgb, var(--bear) 80%, transparent), 0 0 0 1px color-mix(in srgb, var(--bear) 85%, white 15%) inset;
+}
 .news-card__name {
   font-family: var(--font-display);
   font-weight: 700;
