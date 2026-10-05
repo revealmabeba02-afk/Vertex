@@ -146,6 +146,15 @@
 
     <form id="scan-form" class="scanform" novalidate>
 
+      <div class="quickpick" id="quickpick-pairs" role="group" aria-label="Quick-pick pair">
+        <button type="button" class="quickpick__pill" data-symbol="XAUUSD">XAUUSD</button>
+        <button type="button" class="quickpick__pill" data-symbol="EURUSD">EURUSD</button>
+        <button type="button" class="quickpick__pill" data-symbol="GBPUSD">GBPUSD</button>
+        <button type="button" class="quickpick__pill" data-symbol="BTCUSD">BTCUSD</button>
+        <button type="button" class="quickpick__pill" data-symbol="US30">US30</button>
+        <button type="button" class="quickpick__pill" data-symbol="NAS100">NAS100</button>
+      </div>
+
       <label class="symbol-field" for="symbol-input">
         <span class="symbol-field__label">Pair or symbol</span>
         <input
@@ -186,6 +195,19 @@
           <option value="W1">1 week</option>
         </select>
       </fieldset>
+
+      <div class="concepts-row" aria-hidden="true">
+        <span class="concepts-row__label">We look for</span>
+        <div class="concepts-row__pills">
+          <span class="concept-pill">Liquidity sweep</span>
+          <span class="concept-pill">Order block</span>
+          <span class="concept-pill">Change of character</span>
+          <span class="concept-pill">Fair value gap</span>
+          <span class="concept-pill">Break of structure</span>
+          <span class="concept-pill">Kill zones</span>
+          <span class="concept-pill">VWAP</span>
+        </div>
+      </div>
 
       <button type="submit" id="scan-btn" class="scan-btn" disabled>
         <span class="scan-btn__label">Scan chart</span>

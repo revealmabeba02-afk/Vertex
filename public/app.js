@@ -250,7 +250,30 @@
   symbolInput.addEventListener("input", () => {
     clearFormError();
     updateScanBtnState();
+    syncQuickpickActive();
   });
+
+  // Quick-pick pills just fill the symbol field — same field, same scan
+  // button, nothing special happens server-side.
+  const quickpickEl = document.getElementById("quickpick-pairs");
+  function syncQuickpickActive() {
+    if (!quickpickEl) return;
+    const current = symbolInput.value.trim().toUpperCase();
+    quickpickEl.querySelectorAll(".quickpick__pill").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.symbol === current);
+    });
+  }
+  if (quickpickEl) {
+    quickpickEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".quickpick__pill");
+      if (!btn) return;
+      symbolInput.value = btn.dataset.symbol;
+      clearFormError();
+      updateScanBtnState();
+      syncQuickpickActive();
+      symbolInput.focus();
+    });
+  }
 
   function clearForm() {
     symbolInput.value = "";
