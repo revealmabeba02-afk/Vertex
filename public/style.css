@@ -78,7 +78,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
 
 html, body {
   margin: 0;
@@ -87,6 +87,7 @@ html, body {
   color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  max-width: 100%;
 }
 
 body {
@@ -1874,12 +1875,13 @@ body.scanning .scan-hud {
 /* Below this width the sidebar collapses into a horizontal bar pinned to
    the top, with the tabs wrapping to their own row under the brand. */
 @media (max-width: 760px) {
-  .app-shell { flex-direction: column; }
+  .app-shell { flex-direction: column; max-width: 100vw; }
   .sidebar {
     position: sticky;
     top: 0;
     z-index: 40;
     width: 100%;
+    max-width: 100%;
     height: auto;
     flex-direction: row;
     flex-wrap: wrap;
@@ -1888,15 +1890,28 @@ body.scanning .scan-hud {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
+  /* The tab row used to wrap/shrink in place, but with 7 tabs the items
+     never actually shrank below their text width, so the row (and the
+     whole page under it) ended up wider than the screen — on a phone
+     that shows up as the entire page dragging sideways when touched.
+     A dedicated horizontal-scroll lane keeps that overflow contained to
+     just this row instead of the page. */
   .sidenav {
     order: 3;
     flex: 1 0 100%;
     flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
   }
+  .sidenav::-webkit-scrollbar { display: none; }
   .navpill {
-    flex: 1;
+    flex: 0 0 auto;
     justify-content: center;
     min-height: 40px;
+    white-space: nowrap;
   }
   .sidebar__foot {
     margin-top: 0;
