@@ -62,6 +62,29 @@ const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || "").trim();
 // two independent locks, so a bug in one does not expose the other.
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "revealmabeba02@gmail.com").trim().toLowerCase();
 
+// --- Social link tracking --------------------------------------------------
+// /go/:platform links go in King's TikTok/Instagram/YouTube/Facebook bios
+// instead of the raw profile URLs. Each one logs the click (so the admin
+// page can show totals per platform) and emails him instantly, then sends
+// the visitor straight on to the real profile — nothing changes for them.
+// Every value below can be overridden by an env var without a code change.
+const SOCIAL_LINKS = {
+  tiktok: process.env.SOCIAL_LINK_TIKTOK || "https://www.tiktok.com/@verxter6",
+  instagram: process.env.SOCIAL_LINK_INSTAGRAM || "https://instagram.com/verte.x6",
+  youtube: process.env.SOCIAL_LINK_YOUTUBE || "https://www.youtube.com/@Vertex06",
+  facebook: process.env.SOCIAL_LINK_FACEBOOK || "https://www.facebook.com/share/1EGMWwPbXv/"
+};
+const PLATFORM_LABELS = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", facebook: "Facebook" };
+
+// Email alerts via Resend (https://resend.com — free tier, no API key means
+// this just silently stops sending emails; logging/redirect still work).
+const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
+const LINK_ALERT_EMAIL = (process.env.LINK_ALERT_EMAIL || "reveal@shadowfx.co.za").trim();
+// Resend requires the "from" address to be on a domain you've verified with
+// them. Until shadowfx.co.za (or another domain) is verified there, their
+// shared onboarding@resend.dev address works for any destination.
+const LINK_ALERT_FROM = (process.env.LINK_ALERT_FROM || "Vertex Scanner <onboarding@resend.dev>").trim();
+
 // --- Credits / Binance Pay ------------------------------------------------
 // Pay-per-scan credits. No Binance secret and no Supabase service_role key
 // ever sit in the browser: the API key below is a READ-ONLY personal
@@ -469,6 +492,19 @@ app.get("/signup", (req, res) => res.sendFile(page("signup.html")));
 app.get("/app", (req, res) => res.sendFile(page("app.html")));
 app.get("/admin", (req, res) => res.sendFile(page("admin.html")));
 
+// Tracked social links — put these in TikTok/Instagram/YouTube/Facebook
+// bios instead of the raw profile URLs. Logging and the email alert are
+// both fire-and-forget: a slow Supabase or Resend call never delays the
+// redirect the visitor is waiting on.
+app.get("/go/:platform", (req, res) => {
+  const platform = String(req.params.platform || "").toLowerCase();
+  const destination = SOCIAL_LINKS[platform];
+  if (!destination) return res.redirect("/");
+  logLinkClick(platform);
+  sendLinkClickEmail(platform);
+  res.redirect(destination);
+});
+
 // Public Supabase settings for the browser, generated from .env so the keys
 // live in one place.
 app.get("/config.js", (req, res) => {
@@ -832,6 +868,57 @@ async function saveScanFailure(user, pair, timeframe, reason) {
     }
   } catch (err) {
     console.error("Scan failure save error:", err.message);
+  }
+}
+
+// --- Social link tracking ---------------------------------------------------
+// Fire-and-forget by design: a slow or failing log/email must never delay
+// the redirect the visitor is actually waiting on. Both just log to the
+// console on failure and never throw.
+async function logLinkClick(platform) {
+  if (!SUPABASE_READY) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/log_link_click`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ p_platform: platform }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not log link click:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Link click log error:", err.message);
+  }
+}
+
+async function sendLinkClickEmail(platform) {
+  if (!RESEND_API_KEY || !LINK_ALERT_EMAIL) return;
+  const label = PLATFORM_LABELS[platform] || platform;
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [LINK_ALERT_EMAIL],
+        subject: `Someone clicked your ${label} link`,
+        text: `Someone just clicked your ${label} link on Vertex Scanner, just now.`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not send link-click email:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Link click email error:", err.message);
   }
 }
 
@@ -1354,6 +1441,26 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Admin stats error:", err.message);
     res.status(502).json({ error: "Could not load admin stats." });
+  }
+});
+
+// Per-platform click totals for the TikTok/Instagram/YouTube/Facebook
+// tracked links (see /go/:platform above). Same admin-email gate pattern
+// as the other admin routes — admin_link_click_summary() in Postgres
+// re-checks the admin email independently. See supabase/link_clicks.sql.
+app.get("/api/admin/link-clicks", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const rows = await supabaseRpc("admin_link_click_summary", {}, req.user.token);
+    res.json({ clicks: Array.isArray(rows) ? rows : [] });
+  } catch (err) {
+    console.error("Admin link clicks error:", err.message);
+    res.status(502).json({ error: "Could not load link clicks. Has supabase/link_clicks.sql been run yet?" });
   }
 });
 
