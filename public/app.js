@@ -33,13 +33,6 @@
           if (!session) return toLogin();
           document.getElementById("account-email").textContent = session.user.email || "";
           document.getElementById("account").hidden = false;
-          // Cosmetic only — the real gate is server-side (requireUser +
-          // ADMIN_EMAIL check on every /api/admin/* route). This just saves
-          // you typing /admin by hand.
-          const adminLink = document.getElementById("admin-link");
-          if (adminLink && (session.user.email || "").toLowerCase() === "revealmabeba02@gmail.com") {
-            adminLink.hidden = false;
-          }
           revealPage();
         })
         .catch(toLogin);
@@ -230,6 +223,47 @@
   if (sidebarCloseBtn) {
     sidebarCloseBtn.addEventListener("click", () => setSidebar(true));
   }
+
+  // --------------------------------------------------------------
+  // Mobile nav drawer: the sidebar becomes an off-canvas panel below the
+  // 760px breakpoint (see style.css), opened by the hamburger in the
+  // slim mobile top bar and closed by the backdrop, a nav tap, or Esc.
+  // --------------------------------------------------------------
+  const MOBILE_NAV_BREAKPOINT = 760;
+  const mobileNavBtn = document.getElementById("mobile-nav-btn");
+  const mobileNavBackdrop = document.getElementById("mobile-nav-backdrop");
+  const isMobileViewport = () => window.innerWidth <= MOBILE_NAV_BREAKPOINT;
+
+  function openMobileNav() {
+    root.setAttribute("data-mobile-nav", "open");
+    if (mobileNavBtn) mobileNavBtn.setAttribute("aria-expanded", "true");
+    if (mobileNavBackdrop) mobileNavBackdrop.hidden = false;
+  }
+  function closeMobileNav() {
+    root.removeAttribute("data-mobile-nav");
+    if (mobileNavBtn) mobileNavBtn.setAttribute("aria-expanded", "false");
+    if (mobileNavBackdrop) mobileNavBackdrop.hidden = true;
+  }
+
+  if (mobileNavBtn) {
+    mobileNavBtn.addEventListener("click", () => {
+      if (root.getAttribute("data-mobile-nav") === "open") closeMobileNav();
+      else openMobileNav();
+    });
+  }
+  if (mobileNavBackdrop) {
+    mobileNavBackdrop.addEventListener("click", closeMobileNav);
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileNav();
+  });
+  // Tapping any nav link in the drawer should close it behind you.
+  document.querySelectorAll(".navpill[data-view]").forEach((tab) => {
+    tab.addEventListener("click", () => { if (isMobileViewport()) closeMobileNav(); });
+  });
+  // Resizing past the breakpoint (e.g. rotating to a tablet landscape)
+  // shouldn't leave the drawer stuck open with no backdrop logic to close it.
+  window.addEventListener("resize", () => { if (!isMobileViewport()) closeMobileNav(); });
 
   // --------------------------------------------------------------
   // Header status: a real check against the server, not decoration.
@@ -483,6 +517,18 @@
     D1: "1 day", W1: "1 week", MN1: "1 month"
   };
 
+  // Tickers mean nothing to a first-time visitor — pair them with a plain
+  // name wherever a symbol is shown back to the user.
+  const SYMBOL_NAMES = {
+    XAUUSD: "Gold", EURUSD: "Euro / Dollar", GBPUSD: "Pound / Dollar",
+    BTCUSD: "Bitcoin", US30: "Dow Jones", NAS100: "Nasdaq 100"
+  };
+  function friendlySymbol(sym) {
+    if (!sym) return sym;
+    const name = SYMBOL_NAMES[String(sym).toUpperCase()];
+    return name ? `${name} (${sym})` : sym;
+  }
+
   // --------------------------------------------------------------
   // Live candlestick chart. Built on the bars the scan itself read, so it
   // always matches what the analysis below it is talking about — not a
@@ -592,7 +638,7 @@
 
   function renderResult(a, timeframe) {
     renderChart(a);
-    document.getElementById("res-pair").textContent = a.pair_guess || "Symbol unclear";
+    document.getElementById("res-pair").textContent = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
     document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";
 
     const biasEl = document.getElementById("res-bias");
