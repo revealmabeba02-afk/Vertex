@@ -296,6 +296,76 @@
   .click-row__nums { display: flex; gap: 18px; align-items: baseline; }
   .click-row__total { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--text); }
   .click-row__day { font-size: 12px; color: var(--text-faint); }
+
+  .planner-card {
+    margin-top: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .planner-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .planner-form select,
+  .planner-form input[type="date"] {
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-alt) 70%, transparent);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .planner-form textarea {
+    flex: 1 1 240px;
+    min-width: 200px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-alt) 70%, transparent);
+    color: var(--text);
+    font-size: 13px;
+    resize: vertical;
+    min-height: 38px;
+  }
+  .planner-row {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .planner-row:last-child { border-bottom: 0; }
+  .planner-row__main { flex: 1 1 auto; min-width: 0; }
+  .planner-row__top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .planner-row__platform { font-size: 12.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em; }
+  .planner-row__date { font-size: 12px; color: var(--text-faint); }
+  .planner-row__caption { font-size: 13.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .planner-row__caption:empty::before { content: "(no caption written)"; color: var(--text-faint); font-style: italic; }
+  .planner-row__actions { display: flex; gap: 8px; flex: none; align-items: center; }
+  .planner-status {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
+    cursor: pointer;
+  }
+  .planner-status--planned { background: color-mix(in srgb, var(--text-faint) 25%, transparent); color: var(--text); }
+  .planner-status--scheduled { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+  .planner-status--posted { background: color-mix(in srgb, var(--bull) 20%, transparent); color: var(--bull); }
+  .planner-row__delete { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; }
+  .planner-row__delete:hover { color: var(--bear); }
 </style>
 </head>
 <body>
@@ -404,6 +474,23 @@
     <div class="users-empty" id="clicks-empty">Loading…</div>
   </div>
 
+  <div class="planner-card">
+    <div class="users-card__head">Content planner</div>
+    <form class="planner-form" id="planner-form">
+      <select id="planner-platform" required>
+        <option value="tiktok">TikTok</option>
+        <option value="instagram">Instagram</option>
+        <option value="youtube">YouTube</option>
+        <option value="facebook">Facebook</option>
+      </select>
+      <input type="date" id="planner-date">
+      <textarea id="planner-caption" placeholder="Caption / idea (optional)"></textarea>
+      <button type="submit" class="btn btn--primary">Add post</button>
+    </form>
+    <div id="planner-list"></div>
+    <div class="users-empty" id="planner-empty">Loading…</div>
+  </div>
+
   <div class="support-card">
     <div class="users-card__head">Support messages</div>
     <div id="support-list"></div>
@@ -448,6 +535,8 @@
     loadSupport(authHeader);
     loadOrders(authHeader);
     loadLinkClicks(authHeader);
+    loadContentPosts(authHeader);
+    wirePlannerForm(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -607,6 +696,120 @@
       } catch {
         emptyEl.textContent = "Could not reach the server.";
       }
+    }
+
+    function fmtPlannerDate(d) {
+      if (!d) return "No date set";
+      try {
+        return new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      } catch {
+        return d;
+      }
+    }
+
+    const STATUS_CYCLE = { planned: "scheduled", scheduled: "posted", posted: "planned" };
+
+    async function loadContentPosts(authHeader) {
+      const listEl = document.getElementById("planner-list");
+      const emptyEl = document.getElementById("planner-empty");
+      try {
+        const res = await fetch("/api/admin/content-posts", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load posts.";
+          emptyEl.hidden = false;
+          return;
+        }
+        const rows = (data && Array.isArray(data.posts)) ? data.posts : [];
+        if (rows.length === 0) {
+          emptyEl.textContent = "Nothing planned yet — add what you want to post this week.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = "";
+        rows.forEach((row) => {
+          const div = document.createElement("div");
+          div.className = "planner-row";
+          div.innerHTML = `
+            <div class="planner-row__main">
+              <div class="planner-row__top">
+                <span class="planner-row__platform">${escapeHtml(PLATFORM_NAMES[row.platform] || row.platform)}</span>
+                <span class="planner-row__date">${escapeHtml(fmtPlannerDate(row.scheduled_for))}</span>
+              </div>
+              <div class="planner-row__caption">${escapeHtml(row.caption || "")}</div>
+            </div>
+            <div class="planner-row__actions">
+              <button type="button" class="planner-status planner-status--${row.status}" data-id="${row.id}" data-status="${row.status}">${escapeHtml(row.status)}</button>
+              <button type="button" class="planner-row__delete" data-id="${row.id}" aria-label="Delete">✕</button>
+            </div>
+          `;
+          listEl.appendChild(div);
+        });
+
+        listEl.querySelectorAll(".planner-status").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.id;
+            const next = STATUS_CYCLE[btn.dataset.status] || "planned";
+            btn.disabled = true;
+            try {
+              const r = await fetch(`/api/admin/content-posts/${id}`, {
+                method: "PATCH",
+                headers: { ...authHeader, "Content-Type": "application/json" },
+                body: JSON.stringify({ status: next })
+              });
+              if (r.ok) loadContentPosts(authHeader);
+              else btn.disabled = false;
+            } catch {
+              btn.disabled = false;
+            }
+          });
+        });
+
+        listEl.querySelectorAll(".planner-row__delete").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.id;
+            btn.disabled = true;
+            try {
+              const r = await fetch(`/api/admin/content-posts/${id}`, { method: "DELETE", headers: authHeader });
+              if (r.ok) loadContentPosts(authHeader);
+              else btn.disabled = false;
+            } catch {
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+        emptyEl.hidden = false;
+      }
+    }
+
+    function wirePlannerForm(authHeader) {
+      const form = document.getElementById("planner-form");
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const platform = document.getElementById("planner-platform").value;
+        const scheduled_for = document.getElementById("planner-date").value || null;
+        const caption = document.getElementById("planner-caption").value.trim();
+        const submitBtn = form.querySelector("button[type=submit]");
+        submitBtn.disabled = true;
+        try {
+          const r = await fetch("/api/admin/content-posts", {
+            method: "POST",
+            headers: { ...authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ platform, caption, scheduled_for })
+          });
+          if (r.ok) {
+            document.getElementById("planner-caption").value = "";
+            document.getElementById("planner-date").value = "";
+            loadContentPosts(authHeader);
+          }
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
     }
 
     async function loadBriefing(authHeader) {

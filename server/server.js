@@ -1464,6 +1464,89 @@ app.get("/api/admin/link-clicks", requireUser, async (req, res) => {
   }
 });
 
+// Content planner: a simple log of posts King batches at night and checks
+// off during the day (planned -> scheduled -> posted). Same admin-email
+// gate pattern as the routes above; see supabase/content_posts.sql.
+app.get("/api/admin/content-posts", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const rows = await supabaseRpc("admin_list_content_posts", {}, req.user.token);
+    res.json({ posts: Array.isArray(rows) ? rows : [] });
+  } catch (err) {
+    console.error("Admin content posts list error:", err.message);
+    res.status(502).json({ error: "Could not load posts. Has supabase/content_posts.sql been run yet?" });
+  }
+});
+
+app.post("/api/admin/content-posts", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const platform = String(req.body?.platform || "").trim().toLowerCase();
+  const caption = String(req.body?.caption || "").trim();
+  const scheduledFor = req.body?.scheduled_for ? String(req.body.scheduled_for).trim() : null;
+  if (!platform) return res.status(400).json({ error: "Platform is required." });
+  try {
+    const row = await supabaseRpc(
+      "admin_add_content_post",
+      { p_platform: platform, p_caption: caption, p_scheduled_for: scheduledFor },
+      req.user.token
+    );
+    res.json({ post: row });
+  } catch (err) {
+    console.error("Admin content post create error:", err.message);
+    res.status(502).json({ error: "Could not save the post." });
+  }
+});
+
+app.patch("/api/admin/content-posts/:id", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const status = String(req.body?.status || "").trim().toLowerCase();
+  if (!["planned", "scheduled", "posted"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status." });
+  }
+  try {
+    await supabaseRpc(
+      "admin_set_content_post_status",
+      { p_id: req.params.id, p_status: status },
+      req.user.token
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin content post status error:", err.message);
+    res.status(502).json({ error: "Could not update the post." });
+  }
+});
+
+app.delete("/api/admin/content-posts/:id", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    await supabaseRpc("admin_delete_content_post", { p_id: req.params.id }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin content post delete error:", err.message);
+    res.status(502).json({ error: "Could not delete the post." });
+  }
+});
+
 // Same admin-only pattern as /api/admin/stats, but the actual user list
 // (name, email, signup date). admin_list_users() in Postgres re-checks the
 // admin email independently — see supabase/admin_setup.sql.
