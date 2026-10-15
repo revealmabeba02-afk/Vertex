@@ -110,6 +110,23 @@
   // Tabs. Driven by the URL hash so the back button, refresh and shared
   // links all land on the right view.
   // --------------------------------------------------------------
+  // Declared up here, ahead of applyView() below, because applyView runs
+  // immediately on page load — if someone lands directly on #news (a
+  // bookmark, a shared link, or just reopening the app on that tab), the
+  // News code that reacts to it (startNewsClock, loadNewsCalendar further
+  // down this file) needs these to already exist. Having them declared
+  // later in the same scope while something that runs this early reaches
+  // for them is a ReferenceError (temporal dead zone), which used to crash
+  // before the clock or the free-signals count could ever be filled in —
+  // that's why News could get stuck showing "--:--:--" and "—".
+  const newsList = document.getElementById("news-list");
+  const newsEmpty = document.getElementById("news-empty");
+  const newsRemainingValue = document.getElementById("news-remaining-value");
+  const newsStatus = document.getElementById("news-status");
+  const newsClock = document.getElementById("news-clock");
+  let newsLoaded = false;
+  let newsClockTimer = null;
+
   const views = {
     scan: document.getElementById("view-scan"),
     credits: document.getElementById("view-credits"),
@@ -1113,17 +1130,6 @@
     });
   }
 
-  // --------------------------------------------------------------
-  // News: today's economic calendar, free small/medium events shown in
-  // full, big events (NFP/CPI/FOMC) locked until unlocked (2 free/month).
-  // --------------------------------------------------------------
-  const newsList = document.getElementById("news-list");
-  const newsEmpty = document.getElementById("news-empty");
-  const newsRemainingValue = document.getElementById("news-remaining-value");
-  const newsStatus = document.getElementById("news-status");
-  const newsClock = document.getElementById("news-clock");
-  let newsLoaded = false;
-  let newsClockTimer = null;
   function startNewsClock() {
     if (!newsClock || newsClockTimer) return;
     const tick = () => { newsClock.textContent = new Date().toLocaleTimeString(); };
