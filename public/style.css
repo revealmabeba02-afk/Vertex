@@ -1879,7 +1879,7 @@ body.scanning .scan-hud {
 .mobile-topbar {
   display: none;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
@@ -1890,9 +1890,6 @@ body.scanning .scan-hud {
   top: 0;
   z-index: 45;
 }
-.mobile-topbar .brand { padding: 0; gap: 8px; }
-.mobile-topbar .brand__mark { width: 30px; height: 30px; }
-.mobile-topbar .brand__name { font-size: 14.5px; }
 
 .mobile-nav-btn {
   display: grid;
