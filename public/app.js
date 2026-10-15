@@ -717,8 +717,7 @@
 
     document.getElementById("res-sl-value").textContent = sl.suggestion || "—";
     document.getElementById("res-tp-value").textContent =
-      targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "No clear target yet";
-    document.getElementById("res-rr").textContent = a.risk_reward_estimate || "Not enough information to estimate reliably.";
+      targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
     document.getElementById("res-invalidation").textContent = a.invalidation || "";
 
     buildTradeLadder(firstEntry, sl, targets, side);
