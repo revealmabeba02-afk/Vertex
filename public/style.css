@@ -999,59 +999,52 @@ body.scanning .scan-hud {
     radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, var(--bg) 55%, transparent) 55%, var(--bg) 100%);
 }
 
-.scan-hud__grid {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(color-mix(in srgb, var(--bull) 55%, transparent) 1px, transparent 1.5px);
-  background-size: 20px 20px;
-  opacity: 0.35;
-  animation: hud-grid-drift 6s linear infinite;
-}
-
-@keyframes hud-grid-drift {
-  from { background-position: 0 0; }
-  to   { background-position: 0 -40px; }
-}
-
-.scan-hud__corner {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border: 2px solid color-mix(in srgb, var(--bull) 70%, transparent);
-  opacity: 0.8;
-}
-.scan-hud__corner--tl { top: 14px; left: 14px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
-.scan-hud__corner--tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; border-top-right-radius: 6px; }
-.scan-hud__corner--bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; border-bottom-left-radius: 6px; }
-.scan-hud__corner--br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
-
 .scan-hud__center {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 18px;
   text-align: center;
 }
 
-/* A small bank of candles ticking up and down in place, standing in for
-   "reading live price bars" rather than a generic AI-eye icon. */
-.scan-hud__logo {
+/* A small strip of candles that keeps printing left to right for as long as
+   the scan runs — "building the plan bar by bar" rather than a camera
+   scanning the uploaded image. Heights are randomized per-candle via inline
+   animation-delay/duration so the strip doesn't look like one repeating tile. */
+.scan-hud__ticker {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  height: 56px;
-  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--bull) 55%, transparent));
-  animation: hud-logo-pulse 1.8s ease-in-out infinite;
+  gap: 5px;
+  height: 46px;
 }
 
-@keyframes hud-logo-pulse {
-  0%, 100% { transform: scale(0.92); opacity: 0.75; }
-  50% { transform: scale(1.05); opacity: 1; }
+.scan-hud__candle {
+  display: block;
+  width: 6px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, var(--bull), color-mix(in srgb, var(--bull) 55%, var(--accent)));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--bull) 35%, transparent);
+  animation: hud-candle-grow 1.4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.scan-hud__candle:nth-child(1) { height: 14px; animation-delay: 0.00s; animation-duration: 1.3s; }
+.scan-hud__candle:nth-child(2) { height: 26px; animation-delay: 0.10s; animation-duration: 1.5s; }
+.scan-hud__candle:nth-child(3) { height: 18px; animation-delay: 0.20s; animation-duration: 1.2s; }
+.scan-hud__candle:nth-child(4) { height: 34px; animation-delay: 0.30s; animation-duration: 1.6s; }
+.scan-hud__candle:nth-child(5) { height: 22px; animation-delay: 0.40s; animation-duration: 1.35s; }
+.scan-hud__candle:nth-child(6) { height: 30px; animation-delay: 0.50s; animation-duration: 1.45s; }
+.scan-hud__candle:nth-child(7) { height: 16px; animation-delay: 0.60s; animation-duration: 1.25s; }
+.scan-hud__candle:nth-child(8) { height: 24px; animation-delay: 0.70s; animation-duration: 1.55s; }
+
+@keyframes hud-candle-grow {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scan-hud__logo { animation: none; opacity: 1; }
+  .scan-hud__candle { animation: none; opacity: 0.9; }
 }
 
 .scan-hud__title {
@@ -1062,46 +1055,78 @@ body.scanning .scan-hud {
   color: var(--text);
 }
 
-.scan-hud__status {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text-dim);
-  min-height: 1.2em;
-}
-
-.scan-hud__progress {
+/* The checklist replaces a single rotating status line — each step lights
+   up and checks off in turn, driven by startScanHud()/finishScanHud() in
+   app.js, so progress reads as real work being completed rather than a
+   generic percentage climbing. */
+.scan-hud__checklist {
   position: relative;
-  width: min(360px, 84%);
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  width: min(320px, 86%);
+  text-align: left;
 }
 
-.scan-hud__progress-label {
+.scan-hud__check {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 12.5px;
   color: var(--text-faint);
+  opacity: 0.55;
+  transition: opacity 0.3s ease, color 0.3s ease;
 }
 
-#scan-hud-progress-pct { color: var(--bull); font-weight: 600; }
-
-.scan-hud__progress-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border-soft);
-  overflow: hidden;
+.scan-hud__check-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  position: relative;
 }
 
-.scan-hud__progress-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--bull), var(--accent));
-  transition: width 0.4s ease;
+.scan-hud__check.is-active {
+  opacity: 1;
+  color: var(--text);
+}
+.scan-hud__check.is-active .scan-hud__check-icon {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: hud-check-pulse 1s ease-in-out infinite;
+}
+@keyframes hud-check-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 10%, transparent); }
+}
+
+.scan-hud__check.is-done {
+  opacity: 0.85;
+  color: var(--text-dim);
+}
+.scan-hud__check.is-done .scan-hud__check-icon {
+  border-color: var(--bull);
+  background: var(--bull);
+}
+.scan-hud__check.is-done .scan-hud__check-icon::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--bg);
+  border-width: 0 1.6px 1.6px 0;
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-hud__check.is-active .scan-hud__check-icon { animation: none; }
 }
 
 .state--error {

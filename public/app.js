@@ -77,10 +77,7 @@
   const retryBtn = document.getElementById("retry-btn");
   const scanAgainBtn = document.getElementById("scan-again-btn");
 
-  const scanHudStatus = document.getElementById("scan-hud-status");
-  const scanHudProgressText = document.getElementById("scan-hud-progress-text");
-  const scanHudProgressPct = document.getElementById("scan-hud-progress-pct");
-  const scanHudProgressFill = document.getElementById("scan-hud-progress-fill");
+  const scanHudCheckItems = document.querySelectorAll("#scan-hud-checklist .scan-hud__check");
 
   const outputPanel = document.getElementById("output");
   const tfRadios = document.querySelectorAll('input[name="tf"]');
@@ -383,47 +380,42 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  // Stages the loading HUD cycles through while a scan is running. There is
-  // no real progress signal from the server (a single API call, not a
-  // stream), so this is a paced simulation: it eases up to ~92% and holds
-  // there, then the caller jumps it to 100% the moment a real response
-  // lands. Text and percentage change together so the bar never looks
-  // stuck on a stale label.
-  const HUD_STAGES = [
-    { until: 30, status: "Reading price structure…", label: "Mapping market structure" },
-    { until: 58, status: "Mapping structure & liquidity…", label: "Scanning liquidity & key levels" },
-    { until: 80, status: "Weighing bias and momentum…", label: "Checking bias & momentum" },
-    { until: 92, status: "Locating entries and targets…", label: "Building trade zones" }
-  ];
+  // Steps the loading checklist walks through while a scan is running. There
+  // is no real progress signal from the server (a single API call, not a
+  // stream), so this is a paced simulation that holds on the last step
+  // until the caller marks it done the moment a real response lands —
+  // same idea as the old percentage bar, just expressed as checked-off
+  // work instead of a number climbing.
+  const HUD_STEP_DURATIONS_MS = [1400, 1700, 1500, 2200]; // last one just holds, see below
   let hudTimer = null;
 
+  function setHudStep(index, { done = false } = {}) {
+    scanHudCheckItems.forEach((item, i) => {
+      item.classList.remove("is-active", "is-done");
+      if (i < index || (i === index && done)) item.classList.add("is-done");
+      else if (i === index) item.classList.add("is-active");
+    });
+  }
+
   function startScanHud() {
-    let pct = 0;
-    const render = () => {
-      const stage = HUD_STAGES.find((s) => pct < s.until) || HUD_STAGES[HUD_STAGES.length - 1];
-      scanHudStatus.textContent = stage.status;
-      scanHudProgressText.textContent = stage.label;
-      scanHudProgressPct.textContent = Math.round(pct) + "%";
-      scanHudProgressFill.style.width = pct + "%";
+    let step = 0;
+    setHudStep(step);
+    const advance = () => {
+      if (step >= scanHudCheckItems.length - 1) return; // hold on the last step
+      step += 1;
+      setHudStep(step);
+      hudTimer = setTimeout(advance, HUD_STEP_DURATIONS_MS[step] || 1800);
     };
-    render();
-    hudTimer = setInterval(() => {
-      const cap = 92;
-      if (pct >= cap) return;
-      // Slows down as it approaches the cap so it never visibly stalls.
-      pct = Math.min(cap, pct + Math.max(0.6, (cap - pct) * 0.06));
-      render();
-    }, 110);
+    hudTimer = setTimeout(advance, HUD_STEP_DURATIONS_MS[0]);
   }
 
   function finishScanHud(success) {
     if (hudTimer) {
-      clearInterval(hudTimer);
+      clearTimeout(hudTimer);
       hudTimer = null;
     }
     if (success) {
-      scanHudProgressPct.textContent = "100%";
-      scanHudProgressFill.style.width = "100%";
+      setHudStep(scanHudCheckItems.length - 1, { done: true });
     }
   }
 

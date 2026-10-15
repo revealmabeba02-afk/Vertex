@@ -241,28 +241,42 @@
       <div class="scan-hud">
         <img id="scan-hud-bg" class="scan-hud__bg" alt="" aria-hidden="true" hidden />
         <div class="scan-hud__scrim" aria-hidden="true"></div>
-        <div class="scan-hud__grid" aria-hidden="true"></div>
-        <span class="scan-hud__corner scan-hud__corner--tl" aria-hidden="true"></span>
-        <span class="scan-hud__corner scan-hud__corner--tr" aria-hidden="true"></span>
-        <span class="scan-hud__corner scan-hud__corner--bl" aria-hidden="true"></span>
-        <span class="scan-hud__corner scan-hud__corner--br" aria-hidden="true"></span>
 
         <div class="scan-hud__center">
-          <div class="scan-hud__logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="40" height="40"><rect x="3.5" y="14" width="2.6" height="6" rx="0.6" fill="#3FBF8A"/><line x1="4.8" y1="12.5" x2="4.8" y2="21" stroke="#3FBF8A" stroke-width="1"/>   <rect x="8.2" y="10.5" width="2.6" height="7.5" rx="0.6" fill="#3FBF8A"/><line x1="9.5" y1="9" x2="9.5" y2="19" stroke="#3FBF8A" stroke-width="1"/>   <rect x="12.9" y="6.5" width="2.6" height="8.5" rx="0.6" fill="#3FBF8A"/><line x1="14.2" y1="5" x2="14.2" y2="16" stroke="#3FBF8A" stroke-width="1"/>   <rect x="17.6" y="3" width="2.6" height="8" rx="0.6" fill="#3FBF8A"/><line x1="18.9" y1="1.5" x2="18.9" y2="12" stroke="#3FBF8A" stroke-width="1"/>   <line x1="3" y1="20.5" x2="21" y2="2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <!-- A small strip of candles that keeps printing left-to-right for
+               as long as the scan runs — standing in for "building your plan
+               bar by bar" rather than a camera/targeting scan of the image. -->
+          <div class="scan-hud__ticker" aria-hidden="true">
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
+            <span class="scan-hud__candle"></span>
           </div>
-          <p class="scan-hud__title">Vertex is analyzing</p>
-          <p class="scan-hud__status" id="scan-hud-status">Reading price structure…</p>
-        </div>
 
-        <div class="scan-hud__progress">
-          <div class="scan-hud__progress-label">
-            <span id="scan-hud-progress-text">Mapping market structure</span>
-            <span id="scan-hud-progress-pct">0%</span>
-          </div>
-          <div class="scan-hud__progress-track">
-            <div class="scan-hud__progress-fill" id="scan-hud-progress-fill"></div>
-          </div>
+          <p class="scan-hud__title">Building your trade plan</p>
+
+          <ul class="scan-hud__checklist" id="scan-hud-checklist">
+            <li class="scan-hud__check" data-step="0">
+              <span class="scan-hud__check-icon" aria-hidden="true"></span>
+              <span class="scan-hud__check-label">Mapping market structure</span>
+            </li>
+            <li class="scan-hud__check" data-step="1">
+              <span class="scan-hud__check-icon" aria-hidden="true"></span>
+              <span class="scan-hud__check-label">Scanning liquidity &amp; key levels</span>
+            </li>
+            <li class="scan-hud__check" data-step="2">
+              <span class="scan-hud__check-icon" aria-hidden="true"></span>
+              <span class="scan-hud__check-label">Weighing bias &amp; momentum</span>
+            </li>
+            <li class="scan-hud__check" data-step="3">
+              <span class="scan-hud__check-icon" aria-hidden="true"></span>
+              <span class="scan-hud__check-label">Building entry, stop &amp; targets</span>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
