@@ -2252,16 +2252,50 @@ body.scanning .scan-hud {
   font-size: 13px;
   color: var(--text-dim);
 }
-.pay-panel__spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: pay-spin 0.8s linear infinite;
+/* Vertex AI brand mark standing in for a plain spinner here — a core firing
+   out into a small network, same motif as the app's AI identity elsewhere,
+   so "waiting on your payment" still feels like Vertex is doing something
+   rather than a generic loading ring. Kept small on purpose. */
+.pay-panel__brainmark {
+  width: 28px;
+  height: 28px;
   flex: none;
+  overflow: visible;
 }
-@keyframes pay-spin { to { transform: rotate(360deg); } }
+.pay-brainmark__ring {
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+  opacity: 0.5;
+}
+.pay-brainmark__rays line {
+  stroke: var(--bull);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.8;
+  transform-origin: 50px 50px;
+  animation: pay-brainmark-ray 1.6s ease-in-out infinite;
+}
+.pay-brainmark__node {
+  fill: var(--accent);
+  animation: pay-brainmark-node 1.6s ease-in-out infinite;
+}
+.pay-brainmark__rays line:nth-child(odd),
+.pay-brainmark__rays circle:nth-child(odd) { animation-delay: 0s; }
+.pay-brainmark__rays line:nth-child(4n),
+.pay-brainmark__rays circle:nth-child(4n) { animation-delay: 0.3s; }
+.pay-brainmark__rays line:nth-child(4n+2),
+.pay-brainmark__rays circle:nth-child(4n+2) { animation-delay: 0.6s; }
+.pay-brainmark__core {
+  fill: #EAFFF4;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bull) 70%, transparent));
+  animation: pay-brainmark-core 1.6s ease-in-out infinite;
+}
+@keyframes pay-brainmark-ray { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes pay-brainmark-node { 0%, 100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes pay-brainmark-core { 0%, 100% { transform: scale(0.9); } 50% { transform: scale(1.12); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pay-brainmark__rays line, .pay-brainmark__node, .pay-brainmark__core { animation: none; opacity: 1; }
+}
 .pay-panel__done {
   margin-top: 18px;
   display: flex;
