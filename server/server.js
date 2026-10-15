@@ -486,11 +486,21 @@ app.use(express.json({ limit: "1mb" }));
 const PAGES = path.join(__dirname, "..", "pages");
 const page = (name) => path.join(PAGES, name);
 
-app.get("/", (req, res) => res.sendFile(page("landing.html")));
-app.get("/login", (req, res) => res.sendFile(page("login.html")));
-app.get("/signup", (req, res) => res.sendFile(page("signup.html")));
-app.get("/app", (req, res) => res.sendFile(page("app.html")));
-app.get("/admin", (req, res) => res.sendFile(page("admin.html")));
+// These pages change often while the product is being iterated on, and
+// browsers — mobile Safari especially, via its back-forward cache — will
+// otherwise keep showing an old UI after a deploy until the person manually
+// clears site data. no-store forces a real fetch of the current file every
+// time, so a shipped change is what the next load actually shows.
+function sendFreshPage(res, name) {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(page(name));
+}
+
+app.get("/", (req, res) => sendFreshPage(res, "landing.html"));
+app.get("/login", (req, res) => sendFreshPage(res, "login.html"));
+app.get("/signup", (req, res) => sendFreshPage(res, "signup.html"));
+app.get("/app", (req, res) => sendFreshPage(res, "app.html"));
+app.get("/admin", (req, res) => sendFreshPage(res, "admin.html"));
 
 // Tracked social links — put these in TikTok/Instagram/YouTube/Facebook
 // bios instead of the raw profile URLs. Logging and the email alert are
