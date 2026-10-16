@@ -86,12 +86,26 @@
 .landing { padding: 0 clamp(16px, 4vw, 40px) 40px; }
 
 .lhero {
+  position: relative;
   max-width: 1180px;
   margin: 0 auto;
   padding-top: clamp(48px, 9vh, 104px);
   display: grid;
-  max-width: 820px;
+  gap: clamp(28px, 5vh, 56px);
+  max-width: 1040px;
   text-align: center;
+}
+
+.lhero__chart {
+  display: block;
+  width: 100%;
+  height: clamp(110px, 16vw, 200px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .lhero__chart { height: clamp(80px, 26vw, 140px); opacity: 0.7; }
 }
 
 .lhero__badgewrap {
@@ -103,7 +117,7 @@
 }
 
 .lhero__badge {
-  filter: drop-shadow(0 0 22px color-mix(in srgb, #4FE3A0 35%, transparent));
+  filter: drop-shadow(0 0 30px color-mix(in srgb, #4FE3A0 45%, transparent));
 }
 
 .lhero__wordmark {

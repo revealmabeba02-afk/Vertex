@@ -63,15 +63,24 @@
       <span class="brand__mark" aria-hidden="true">
         <svg viewBox="0 0 200 200" width="20" height="20">
           <defs>
-            <linearGradient id="vb-ring-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#7EE0B8"/><stop offset="100%" stop-color="#1E8F5E"/></linearGradient>
-            <linearGradient id="vb-silver-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#AEB4B2"/></linearGradient>
-            <linearGradient id="vb-green-signup" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1E8F5E"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+            <linearGradient id="vb-ring-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+            <linearGradient id="vb-silver-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+            <linearGradient id="vb-green-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+            <linearGradient id="vb-sheen-signup" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+            <radialGradient id="vb-bg-signup" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
+            <clipPath id="vb-clip-signup"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
           </defs>
-          <rect x="6" y="6" width="188" height="188" rx="42" fill="#0B150F"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-signup)"/>
           <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-signup)" stroke-width="6"/>
-          <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-silver-signup)"/>
-          <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-green-signup)"/>
-          <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-green-signup)"/>
+          <g clip-path="url(#vb-clip-signup)">
+            <path d="M -10 40 L 90 -10 L 220 -10 L 20 120 Z" fill="url(#vb-sheen-signup)" opacity="0.55"/>
+            <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-silver-signup)"/>
+            <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-sheen-signup)" opacity="0.5"/>
+            <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-green-signup)"/>
+            <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-sheen-signup)" opacity="0.35"/>
+            <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-green-signup)"/>
+            <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-sheen-signup)" opacity="0.4"/>
+          </g>
         </svg>
       </span>
       <span class="brand__name">Vertex Scanner</span>
