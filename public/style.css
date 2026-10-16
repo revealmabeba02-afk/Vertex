@@ -1047,6 +1047,20 @@ body.scanning .scan-hud {
   .scan-hud__candle { animation: none; opacity: 0.9; }
 }
 
+.scan-hud__badge {
+  filter: drop-shadow(0 0 16px color-mix(in srgb, #4FE3A0 45%, transparent));
+  animation: hud-badge-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes hud-badge-pulse {
+  0%, 100% { filter: drop-shadow(0 0 10px color-mix(in srgb, #4FE3A0 30%, transparent)); }
+  50% { filter: drop-shadow(0 0 22px color-mix(in srgb, #4FE3A0 55%, transparent)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-hud__badge { animation: none; }
+}
+
 .scan-hud__title {
   margin: 0;
   font-family: var(--font-display);
