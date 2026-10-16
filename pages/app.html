@@ -94,18 +94,17 @@
      stays hidden there (see style.css). -->
 <div class="mobile-topbar" id="mobile-topbar">
   <span class="mobile-topbar__mark" aria-hidden="true">
-    <svg viewBox="0 0 44 44" width="26" height="26">
-      <circle cx="22" cy="22" r="19" fill="none" stroke="url(#mtm-ring)" stroke-width="2.4"/>
-      <rect x="11" y="24" width="3" height="7" rx="1" fill="#3FBF8A"/>
-      <rect x="17.5" y="19" width="3" height="10" rx="1" fill="#3FBF8A"/>
-      <rect x="24" y="13" width="3" height="14" rx="1" fill="#7EE0B8"/>
-      <line x1="10" y1="31" x2="30" y2="11" stroke="url(#mtm-ring)" stroke-width="2.2" stroke-linecap="round"/>
-      <circle cx="30" cy="11" r="2" fill="#F4C874"/>
+    <svg viewBox="0 0 200 200" width="26" height="26">
       <defs>
-        <linearGradient id="mtm-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#F4C874"/><stop offset="100%" stop-color="#C98A2A"/>
-        </linearGradient>
+        <linearGradient id="vb-ring-mtop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#7EE0B8"/><stop offset="100%" stop-color="#1E8F5E"/></linearGradient>
+        <linearGradient id="vb-silver-mtop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#AEB4B2"/></linearGradient>
+        <linearGradient id="vb-green-mtop" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1E8F5E"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
       </defs>
+      <rect x="6" y="6" width="188" height="188" rx="42" fill="#0B150F"/>
+      <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-mtop)" stroke-width="6"/>
+      <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-silver-mtop)"/>
+      <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-green-mtop)"/>
+      <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-green-mtop)"/>
     </svg>
   </span>
   <button type="button" id="mobile-nav-btn" class="mobile-nav-btn" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
@@ -120,18 +119,17 @@
   <div class="sidebar__top">
     <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
       <span class="brand__mark" aria-hidden="true">
-        <svg viewBox="0 0 44 44" width="22" height="22">
-          <circle cx="22" cy="22" r="19" fill="none" stroke="url(#sbm-ring)" stroke-width="2.4"/>
-          <rect x="11" y="24" width="3" height="7" rx="1" fill="#3FBF8A"/>
-          <rect x="17.5" y="19" width="3" height="10" rx="1" fill="#3FBF8A"/>
-          <rect x="24" y="13" width="3" height="14" rx="1" fill="#7EE0B8"/>
-          <line x1="10" y1="31" x2="30" y2="11" stroke="url(#sbm-ring)" stroke-width="2.2" stroke-linecap="round"/>
-          <circle cx="30" cy="11" r="2" fill="#F4C874"/>
+        <svg viewBox="0 0 200 200" width="22" height="22">
           <defs>
-            <linearGradient id="sbm-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#F4C874"/><stop offset="100%" stop-color="#C98A2A"/>
-            </linearGradient>
+            <linearGradient id="vb-ring-sbar" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#7EE0B8"/><stop offset="100%" stop-color="#1E8F5E"/></linearGradient>
+            <linearGradient id="vb-silver-sbar" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#AEB4B2"/></linearGradient>
+            <linearGradient id="vb-green-sbar" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1E8F5E"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
           </defs>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="#0B150F"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-sbar)" stroke-width="6"/>
+          <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-silver-sbar)"/>
+          <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-green-sbar)"/>
+          <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-green-sbar)"/>
         </svg>
       </span>
       <span class="brand__name">Vertex Scanner</span>

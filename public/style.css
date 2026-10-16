@@ -1920,7 +1920,7 @@ body.scanning .scan-hud {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, #E8A840 45%, transparent));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, #4FE3A0 50%, transparent));
 }
 
 .mobile-nav-btn {
