@@ -279,6 +279,34 @@
     <div id="state-loading" class="state state--loading" hidden>
       <div class="scan-hud">
         <img id="scan-hud-bg" class="scan-hud__bg" alt="" aria-hidden="true" hidden />
+        <svg class="scan-hud__green-bg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <radialGradient id="hud-bg" cx="50%" cy="30%" r="80%">
+              <stop offset="0%" stop-color="#0E2A1C"/>
+              <stop offset="48%" stop-color="#061A11"/>
+              <stop offset="100%" stop-color="#010705"/>
+            </radialGradient>
+            <linearGradient id="hud-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7EE8B9"/><stop offset="100%" stop-color="#17A76B"/></linearGradient>
+            <linearGradient id="hud-fade-v" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+              <stop offset="35%" stop-color="#fff" stop-opacity="0.45"/>
+              <stop offset="70%" stop-color="#fff" stop-opacity="0.7"/>
+              <stop offset="100%" stop-color="#fff" stop-opacity="0.1"/>
+            </linearGradient>
+            <mask id="hud-mask"><rect x="0" y="0" width="1000" height="1000" fill="url(#hud-fade-v)"/></mask>
+            <linearGradient id="hud-diag" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4FE3A0" stop-opacity="0.14"/>
+              <stop offset="100%" stop-color="#4FE3A0" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <rect width="1000" height="1000" fill="url(#hud-bg)"/>
+          <polygon points="650,0 1000,0 1000,420" fill="url(#hud-diag)"/>
+          <polygon points="0,560 0,1000 380,1000" fill="url(#hud-diag)" transform="rotate(180 500 500)"/>
+          <g mask="url(#hud-mask)" opacity="0.8">
+            <g id="scan-hud-candles"></g>
+            <path id="scan-hud-priceline" fill="none" stroke="#DFFBEC" stroke-width="1.2" stroke-opacity="0.5"/>
+          </g>
+        </svg>
         <div class="scan-hud__scrim" aria-hidden="true"></div>
 
         <div class="scan-hud__center">
@@ -676,6 +704,77 @@
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="/config.js"></script>
 <script src="/auth-client.js"></script>
+<script>
+(function(){
+  // Procedurally draw a gentle dip-then-rise candlestick wave behind the
+  // loading HUD, same look as the /welcome splash screen.
+  function drawHudCandles(){
+    var g = document.getElementById('scan-hud-candles');
+    var lineEl = document.getElementById('scan-hud-priceline');
+    if (!g || !lineEl) return;
+    var n = 34, w = 1000, h = 1000;
+    var colW = w / n;
+    var rand = (function(seed){
+      return function(){ seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    })(7);
+
+    var closes = [];
+    var price = 0.55;
+    for (var i = 0; i < n; i++){
+      var t = i / (n - 1);
+      var wave = t < 0.3 ? -0.10 * (t / 0.3) : -0.10 + 0.55 * ((t - 0.3) / 0.7);
+      var noise = (rand() - 0.5) * 0.045;
+      closes.push(price + wave + noise);
+    }
+    var minP = Math.min.apply(null, closes);
+    var maxP = Math.max.apply(null, closes);
+    function norm(p){
+      var t = (p - minP) / (maxP - minP);
+      return h - 120 - t * (h * 0.4);
+    }
+
+    var svgns = "http://www.w3.org/2000/svg";
+    var linePts = [];
+    var prevClose = closes[0];
+    for (var j = 0; j < n; j++){
+      var cx = colW * j + colW * 0.5;
+      var open = norm(prevClose);
+      var close = norm(closes[j]);
+      var bodyTop = Math.min(open, close);
+      var bodyH = Math.max(Math.abs(close - open), 5);
+      var wickTop = bodyTop - (4 + rand() * 7);
+      var wickBot = bodyTop + bodyH + (4 + rand() * 7);
+      var bw = colW * 0.4;
+      var fill = (j % 5 === 0) ? '#2E8F62' : 'url(#hud-green)';
+
+      var wick = document.createElementNS(svgns, 'line');
+      wick.setAttribute('x1', cx); wick.setAttribute('x2', cx);
+      wick.setAttribute('y1', wickTop); wick.setAttribute('y2', wickBot);
+      wick.setAttribute('stroke', '#2DAE78');
+      wick.setAttribute('stroke-width', '1.8');
+      g.appendChild(wick);
+
+      var body = document.createElementNS(svgns, 'rect');
+      body.setAttribute('x', cx - bw/2);
+      body.setAttribute('y', bodyTop);
+      body.setAttribute('width', bw);
+      body.setAttribute('height', bodyH);
+      body.setAttribute('rx', 1.6);
+      body.setAttribute('fill', fill);
+      g.appendChild(body);
+
+      linePts.push(cx.toFixed(1) + ',' + close.toFixed(1));
+      prevClose = closes[j];
+    }
+    lineEl.setAttribute('d', 'M' + linePts.join(' L'));
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', drawHudCandles);
+  } else {
+    drawHudCandles();
+  }
+})();
+</script>
 <script src="/app.js"></script>
 </body>
 </html>

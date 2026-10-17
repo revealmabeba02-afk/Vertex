@@ -992,11 +992,18 @@ body.scanning .scan-hud {
   transform: scale(1.15); /* hides the blurred edge fringe */
 }
 
+.scan-hud__green-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .scan-hud__scrim {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, var(--bg) 55%, transparent) 55%, var(--bg) 100%);
+    radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, #040b08 35%, transparent) 60%, #040b08 100%);
 }
 
 .scan-hud__center {
