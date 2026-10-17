@@ -16,6 +16,124 @@ const multer = require("multer");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
+// --- Admin PIN gate --------------------------------------------------------
+// An extra lock in front of /admin, on top of the real security (requireUser
+// + ADMIN_EMAIL on every /api/admin/* call below). Without a PIN set, anyone
+// who finds the /admin URL can at least see the page shell load before every
+// API call 401s; with one set, the page itself won't render until the right
+// PIN is entered. Not cryptographic-grade — it's a deterrent for a casual
+// visitor, not a defense against someone reading the server's source.
+const ADMIN_PIN = (process.env.ADMIN_PIN || "").trim();
+const ADMIN_PIN_COOKIE = "vx_admin_pin";
+const ADMIN_PIN_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function signAdminPinToken(expiresAt) {
+  const hmac = crypto.createHmac("sha256", ADMIN_PIN || "no-pin-set").update(String(expiresAt)).digest("hex");
+  return `${expiresAt}.${hmac}`;
+}
+
+function adminPinCookieIsValid(cookieHeader) {
+  if (!ADMIN_PIN) return true; // no PIN configured — gate is off
+  if (!cookieHeader) return false;
+  const match = cookieHeader.match(/(?:^|;\s*)vx_admin_pin=([^;]+)/);
+  if (!match) return false;
+  const value = decodeURIComponent(match[1]);
+  const [expiresAtStr, hmac] = value.split(".");
+  const expiresAt = Number(expiresAtStr);
+  if (!expiresAt || !hmac || Date.now() > expiresAt) return false;
+  const expected = signAdminPinToken(expiresAt);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
+const adminPinLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please wait a few minutes and try again." }
+});
+
+const ADMIN_PIN_LOCK_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Admin · Vertex Chart Scanner</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #06100B; color: #EAF7F0;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    padding: 20px;
+  }
+  .card {
+    width: 100%; max-width: 340px; padding: 32px 28px; border-radius: 18px;
+    border: 1px solid #1E3A2C; background: #0B1A13;
+    text-align: center;
+  }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  p { margin: 0 0 22px; font-size: 13.5px; color: #8FA89B; }
+  input {
+    width: 100%; font-size: 22px; letter-spacing: 6px; text-align: center;
+    padding: 14px 10px; border-radius: 10px; border: 1px solid #2A4B3A;
+    background: #0E2118; color: #EAF7F0; margin-bottom: 14px;
+  }
+  input:focus { outline: none; border-color: #4FE3A0; }
+  button {
+    width: 100%; padding: 12px; border-radius: 10px; border: none;
+    background: #4FE3A0; color: #06281A; font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .err { color: #E25C63; font-size: 13px; margin-top: 12px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <form class="card" id="pin-form">
+    <h1>Admin access</h1>
+    <p>Enter the PIN to continue.</p>
+    <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="12" autofocus />
+    <button type="submit" id="pin-submit">Unlock</button>
+    <div class="err" id="pin-err"></div>
+  </form>
+  <script>
+    var form = document.getElementById("pin-form");
+    var input = document.getElementById("pin-input");
+    var btn = document.getElementById("pin-submit");
+    var err = document.getElementById("pin-err");
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      err.textContent = "";
+      btn.disabled = true;
+      try {
+        var res = await fetch("/api/admin/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: input.value })
+        });
+        if (res.ok) {
+          window.location.reload();
+          return;
+        }
+        var data = await res.json().catch(function () { return {}; });
+        err.textContent = data.error || "Wrong PIN.";
+      } catch (e2) {
+        err.textContent = "Something went wrong. Try again.";
+      }
+      btn.disabled = false;
+      input.value = "";
+      input.focus();
+    });
+  </script>
+</body>
+</html>`;
+
 // FXSynapse AI provides the actual chart analysis. Confirmed 2026-10-04
 // straight from their own API reference (fxsynapseai.com/dashboard ->
 // Docs): one real endpoint, POST /api/v1/chart, which takes a symbol +
@@ -501,7 +619,31 @@ app.get("/welcome", (req, res) => sendFreshPage(res, "splash.html"));
 app.get("/login", (req, res) => sendFreshPage(res, "login.html"));
 app.get("/signup", (req, res) => sendFreshPage(res, "signup.html"));
 app.get("/app", (req, res) => sendFreshPage(res, "app.html"));
-app.get("/admin", (req, res) => sendFreshPage(res, "admin.html"));
+app.get("/admin", (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    res.set("Cache-Control", "no-store");
+    return res.type("html").send(ADMIN_PIN_LOCK_HTML);
+  }
+  sendFreshPage(res, "admin.html");
+});
+
+app.post("/api/admin/unlock", adminPinLimiter, (req, res) => {
+  if (!ADMIN_PIN) return res.status(400).json({ error: "No admin PIN is configured." });
+  const pin = String((req.body && req.body.pin) || "").trim();
+  const expected = Buffer.from(ADMIN_PIN);
+  const given = Buffer.from(pin);
+  const ok = expected.length === given.length && crypto.timingSafeEqual(expected, given);
+  if (!ok) return res.status(401).json({ error: "Wrong PIN." });
+  const expiresAt = Date.now() + ADMIN_PIN_MAX_AGE_MS;
+  const token = signAdminPinToken(expiresAt);
+  res.set(
+    "Set-Cookie",
+    `${ADMIN_PIN_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(ADMIN_PIN_MAX_AGE_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax${
+      req.secure ? "; Secure" : ""
+    }`
+  );
+  res.json({ ok: true });
+});
 
 // Tracked social links — put these in TikTok/Instagram/YouTube/Facebook
 // bios instead of the raw profile URLs. Logging and the email alert are
