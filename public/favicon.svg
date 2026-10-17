@@ -21,11 +21,8 @@
     <rect x="54" y="78" width="7" height="46" rx="1.5" fill="url(#vb-green-fav)"/><line x1="57.5" y1="68" x2="57.5" y2="132" stroke="#17A76B" stroke-width="2"/>
     <rect x="138" y="100" width="7" height="30" rx="1.5" fill="url(#vb-green-fav)"/><line x1="141.5" y1="90" x2="141.5" y2="136" stroke="#17A76B" stroke-width="2"/>
     <rect x="152" y="70" width="7" height="52" rx="1.5" fill="url(#vb-green-fav)"/><line x1="155.5" y1="60" x2="155.5" y2="128" stroke="#17A76B" stroke-width="2"/>
-    <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-silver-fav)"/>
-    <path d="M 66 70 L 97 142 L 83 142 L 58 84 Z" fill="url(#vb-sheen-fav)" opacity="0.6"/>
-    <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-green-fav)"/>
-    <path d="M 137 58 L 100 142 L 114 142 L 151 68 Z" fill="url(#vb-sheen-fav)" opacity="0.4"/>
-    <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-green-fav)"/>
-    <path d="M 130 52 L 158 66 L 148 26 Z" fill="url(#vb-sheen-fav)" opacity="0.5"/>
+    <path d="M60,52 L101,148" fill="none" stroke="url(#vb-silver-fav)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M101,148 L130,64" fill="none" stroke="url(#vb-green-fav)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M114,70 L146,58 L152,16 Z" fill="url(#vb-green-fav)"/>
   </g>
 </svg>
