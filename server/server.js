@@ -79,7 +79,7 @@ const PLATFORM_LABELS = { tiktok: "TikTok", instagram: "Instagram", youtube: "Yo
 // Email alerts via Resend (https://resend.com — free tier, no API key means
 // this just silently stops sending emails; logging/redirect still work).
 const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
-const LINK_ALERT_EMAIL = (process.env.LINK_ALERT_EMAIL || "reveal@shadowfx.co.za").trim();
+const LINK_ALERT_EMAIL = (process.env.LINK_ALERT_EMAIL || "revealmabeba02@icloud.com").trim();
 // Resend requires the "from" address to be on a domain you've verified with
 // them. Until shadowfx.co.za (or another domain) is verified there, their
 // shared onboarding@resend.dev address works for any destination.
