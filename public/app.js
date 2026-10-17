@@ -1182,7 +1182,7 @@
       const freeRemaining = typeof data.freeRemaining === "number" ? data.freeRemaining : null;
       setCreditPill(currentBalance, freeRemaining);
       if (creditBalanceValue) creditBalanceValue.textContent = currentBalance === null ? "—" : String(currentBalance);
-      if (freeScansValue) freeScansValue.textContent = freeRemaining === null ? "—" : `${freeRemaining} / 4`;
+      if (freeScansValue) freeScansValue.textContent = freeRemaining === null ? "—" : `${freeRemaining} / 2`;
     } catch {
       // Best-effort — leave whatever was last shown.
     }
