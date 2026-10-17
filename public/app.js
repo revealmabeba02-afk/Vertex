@@ -380,6 +380,61 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
+  // One-tap "copy trade plan": formats the current scan's bias, entry, stop
+  // and targets as plain text ready to paste into MT4/MT5, a broker app, or
+  // a chat with whoever's following your calls.
+  const copyPlanBtn = document.getElementById("res-copy-plan-btn");
+  if (copyPlanBtn) {
+    copyPlanBtn.addEventListener("click", async () => {
+      if (!lastResultForCopy) return;
+      const { a, timeframe } = lastResultForCopy;
+      const pair = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
+      const tf = timeframe ? (TF_LABELS[timeframe] || timeframe) : "—";
+      const bias = a.market_bias || "Neutral / Ranging";
+      const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+      const side = (firstEntry?.type || "").toLowerCase();
+      const signal = side === "long" ? "BUY" : side === "short" ? "SELL" : "NO TRADE";
+      const entryLine = firstEntry?.entry || firstEntry?.zone || "—";
+      const sl = a.stop_loss?.suggestion || "—";
+      const targets = Array.isArray(a.take_profit) ? a.take_profit : [];
+      const tpLine = targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
+
+      const lines = [
+        `Vertex AI — ${pair} (${tf})`,
+        `${signal} — ${bias}`,
+        `Entry: ${entryLine}`,
+        `Stop loss: ${sl}`,
+        `Take profit: ${tpLine}`,
+      ];
+      if (a.invalidation) lines.push(`Invalidation: ${a.invalidation}`);
+
+      const text = lines.join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Clipboard API can be blocked (older browsers, non-HTTPS); fall back
+        // to a hidden textarea + execCommand so the button still works.
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch {}
+        document.body.removeChild(ta);
+      }
+
+      const label = copyPlanBtn.querySelector("span");
+      const prevLabel = label.textContent;
+      copyPlanBtn.classList.add("is-copied");
+      label.textContent = "Copied!";
+      setTimeout(() => {
+        copyPlanBtn.classList.remove("is-copied");
+        label.textContent = prevLabel;
+      }, 1800);
+    });
+  }
+
   // Steps the loading checklist walks through while a scan is running. There
   // is no real progress signal from the server (a single API call, not a
   // stream), so this is a paced simulation that holds on the last step
@@ -645,7 +700,10 @@
     liveChart.timeScale().fitContent();
   }
 
+  let lastResultForCopy = null;
+
   function renderResult(a, timeframe) {
+    lastResultForCopy = { a, timeframe };
     renderChart(a);
     document.getElementById("res-pair").textContent = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
     document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";

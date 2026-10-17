@@ -396,7 +396,13 @@
         </section>
 
         <section class="result-section result-section--wide trade-plan">
-          <h2 class="result-section__title">Trade plan</h2>
+          <div class="trade-plan__head">
+            <h2 class="result-section__title">Trade plan</h2>
+            <button type="button" id="res-copy-plan-btn" class="copy-plan-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/></svg>
+              <span>Copy plan</span>
+            </button>
+          </div>
           <div id="res-entries" class="entry-list"></div>
 
           <div id="res-ladder-wrap" class="trade-ladder" hidden>
