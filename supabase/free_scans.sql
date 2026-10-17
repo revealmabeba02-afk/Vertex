@@ -2,7 +2,7 @@
 -- Requires supabase/credits_setup.sql to already be set up (uses the same
 -- credit_balances table as the fallback once free scans run out).
 --
--- Gives every signed-in user 4 free scans a day, resetting at midnight UTC.
+-- Gives every signed-in user 2 free scans a day, resetting at midnight UTC.
 -- Once those are used, scanning falls back to paid credit balance exactly
 -- as before. Free scans never touch credit_balances, so they can't be
 -- "spent" by buying more — they're just a daily allowance on top.
@@ -20,7 +20,7 @@ alter table public.free_scan_log enable row level security;
 -- REST access, so RLS being on with no policies is the safe default (deny
 -- all direct access).
 
--- Spends one scan for the signed-in user: today's free allowance first (4 a
+-- Spends one scan for the signed-in user: today's free allowance first (2 a
 -- day), then falls back to their paid credit balance. Raises an exception
 -- (caught server-side, same as the old spend_credit) only when both are
 -- exhausted, so there's never a way to scan into a negative balance even
@@ -34,7 +34,7 @@ as $$
 declare
   v_free_count integer;
   v_balance integer;
-  v_free_limit constant integer := 4;
+  v_free_limit constant integer := 2;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -120,7 +120,7 @@ set search_path = public
 as $$
 declare
   v_free_count integer;
-  v_free_limit constant integer := 4;
+  v_free_limit constant integer := 2;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';

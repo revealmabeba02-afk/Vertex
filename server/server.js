@@ -255,7 +255,7 @@ const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Verte
 
 What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick a timeframe, and get back a technical read calculated from live price bars — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, take-profit targets, and a confidence % (shown as an animated ring by the pair name and an animated bar in the trade stats — it reflects how aligned the plan, risk/reward and top-down timeframes are, not a win-rate promise). No chart screenshot is needed or accepted. It is a technical read, not financial advice.
 
-Billing: every signed-in user gets 4 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought via Whop, either as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, credited at the same ~$0.50/scan rate. Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
+Billing: every signed-in user gets 2 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought via Whop, either as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, credited at the same ~$0.50/scan rate. Credits never expire. Payment is usually credited within about a minute of paying, as long as the buyer uses the same email at Whop checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
 
 News tab: a live economic calendar (NFP, CPI, PMIs, etc.) with a BUY/SELL tag per event once a clear bias shows. Small/medium events are fully free and unlimited, actual result included. Big ("High" importance) events are free to see on the calendar (time, forecast, previous) but the actual-vs-forecast result only unlocks after the event releases — 2 unlocks are free per user per calendar month, and after that each extra unlock costs 2 credits from the same balance used for scans.
 
@@ -1948,7 +1948,7 @@ app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
 });
 
 async function runAnalyze(req, res, symbol, timeframe) {
-  // Spend one scan up front — today's free allowance first (4/day), then
+  // Spend one scan up front — today's free allowance first (2/day), then
   // paid credits (use_scan() in supabase/free_scans.sql handles the split).
   // If both are exhausted, stop here — never call FXSynapse (which costs
   // real money) for a request that can't be charged. If the scan itself
