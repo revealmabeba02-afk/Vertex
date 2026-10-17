@@ -497,6 +497,7 @@ function sendFreshPage(res, name) {
 }
 
 app.get("/", (req, res) => sendFreshPage(res, "landing.html"));
+app.get("/welcome", (req, res) => sendFreshPage(res, "splash.html"));
 app.get("/login", (req, res) => sendFreshPage(res, "login.html"));
 app.get("/signup", (req, res) => sendFreshPage(res, "signup.html"));
 app.get("/app", (req, res) => sendFreshPage(res, "app.html"));

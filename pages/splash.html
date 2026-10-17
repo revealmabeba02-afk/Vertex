@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertex AI — Chart Scanner</title>
+<meta name="description" content="Vertex AI Chart Scanner — scan charts, find opportunities, trade smarter.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{
+    --bg-0:#02100a;
+    --bg-1:#06201432;
+    --green:#4FE3A0;
+    --green-deep:#17A76B;
+    --ink:#F7FFFA;
+    --ink-dim:#A9BFB5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-0);}
+  body{
+    min-height:100vh;
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    position:relative;
+    font-family:'Inter','Helvetica Neue',Arial,sans-serif;
+    color:var(--ink);
+  }
+  .splash__bg{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    z-index:0;
+  }
+  .splash__wrap{
+    position:relative;
+    z-index:2;
+    width:100%;
+    max-width:460px;
+    padding:0 28px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+  }
+  .splash__badge{
+    width:128px;
+    height:128px;
+    filter:drop-shadow(0 0 28px rgba(79,227,160,0.35));
+    animation:splash-float 4.5s ease-in-out infinite;
+  }
+  @keyframes splash-float{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-8px); }
+  }
+  .splash__wordmark{
+    margin:22px 0 6px;
+    font-weight:800;
+    font-size:34px;
+    letter-spacing:2px;
+    color:var(--ink);
+  }
+  .splash__wordmark span{ color:var(--green); }
+  .splash__tagline{
+    margin:0 0 20px;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:6px;
+    color:var(--ink-dim);
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .splash__tagline::before,
+  .splash__tagline::after{
+    content:"";
+    width:26px;
+    height:1px;
+    background:rgba(79,227,160,0.6);
+  }
+  .splash__features{
+    margin:0 0 34px;
+    font-size:13px;
+    color:var(--ink-dim);
+    letter-spacing:0.3px;
+  }
+  .splash__features span{ color:var(--green); margin:0 10px; }
+  .splash__cta{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    padding:14px 30px;
+    border-radius:999px;
+    background:linear-gradient(135deg,#4FE3A0,#17A76B);
+    color:#06130D;
+    font-weight:700;
+    font-size:15px;
+    text-decoration:none;
+    box-shadow:0 10px 30px rgba(79,227,160,0.3);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .splash__cta:hover{ transform:translateY(-1px); box-shadow:0 14px 36px rgba(79,227,160,0.4); }
+  .splash__cta svg{ width:16px; height:16px; }
+  .splash__footer{
+    position:absolute;
+    bottom:22px;
+    left:0;
+    right:0;
+    z-index:2;
+    text-align:center;
+    font-size:11px;
+    letter-spacing:3px;
+    color:rgba(169,191,181,0.55);
+  }
+  @media (max-height: 640px){
+    .splash__badge{ width:100px; height:100px; }
+    .splash__wordmark{ font-size:28px; margin-top:16px; }
+  }
+</style>
+</head>
+<body>
+
+  <svg class="splash__bg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <radialGradient id="sp-bg" cx="50%" cy="32%" r="80%">
+        <stop offset="0%" stop-color="#0E2A1C"/>
+        <stop offset="48%" stop-color="#061A11"/>
+        <stop offset="100%" stop-color="#010705"/>
+      </radialGradient>
+      <linearGradient id="sp-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7EE8B9"/><stop offset="100%" stop-color="#17A76B"/></linearGradient>
+      <linearGradient id="sp-fade-v" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="35%" stop-color="#fff" stop-opacity="0.55"/>
+        <stop offset="70%" stop-color="#fff" stop-opacity="0.85"/>
+        <stop offset="100%" stop-color="#fff" stop-opacity="0.15"/>
+      </linearGradient>
+      <mask id="sp-mask"><rect x="0" y="0" width="1000" height="1000" fill="url(#sp-fade-v)"/></mask>
+    </defs>
+    <rect width="1000" height="1000" fill="url(#sp-bg)"/>
+    <g mask="url(#sp-mask)" opacity="0.8">
+      <!-- generated ascending candlestick band, stretched across the lower two-thirds -->
+      <g id="sp-candles"></g>
+    </g>
+  </svg>
+
+  <main class="splash__wrap">
+    <svg class="splash__badge" viewBox="0 0 200 200" aria-hidden="true">
+      <defs>
+        <linearGradient id="vb-ring-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+        <linearGradient id="vb-silver-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+        <linearGradient id="vb-green-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+        <linearGradient id="vb-sheen-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+        <radialGradient id="vb-bg-splash" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
+        <radialGradient id="vb-outerglow-splash" cx="50%" cy="38%" r="65%"><stop offset="0%" stop-color="#4FE3A0" stop-opacity="0.5"/><stop offset="60%" stop-color="#4FE3A0" stop-opacity="0.1"/><stop offset="100%" stop-color="#4FE3A0" stop-opacity="0"/></radialGradient>
+        <filter id="vb-blur-splash" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+        <clipPath id="vb-clip-splash"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
+      </defs>
+      <rect x="-20" y="-20" width="240" height="240" fill="url(#vb-outerglow-splash)"/>
+      <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-splash)"/>
+      <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-splash)" stroke-width="5"/>
+      <rect x="11" y="11" width="178" height="178" rx="38" fill="none" stroke="#4FE3A0" stroke-opacity="0.25" stroke-width="1"/>
+      <g clip-path="url(#vb-clip-splash)">
+        <path d="M -10 40 L 90 -10 L 220 -10 L 20 120 Z" fill="url(#vb-sheen-splash)" opacity="0.5"/>
+        <ellipse cx="100" cy="108" rx="70" ry="47" fill="none" stroke="#4FE3A0" stroke-width="7" opacity="0.35" filter="url(#vb-blur-splash)"/>
+        <ellipse cx="100" cy="108" rx="70" ry="47" fill="none" stroke="url(#vb-ring-splash)" stroke-width="2.5"/>
+        <rect x="40" y="94" width="7" height="36" rx="1.8" fill="#E2735F"/><line x1="43.5" y1="83" x2="43.5" y2="141" stroke="#E2735F" stroke-width="1.6"/>
+        <rect x="55" y="74" width="7" height="50" rx="1.8" fill="url(#vb-green-splash)"/><line x1="58.5" y1="63" x2="58.5" y2="135" stroke="#17A76B" stroke-width="1.6"/>
+        <rect x="137" y="100" width="7" height="30" rx="1.8" fill="url(#vb-green-splash)"/><line x1="140.5" y1="89" x2="140.5" y2="139" stroke="#17A76B" stroke-width="1.6"/>
+        <rect x="151" y="68" width="7" height="54" rx="1.8" fill="url(#vb-green-splash)"/><line x1="154.5" y1="57" x2="154.5" y2="131" stroke="#17A76B" stroke-width="1.6"/>
+        <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-splash)" stroke-width="24" stroke-linecap="round"/>
+        <path d="M100,152 L144,50" fill="none" stroke="url(#vb-green-splash)" stroke-width="24" stroke-linecap="round"/>
+      </g>
+    </svg>
+
+    <p class="splash__wordmark">VERTEX <span>AI</span></p>
+    <p class="splash__tagline">CHART SCANNER</p>
+    <p class="splash__features">Scan Charts<span>·</span>Find Opportunities<span>·</span>Trade Smarter</p>
+
+    <a class="splash__cta" href="/">
+      Welcome to Vertex AI
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </a>
+  </main>
+
+  <p class="splash__footer">CHART SCANNER &middot; VERSION 1.0</p>
+
+<script>
+(function(){
+  // Procedurally generate an ascending candlestick band across the full-bleed background,
+  // same shape language as the landing hero chart but spanning the whole splash screen.
+  var n = 34;
+  var w = 1000, h = 1000;
+  var colW = w / n;
+  var rand = (function(seed){
+    return function(){ seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  })(42);
+
+  var closes = [];
+  var price = 0.30;
+  for (var i = 0; i < n; i++){
+    var drift = 0.012 + rand() * 0.01;
+    price += drift;
+    closes.push(price);
+  }
+  var minP = Math.min.apply(null, closes);
+  var maxP = Math.max.apply(null, closes);
+  function norm(p){
+    // smaller price -> larger y (near bottom), larger price -> smaller y (near top)
+    var t = (p - minP) / (maxP - minP);
+    return h - 60 - t * (h * 0.62);
+  }
+
+  var svgns = "http://www.w3.org/2000/svg";
+  var g = document.getElementById('sp-candles');
+  var prevClose = closes[0] - 0.02;
+  for (var j = 0; j < n; j++){
+    var cx = colW * j + colW * 0.5;
+    var open = norm(prevClose);
+    var close = norm(closes[j]);
+    var bodyTop = Math.min(open, close);
+    var bodyH = Math.max(Math.abs(close - open), 6);
+    var wickTop = bodyTop - (8 + rand() * 14);
+    var wickBot = bodyTop + bodyH + (8 + rand() * 14);
+    var bullish = closes[j] >= prevClose;
+    var bw = colW * 0.46;
+
+    var wick = document.createElementNS(svgns, 'line');
+    wick.setAttribute('x1', cx); wick.setAttribute('x2', cx);
+    wick.setAttribute('y1', wickTop); wick.setAttribute('y2', wickBot);
+    wick.setAttribute('stroke', bullish ? '#2DAE78' : '#5B6861');
+    wick.setAttribute('stroke-width', '2.4');
+    g.appendChild(wick);
+
+    var body = document.createElementNS(svgns, 'rect');
+    body.setAttribute('x', cx - bw/2);
+    body.setAttribute('y', bodyTop);
+    body.setAttribute('width', bw);
+    body.setAttribute('height', bodyH);
+    body.setAttribute('rx', 2.4);
+    body.setAttribute('fill', bullish ? 'url(#sp-green)' : '#5B6861');
+    g.appendChild(body);
+
+    prevClose = closes[j];
+  }
+})();
+</script>
+
+</body>
+</html>
