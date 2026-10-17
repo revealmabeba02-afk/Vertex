@@ -214,41 +214,44 @@
     return function(){ seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
   })(42);
 
+  // Wave shape like the reference: a gentle dip through the first third,
+  // then a steady climb through the rest — not a straight diagonal.
   var closes = [];
-  var price = 0.30;
+  var price = 0.55;
   for (var i = 0; i < n; i++){
-    var drift = 0.012 + rand() * 0.01;
-    price += drift;
-    closes.push(price);
+    var t = i / (n - 1);
+    var wave = t < 0.3 ? -0.10 * (t / 0.3) : -0.10 + 0.55 * ((t - 0.3) / 0.7);
+    var noise = (rand() - 0.5) * 0.045;
+    closes.push(price + wave + noise);
   }
   var minP = Math.min.apply(null, closes);
   var maxP = Math.max.apply(null, closes);
   function norm(p){
     // smaller price -> larger y (near bottom), larger price -> smaller y (near top)
     var t = (p - minP) / (maxP - minP);
-    return h - 60 - t * (h * 0.62);
+    return h - 120 - t * (h * 0.4);
   }
 
   var svgns = "http://www.w3.org/2000/svg";
   var g = document.getElementById('sp-candles');
   var linePts = [];
-  var prevClose = closes[0] - 0.02;
+  var prevClose = closes[0];
   for (var j = 0; j < n; j++){
     var cx = colW * j + colW * 0.5;
     var open = norm(prevClose);
     var close = norm(closes[j]);
     var bodyTop = Math.min(open, close);
-    var bodyH = Math.max(Math.abs(close - open), 9);
-    var wickTop = bodyTop - (6 + rand() * 10);
-    var wickBot = bodyTop + bodyH + (6 + rand() * 10);
-    var bullish = closes[j] >= prevClose;
-    var bw = colW * 0.56;
+    var bodyH = Math.max(Math.abs(close - open), 5);
+    var wickTop = bodyTop - (4 + rand() * 7);
+    var wickBot = bodyTop + bodyH + (4 + rand() * 7);
+    var bw = colW * 0.4;
+    var fill = (j % 5 === 0) ? '#2E8F62' : 'url(#sp-green)';
 
     var wick = document.createElementNS(svgns, 'line');
     wick.setAttribute('x1', cx); wick.setAttribute('x2', cx);
     wick.setAttribute('y1', wickTop); wick.setAttribute('y2', wickBot);
-    wick.setAttribute('stroke', bullish ? '#17A76B' : '#E2735F');
-    wick.setAttribute('stroke-width', '2.6');
+    wick.setAttribute('stroke', '#2DAE78');
+    wick.setAttribute('stroke-width', '1.8');
     g.appendChild(wick);
 
     var body = document.createElementNS(svgns, 'rect');
@@ -256,8 +259,8 @@
     body.setAttribute('y', bodyTop);
     body.setAttribute('width', bw);
     body.setAttribute('height', bodyH);
-    body.setAttribute('rx', 2.8);
-    body.setAttribute('fill', bullish ? 'url(#sp-green)' : '#E2735F');
+    body.setAttribute('rx', 1.6);
+    body.setAttribute('fill', fill);
     g.appendChild(body);
 
     linePts.push(cx.toFixed(1) + ',' + close.toFixed(1));
@@ -265,7 +268,10 @@
   }
 
   var pathD = 'M' + linePts.join(' L');
-  document.getElementById('sp-priceline').setAttribute('d', pathD);
+  var line = document.getElementById('sp-priceline');
+  line.setAttribute('d', pathD);
+  line.setAttribute('stroke-width', '1.2');
+  line.setAttribute('stroke-opacity', '0.55');
 })();
 </script>
 
