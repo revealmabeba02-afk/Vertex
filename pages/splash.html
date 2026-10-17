@@ -86,11 +86,11 @@
   }
   .splash__features{
     margin:0 0 34px;
-    font-size:13px;
+    font-size:12.5px;
     color:var(--ink-dim);
     letter-spacing:0.3px;
   }
-  .splash__features span{ color:var(--green); margin:0 10px; }
+  .splash__features span{ color:rgba(169,191,181,0.5); margin:0 10px; }
   .splash__cta{
     display:inline-flex;
     align-items:center;
@@ -114,9 +114,10 @@
     right:0;
     z-index:2;
     text-align:center;
-    font-size:11px;
+    font-size:10.5px;
+    line-height:1.7;
     letter-spacing:3px;
-    color:rgba(169,191,181,0.55);
+    color:rgba(169,191,181,0.5);
   }
   @media (max-height: 640px){
     .splash__badge{ width:100px; height:100px; }
@@ -141,11 +142,23 @@
         <stop offset="100%" stop-color="#fff" stop-opacity="0.15"/>
       </linearGradient>
       <mask id="sp-mask"><rect x="0" y="0" width="1000" height="1000" fill="url(#sp-fade-v)"/></mask>
+      <linearGradient id="sp-diag" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#4FE3A0" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#4FE3A0" stop-opacity="0"/>
+      </linearGradient>
     </defs>
     <rect width="1000" height="1000" fill="url(#sp-bg)"/>
-    <g mask="url(#sp-mask)" opacity="0.8">
+
+    <!-- angular diagonal accent panels, top-right and bottom-left -->
+    <polygon points="650,0 1000,0 1000,420" fill="url(#sp-diag)"/>
+    <polygon points="700,0 1000,0 1000,260" fill="none" stroke="#4FE3A0" stroke-opacity="0.18" stroke-width="2"/>
+    <polygon points="0,560 0,1000 380,1000" fill="url(#sp-diag)" transform="rotate(180 500 500)"/>
+    <polygon points="0,740 0,1000 260,1000" fill="none" stroke="#4FE3A0" stroke-opacity="0.18" stroke-width="2"/>
+
+    <g mask="url(#sp-mask)" opacity="0.85">
       <!-- generated ascending candlestick band, stretched across the lower two-thirds -->
       <g id="sp-candles"></g>
+      <path id="sp-priceline" fill="none" stroke="#DFFBEC" stroke-width="1.6" stroke-opacity="0.7"/>
     </g>
   </svg>
 
@@ -180,7 +193,7 @@
 
     <p class="splash__wordmark">VERTEX <span>AI</span></p>
     <p class="splash__tagline">CHART SCANNER</p>
-    <p class="splash__features">Scan Charts<span>·</span>Find Opportunities<span>·</span>Trade Smarter</p>
+    <p class="splash__features">Scan Charts<span>|</span>Find Opportunities<span>|</span>Trade Smarter</p>
 
     <a class="splash__cta" href="/">
       Welcome to Vertex AI
@@ -188,7 +201,7 @@
     </a>
   </main>
 
-  <p class="splash__footer">CHART SCANNER &middot; VERSION 1.0</p>
+  <p class="splash__footer">CHART SCANNER<br>VERSION 1.0</p>
 
 <script>
 (function(){
@@ -218,23 +231,24 @@
 
   var svgns = "http://www.w3.org/2000/svg";
   var g = document.getElementById('sp-candles');
+  var linePts = [];
   var prevClose = closes[0] - 0.02;
   for (var j = 0; j < n; j++){
     var cx = colW * j + colW * 0.5;
     var open = norm(prevClose);
     var close = norm(closes[j]);
     var bodyTop = Math.min(open, close);
-    var bodyH = Math.max(Math.abs(close - open), 6);
-    var wickTop = bodyTop - (8 + rand() * 14);
-    var wickBot = bodyTop + bodyH + (8 + rand() * 14);
+    var bodyH = Math.max(Math.abs(close - open), 9);
+    var wickTop = bodyTop - (6 + rand() * 10);
+    var wickBot = bodyTop + bodyH + (6 + rand() * 10);
     var bullish = closes[j] >= prevClose;
-    var bw = colW * 0.46;
+    var bw = colW * 0.56;
 
     var wick = document.createElementNS(svgns, 'line');
     wick.setAttribute('x1', cx); wick.setAttribute('x2', cx);
     wick.setAttribute('y1', wickTop); wick.setAttribute('y2', wickBot);
-    wick.setAttribute('stroke', bullish ? '#2DAE78' : '#5B6861');
-    wick.setAttribute('stroke-width', '2.4');
+    wick.setAttribute('stroke', bullish ? '#17A76B' : '#E2735F');
+    wick.setAttribute('stroke-width', '2.6');
     g.appendChild(wick);
 
     var body = document.createElementNS(svgns, 'rect');
@@ -242,12 +256,16 @@
     body.setAttribute('y', bodyTop);
     body.setAttribute('width', bw);
     body.setAttribute('height', bodyH);
-    body.setAttribute('rx', 2.4);
-    body.setAttribute('fill', bullish ? 'url(#sp-green)' : '#5B6861');
+    body.setAttribute('rx', 2.8);
+    body.setAttribute('fill', bullish ? 'url(#sp-green)' : '#E2735F');
     g.appendChild(body);
 
+    linePts.push(cx.toFixed(1) + ',' + close.toFixed(1));
     prevClose = closes[j];
   }
+
+  var pathD = 'M' + linePts.join(' L');
+  document.getElementById('sp-priceline').setAttribute('d', pathD);
 })();
 </script>
 
