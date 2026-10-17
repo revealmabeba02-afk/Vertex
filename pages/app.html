@@ -198,6 +198,11 @@
 
     <form id="scan-form" class="scanform" novalidate>
 
+      <div class="watchlist" id="watchlist-strip" hidden>
+        <span class="watchlist__label">Watchlist</span>
+        <div class="watchlist__tiles" id="watchlist-tiles"></div>
+      </div>
+
       <div class="quickpick" id="quickpick-pairs" role="group" aria-label="Quick-pick pair">
         <button type="button" class="quickpick__pill" data-symbol="XAUUSD"><span class="quickpick__name">Gold</span><span class="quickpick__ticker">XAUUSD</span></button>
         <button type="button" class="quickpick__pill" data-symbol="EURUSD"><span class="quickpick__name">Euro / Dollar</span><span class="quickpick__ticker">EURUSD</span></button>
@@ -352,7 +357,12 @@
 
       <div class="result__head">
         <div>
-          <div class="result__pair" id="res-pair">—</div>
+          <div class="result__pair-row">
+            <div class="result__pair" id="res-pair">—</div>
+            <button type="button" id="res-watchlist-btn" class="watchlist-star" aria-label="Add to watchlist" hidden>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </button>
+          </div>
           <div class="result__meta">
             <span class="result__tf" id="res-tf">—</span>
             <span class="result__sep" aria-hidden="true">·</span>

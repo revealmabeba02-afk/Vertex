@@ -329,6 +329,124 @@
     updateScanBtnState();
   }
 
+  // ---- Watchlist: a quick-glance strip of saved pairs, stored per-browser
+  // in localStorage (no backend table needed for a convenience list like
+  // this). The star on a scan result adds/removes that pair; tapping a
+  // watchlist tile drops it straight into the symbol field, same as a
+  // quick-pick pill.
+  const WATCHLIST_KEY = "vertex_watchlist_v1";
+
+  function loadWatchlist() {
+    try {
+      const raw = localStorage.getItem(WATCHLIST_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveWatchlist(list) {
+    try {
+      localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list.slice(0, 12)));
+    } catch {
+      // Private browsing / storage disabled — the star just won't persist.
+    }
+  }
+
+  function isWatchlisted(symbol) {
+    if (!symbol) return false;
+    return loadWatchlist().includes(symbol.toUpperCase());
+  }
+
+  function toggleWatchlist(symbol) {
+    if (!symbol) return;
+    const sym = symbol.toUpperCase();
+    const list = loadWatchlist();
+    const idx = list.indexOf(sym);
+    if (idx === -1) {
+      list.unshift(sym);
+    } else {
+      list.splice(idx, 1);
+    }
+    saveWatchlist(list);
+    renderWatchlistStrip();
+    return idx === -1; // true if it was just added
+  }
+
+  const watchlistStripEl = document.getElementById("watchlist-strip");
+  const watchlistTilesEl = document.getElementById("watchlist-tiles");
+
+  function renderWatchlistStrip() {
+    if (!watchlistStripEl || !watchlistTilesEl) return;
+    const list = loadWatchlist();
+    if (list.length === 0) {
+      watchlistStripEl.hidden = true;
+      return;
+    }
+    watchlistStripEl.hidden = false;
+    watchlistTilesEl.innerHTML = "";
+    list.forEach((sym) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "watchlist__tile";
+      tile.dataset.symbol = sym;
+
+      const label = document.createElement("span");
+      label.textContent = sym;
+      tile.appendChild(label);
+
+      const remove = document.createElement("span");
+      remove.className = "watchlist__tile-remove";
+      remove.setAttribute("role", "button");
+      remove.setAttribute("aria-label", `Remove ${sym} from watchlist`);
+      remove.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleWatchlist(sym);
+        if (symbolInput.value.trim().toUpperCase() === sym) syncWatchlistStar();
+      });
+      tile.appendChild(remove);
+
+      tile.addEventListener("click", () => {
+        symbolInput.value = sym;
+        clearFormError();
+        updateScanBtnState();
+        syncQuickpickActive();
+        syncWatchlistStar();
+        symbolInput.focus();
+        symbolInput.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+
+      watchlistTilesEl.appendChild(tile);
+    });
+  }
+
+  function syncWatchlistStar() {
+    const btn = document.getElementById("res-watchlist-btn");
+    if (!btn) return;
+    const sym = (lastResultForCopy?.a?.pair_guess || "").toUpperCase();
+    if (!sym) {
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = false;
+    btn.classList.toggle("is-saved", isWatchlisted(sym));
+    btn.setAttribute("aria-label", isWatchlisted(sym) ? "Remove from watchlist" : "Add to watchlist");
+  }
+
+  const watchlistBtn = document.getElementById("res-watchlist-btn");
+  if (watchlistBtn) {
+    watchlistBtn.addEventListener("click", () => {
+      const sym = (lastResultForCopy?.a?.pair_guess || "").toUpperCase();
+      if (!sym) return;
+      toggleWatchlist(sym);
+      syncWatchlistStar();
+    });
+  }
+
+  renderWatchlistStrip();
+
   function showFormError(msg) {
     formError.textContent = msg;
     formError.hidden = false;
@@ -704,6 +822,7 @@
 
   function renderResult(a, timeframe) {
     lastResultForCopy = { a, timeframe };
+    syncWatchlistStar();
     renderChart(a);
     document.getElementById("res-pair").textContent = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
     document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";
