@@ -16,13 +16,14 @@
   --text-dim:      #A69DB2;
   --text-faint:    #8A8199;   /* clears 4.5:1 on --bg; the disclaimer uses it */
 
-  --accent:        #E8A840;   /* brand amber */
+  --accent:        #4FE3A0;   /* brand mint green, matches the Vertex mark */
   --accent-2:      #9B8FE0;   /* violet, the second glow */
 
-  /* The call to action is its own colour, deliberately not --bull, so green
-     only ever means "bias is up" and never doubles as chrome. */
-  --action:        #E8A840;
-  --action-ink:    #2A1B05;
+  /* The call to action now shares the brand's green, one shade brighter
+     than --bull so chrome and "bias is up" stay visually distinct even
+     though both read as green. */
+  --action:        #4FE3A0;
+  --action-ink:    #06281A;
 
   --bull:          #3FBF8A;
   --bear:          #E25C63;
