@@ -143,7 +143,13 @@
   // asked their OS for reduced motion, in which case we just swap.
   const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PAGE_LEAVE_MS = 150;
-  let viewTransitioning = false;
+  // Bumped on every applyView() call. A pending leave-transition timeout
+  // only acts if its own token is still the latest one — otherwise a fast
+  // double-tap (very normal on mobile) would let a stale timeout finish
+  // last and silently override a newer tap, leaving you stuck on the
+  // wrong tab. The hash itself (not a locally-held view name) is read when
+  // the timeout fires, so it always lands on wherever the user ended up.
+  let transitionToken = 0;
 
   function showView(name) {
     Object.entries(views).forEach(([key, el]) => { el.hidden = key !== name; });
@@ -169,26 +175,27 @@
   }
 
   function applyView() {
+    const myToken = ++transitionToken;
     const name = HASH_TO_VIEW[location.hash] || "scan";
     const currentEl = Object.values(views).find((el) => el && !el.hidden);
     const nextEl = views[name];
 
     if (!currentEl || currentEl === nextEl || REDUCED_MOTION) {
+      currentEl && currentEl.classList.remove("view--leaving");
       showView(name);
       return;
     }
 
-    // Let a page already mid-transition finish on its own terms rather
-    // than stacking timers if someone taps tabs quickly.
-    if (viewTransitioning) {
-      currentEl.classList.remove("view--leaving", "view--entering");
-    }
-    viewTransitioning = true;
+    // Jump to the top before the fade starts, not after the swap — so a
+    // tab tapped while scrolled down doesn't show the old page jumping to
+    // the top mid-animation.
+    window.scrollTo({ top: 0, behavior: "auto" });
     currentEl.classList.add("view--leaving");
     setTimeout(() => {
+      // A later tap has already taken over — let that one finish instead.
+      if (myToken !== transitionToken) return;
       currentEl.classList.remove("view--leaving");
-      viewTransitioning = false;
-      showView(name);
+      showView(HASH_TO_VIEW[location.hash] || "scan");
     }, PAGE_LEAVE_MS);
   }
 
