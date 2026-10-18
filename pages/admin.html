@@ -497,6 +497,87 @@
   .planner-status--posted { background: color-mix(in srgb, var(--bull) 20%, transparent); color: var(--bull); }
   .planner-row__delete { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; }
   .planner-row__delete:hover { color: var(--bear); }
+
+  /* --- Command Deck layout (sidebar + dense grid) ------------------------ */
+  .command-shell {
+    display: flex;
+    align-items: flex-start;
+    min-height: 100vh;
+  }
+  .command-rail {
+    position: sticky;
+    top: 0;
+    flex: none;
+    width: 56px;
+    height: 100vh;
+    background: color-mix(in srgb, var(--panel) 70%, #06040a);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 0;
+    overflow-y: auto;
+  }
+  .command-rail__mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), var(--bull));
+    margin-bottom: 6px;
+    flex: none;
+  }
+  .command-rail a {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-faint);
+    text-decoration: none;
+    border: 1px solid transparent;
+    flex: none;
+  }
+  .command-rail a:hover {
+    color: var(--text);
+    background: var(--panel-alt);
+    border-color: var(--border);
+  }
+  .command-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .command-main .admin-wrap {
+    max-width: 1080px;
+    padding-top: clamp(24px, 5vh, 48px);
+  }
+  .command-main .briefing-card,
+  .command-main .q2-card,
+  .command-main .health-card,
+  .command-main .orders-card,
+  .command-main .pattern-card,
+  .command-main .users-card,
+  .command-main .clicks-card,
+  .command-main .planner-card,
+  .command-main .support-card {
+    margin-top: 16px;
+    border-left: 2px solid var(--accent);
+  }
+  .command-main .admin-stats { margin-top: 18px; }
+  .command-section-label {
+    margin: 26px 0 -6px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .command-section-label:first-of-type { margin-top: 6px; }
+  @media (max-width: 760px) {
+    .command-rail { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -550,8 +631,22 @@
   </div>
 </header>
 
-<main class="admin-wrap">
-  <p class="eyebrow">
+<div class="command-shell">
+<nav class="command-rail" aria-label="Admin sections">
+  <div class="command-rail__mark" aria-hidden="true"></div>
+  <a href="#sec-overview" title="Overview">OV</a>
+  <a href="#sec-ai" title="Q2 / Q3">AI</a>
+  <a href="#sec-health" title="Health">HP</a>
+  <a href="#sec-orders" title="Orders">$</a>
+  <a href="#sec-stats" title="Stats">#</a>
+  <a href="#sec-users" title="Users">U</a>
+  <a href="#sec-clicks" title="Link clicks">LK</a>
+  <a href="#sec-planner" title="Content planner">PL</a>
+  <a href="#sec-support" title="Support">SU</a>
+  <a href="#sec-feedback" title="Feedback">FB</a>
+</nav>
+<main class="admin-wrap command-main">
+  <p class="eyebrow" id="sec-overview">
     <span class="eyebrow__dot" aria-hidden="true"></span>
     Admin
   </p>
@@ -563,7 +658,7 @@
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
   </div>
 
-  <div class="q2-card">
+  <div class="q2-card" id="sec-ai">
     <div class="q2-card__head">
       <div>
         <div class="q2-card__title">Q2 — autonomous support</div>
@@ -589,7 +684,7 @@
     <div class="q2-card__status" id="q3-status"></div>
   </div>
 
-  <div class="health-card">
+  <div class="health-card" id="sec-health">
     <div>
       <div class="health-card__percent" id="health-percent">—</div>
       <div class="health-card__status" id="health-status"></div>
@@ -599,13 +694,13 @@
     </div>
   </div>
 
-  <div class="orders-card">
+  <div class="orders-card" id="sec-orders">
     <div class="users-card__head">Pending payments</div>
     <div id="orders-list"></div>
     <div class="users-empty" id="orders-empty">Loading…</div>
   </div>
 
-  <div class="admin-stats">
+  <div class="admin-stats" id="sec-stats">
     <div class="stat-card">
       <div class="stat-card__label">Total signed-up users</div>
       <div class="stat-card__value" id="stat-users">—</div>
@@ -630,7 +725,7 @@
 
   <p class="admin-status" id="admin-status">Loading…</p>
 
-  <div class="users-card">
+  <div class="users-card" id="sec-users">
     <div class="users-card__head">Users</div>
     <div class="users-table-wrap">
       <table class="users-table" id="users-table" hidden>
@@ -649,13 +744,13 @@
     </div>
   </div>
 
-  <div class="clicks-card">
+  <div class="clicks-card" id="sec-clicks">
     <div class="users-card__head">Link clicks (TikTok · Instagram · YouTube · Facebook)</div>
     <div id="clicks-list"></div>
     <div class="users-empty" id="clicks-empty">Loading…</div>
   </div>
 
-  <div class="planner-card">
+  <div class="planner-card" id="sec-planner">
     <div class="users-card__head">Content planner</div>
     <form class="planner-form" id="planner-form">
       <select id="planner-platform" required>
@@ -672,18 +767,19 @@
     <div class="users-empty" id="planner-empty">Loading…</div>
   </div>
 
-  <div class="support-card">
+  <div class="support-card" id="sec-support">
     <div class="users-card__head">Support messages</div>
     <div id="support-list"></div>
     <div class="users-empty" id="support-empty">Loading…</div>
   </div>
 
-  <div class="support-card">
+  <div class="support-card" id="sec-feedback">
     <div class="users-card__head">Feature requests &amp; feedback</div>
     <div id="feedback-list"></div>
     <div class="users-empty" id="feedback-empty">Loading…</div>
   </div>
 </main>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <script src="/config.js"></script>
