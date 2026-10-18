@@ -562,6 +562,53 @@
   const HUD_STEP_DURATIONS_MS = [1400, 1700, 1500, 2200]; // last one just holds, see below
   let hudTimer = null;
 
+  // Decorative candlestick strip + price line drawn behind the HUD. Purely
+  // cosmetic (randomized each run), but an empty <g>/<path> here used to
+  // leave the whole background blank except for the gradient glow, so the
+  // "scanning" screen looked unfinished. Regenerated every time a scan
+  // starts so it never repeats identically.
+  function buildHudBackground() {
+    const group = document.getElementById("scan-hud-candles");
+    const priceLine = document.getElementById("scan-hud-priceline");
+    if (!group || !priceLine) return;
+
+    const COUNT = 28;
+    const startX = 60;
+    const endX = 940;
+    const step = (endX - startX) / (COUNT - 1);
+    const baseY = 740;
+    const topY = 280;
+
+    let prevClose = baseY;
+    let markup = "";
+    const points = [];
+
+    for (let i = 0; i < COUNT; i++) {
+      const t = i / (COUNT - 1);
+      const trendTarget = baseY - (baseY - topY) * t;
+      const noise = (Math.random() - 0.5) * 46;
+      const close = trendTarget + noise;
+      const open = prevClose;
+      prevClose = close;
+
+      const bodyTop = Math.min(open, close);
+      const bodyHeight = Math.max(Math.abs(close - open), 7);
+      const wickHigh = bodyTop - (Math.random() * 20 + 6);
+      const wickLow = bodyTop + bodyHeight + (Math.random() * 20 + 6);
+      const isUp = close <= open; // smaller y = higher price on screen
+      const x = startX + step * i;
+      const fill = isUp ? "url(#hud-green)" : "#4B5B53";
+      const wickColor = isUp ? "#2DAE78" : "#45544C";
+
+      markup += `<line x1="${x.toFixed(1)}" y1="${wickHigh.toFixed(1)}" x2="${x.toFixed(1)}" y2="${wickLow.toFixed(1)}" stroke="${wickColor}" stroke-width="2"/>`;
+      markup += `<rect x="${(x - 7.5).toFixed(1)}" y="${bodyTop.toFixed(1)}" width="15" height="${bodyHeight.toFixed(1)}" rx="2.5" fill="${fill}" opacity="0.92"/>`;
+      points.push(`${x.toFixed(1)},${close.toFixed(1)}`);
+    }
+
+    group.innerHTML = markup;
+    priceLine.setAttribute("d", `M ${points[0]} L ${points.slice(1).join(" L ")}`);
+  }
+
   function setHudStep(index, { done = false } = {}) {
     scanHudCheckItems.forEach((item, i) => {
       item.classList.remove("is-active", "is-done");
@@ -571,6 +618,7 @@
   }
 
   function startScanHud() {
+    buildHudBackground();
     let step = 0;
     setHudStep(step);
     const advance = () => {
@@ -592,12 +640,22 @@
     }
   }
 
+  // Hard ceiling on how long a scan is allowed to sit on the loading screen.
+  // The backend call is a single request/response (no streaming progress),
+  // so without this a stalled network or a backend that never replies would
+  // leave the HUD spinning forever. 75s comfortably covers a slow vision-model
+  // response and a sleepy Render instance waking from idle.
+  const SCAN_TIMEOUT_MS = 75000;
+
   async function runScan(symbol, timeframe) {
     scanInFlight = true;
     setLoadingUI(true);
     if (scanHudBg) scanHudBg.hidden = true;
     showState("loading");
     startScanHud();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
 
     try {
       // Ask for the session at scan time rather than caching it: supabase-js
@@ -609,7 +667,8 @@
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers,
-        body: JSON.stringify({ symbol, timeframe })
+        body: JSON.stringify({ symbol, timeframe }),
+        signal: controller.signal
       });
 
       if (res.status === 401) {
@@ -650,7 +709,9 @@
       if (typeof window.__vertexRefreshCredits === "function") window.__vertexRefreshCredits();
     } catch (err) {
       finishScanHud(false);
-      if (err.code === "no_credits") {
+      if (err.name === "AbortError") {
+        errorText.textContent = "This scan is taking longer than expected. Please check your connection and try again.";
+      } else if (err.code === "no_credits") {
         errorText.innerHTML = "";
         errorText.appendChild(document.createTextNode("You're out of free scans for today and have no credits left. "));
         const link = document.createElement("a");
@@ -663,6 +724,7 @@
       }
       showState("error");
     } finally {
+      clearTimeout(timeoutId);
       scanInFlight = false;
       setLoadingUI(false);
     }
