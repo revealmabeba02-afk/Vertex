@@ -217,6 +217,55 @@
     min-height: 16px;
   }
 
+  .pattern-card {
+    margin-top: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .pattern-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 22px;
+  }
+  .pattern-row__label {
+    width: 90px;
+    flex: none;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .pattern-row__track {
+    flex: 1;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--panel-alt);
+    overflow: hidden;
+  }
+  .pattern-row__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--bull), var(--accent));
+  }
+  .pattern-row.is-best .pattern-row__label { color: var(--bull); font-weight: 700; }
+  .pattern-row__count {
+    width: 110px;
+    flex: none;
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+  .pattern-card__note {
+    padding: 14px 22px 20px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--border-soft);
+  }
+
   .health-card {
     margin-top: 28px;
     padding: 22px 24px;
@@ -558,6 +607,14 @@
     </div>
   </div>
 
+  <div class="pattern-card">
+    <div class="users-card__head">Best day to buy — weekly pattern</div>
+    <div id="pattern-body">
+      <div class="users-empty" id="pattern-empty">Loading…</div>
+      <div id="pattern-bars" hidden></div>
+    </div>
+  </div>
+
   <p class="admin-status" id="admin-status">Loading…</p>
 
   <div class="users-card">
@@ -653,6 +710,7 @@
     loadFeedback(authHeader);
     wireQ2Toggle(authHeader);
     loadOrders(authHeader);
+    loadPurchasePatterns(authHeader);
     loadLinkClicks(authHeader);
     loadContentPosts(authHeader);
     wirePlannerForm(authHeader);
@@ -727,6 +785,63 @@
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function loadPurchasePatterns(authHeader) {
+      const emptyEl = document.getElementById("pattern-empty");
+      const barsEl = document.getElementById("pattern-bars");
+      const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      try {
+        const res = await fetch("/api/admin/purchase-patterns", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load purchase patterns.";
+          return;
+        }
+        const rows = (data && Array.isArray(data.days)) ? data.days : [];
+        const totalOrders = rows.reduce((sum, r) => sum + Number(r.order_count || 0), 0);
+
+        // Need a handful of paid orders before a day-of-week read means
+        // anything — otherwise one early sale would look like "Tuesdays
+        // are huge" off a sample size of one.
+        if (totalOrders < 5) {
+          emptyEl.textContent = `Not enough purchase history yet (${totalOrders} paid order${totalOrders === 1 ? "" : "s"} so far) — comes alive once there's more to go on.`;
+          return;
+        }
+
+        emptyEl.hidden = true;
+        barsEl.hidden = false;
+
+        const byDow = new Map(rows.map((r) => [Number(r.dow), r]));
+        const maxCount = Math.max(1, ...rows.map((r) => Number(r.order_count || 0)));
+        let bestDow = null, bestCount = -1;
+        rows.forEach((r) => { if (Number(r.order_count) > bestCount) { bestCount = Number(r.order_count); bestDow = Number(r.dow); } });
+
+        barsEl.innerHTML = "";
+        for (let dow = 0; dow < 7; dow++) {
+          const row = byDow.get(dow);
+          const count = row ? Number(row.order_count) : 0;
+          const revenue = row ? Number(row.revenue_usd) : 0;
+          const pct = Math.round((count / maxCount) * 100);
+          const el = document.createElement("div");
+          el.className = "pattern-row" + (dow === bestDow && count > 0 ? " is-best" : "");
+          el.innerHTML = `
+            <div class="pattern-row__label">${DAY_NAMES[dow]}</div>
+            <div class="pattern-row__track"><div class="pattern-row__fill" style="width:${pct}%"></div></div>
+            <div class="pattern-row__count">${count} order${count === 1 ? "" : "s"} · $${revenue.toFixed(2)}</div>
+          `;
+          barsEl.appendChild(el);
+        }
+
+        const note = document.createElement("div");
+        note.className = "pattern-card__note";
+        note.textContent = bestDow !== null
+          ? `${DAY_NAMES[bestDow]} is your best day so far, based on ${totalOrders} paid order${totalOrders === 1 ? "" : "s"} total. Worth pushing promos/content around that day.`
+          : "";
+        barsEl.appendChild(note);
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
     }
 
     async function loadOrders(authHeader) {

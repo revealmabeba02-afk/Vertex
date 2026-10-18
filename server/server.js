@@ -1614,6 +1614,23 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
   }
 });
 
+// Which day of the week credits actually get bought on — a read-only report
+// off existing paid orders, no scheduled job needed: it's just grouped by
+// weekday fresh every time the admin page asks.
+app.get("/api/admin/purchase-patterns", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const rows = await supabaseRpc("admin_purchase_day_pattern", {}, req.user.token);
+    res.json({ days: Array.isArray(rows) ? rows : [] });
+  } catch (err) {
+    console.error("Admin purchase pattern error:", err.message);
+    res.status(502).json({ error: "Could not load purchase patterns. Has supabase/purchase_day_pattern.sql been run?" });
+  }
+});
+
 // Per-platform click totals for the TikTok/Instagram/YouTube/Facebook
 // tracked links (see /go/:platform above). Same admin-email gate pattern
 // as the other admin routes — admin_link_click_summary() in Postgres
