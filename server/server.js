@@ -24,6 +24,12 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 // PIN is entered. Not cryptographic-grade — it's a deterrent for a casual
 // visitor, not a defense against someone reading the server's source.
 const ADMIN_PIN = (process.env.ADMIN_PIN || "").trim();
+// Optional second PIN that unlocks /admin exactly like the main one — a
+// backup in case the main PIN is forgotten. Either one works; the cookie
+// they get is identical either way (signed with ADMIN_PIN as the HMAC key
+// regardless of which PIN was entered), so nothing downstream needs to know
+// which one was used.
+const ADMIN_PIN_BACKUP = (process.env.ADMIN_PIN_BACKUP || "").trim();
 const ADMIN_PIN_COOKIE = "vx_admin_pin";
 const ADMIN_PIN_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -711,12 +717,17 @@ app.get("/admin", (req, res) => {
   sendFreshPage(res, "admin.html");
 });
 
+function pinMatches(given, candidate) {
+  if (!candidate) return false;
+  const expected = Buffer.from(candidate);
+  const givenBuf = Buffer.from(given);
+  return expected.length === givenBuf.length && crypto.timingSafeEqual(expected, givenBuf);
+}
+
 app.post("/api/admin/unlock", adminPinLimiter, (req, res) => {
   if (!ADMIN_PIN) return res.status(400).json({ error: "No admin PIN is configured." });
   const pin = String((req.body && req.body.pin) || "").trim();
-  const expected = Buffer.from(ADMIN_PIN);
-  const given = Buffer.from(pin);
-  const ok = expected.length === given.length && crypto.timingSafeEqual(expected, given);
+  const ok = pinMatches(pin, ADMIN_PIN) || pinMatches(pin, ADMIN_PIN_BACKUP);
   if (!ok) return res.status(401).json({ error: "Wrong PIN." });
   const expiresAt = Date.now() + ADMIN_PIN_MAX_AGE_MS;
   const token = signAdminPinToken(expiresAt);
