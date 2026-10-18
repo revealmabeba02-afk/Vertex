@@ -1773,4 +1773,49 @@
       // Best-effort — leave whatever was last shown.
     }
   }
+
+  const feedbackForm = document.getElementById("feedback-form");
+  const feedbackMessage = document.getElementById("feedback-message");
+  const feedbackStatus = document.getElementById("feedback-status");
+  const feedbackSubmitBtn = document.getElementById("feedback-submit-btn");
+
+  if (feedbackForm) {
+    feedbackForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = feedbackMessage.value.trim();
+      if (!text) return;
+
+      feedbackSubmitBtn.disabled = true;
+      feedbackSubmitBtn.classList.add("is-loading");
+      feedbackStatus.hidden = true;
+
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          feedbackStatus.textContent = (data && data.error) || "Could not send your suggestion. Please try again.";
+          feedbackStatus.classList.add("credits-status--error");
+          feedbackStatus.hidden = false;
+          return;
+        }
+        feedbackMessage.value = "";
+        feedbackStatus.textContent = "Thanks — added to the build list.";
+        feedbackStatus.classList.remove("credits-status--error");
+        feedbackStatus.hidden = false;
+      } catch {
+        feedbackStatus.textContent = "Could not reach the server. Please try again.";
+        feedbackStatus.classList.add("credits-status--error");
+        feedbackStatus.hidden = false;
+      } finally {
+        feedbackSubmitBtn.disabled = false;
+        feedbackSubmitBtn.classList.remove("is-loading");
+      }
+    });
+  }
 })();

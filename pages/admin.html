@@ -335,6 +335,18 @@
   }
   .support-item__tag--open { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
   .support-item__tag--resolved { background: color-mix(in srgb, var(--bull) 20%, transparent); color: var(--bull); }
+  .support-item__tag--new { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+  .support-item__tag--planned { background: color-mix(in srgb, #E0A84F 20%, transparent); color: #E0A84F; }
+  .support-item__tag--done { background: color-mix(in srgb, var(--bull) 20%, transparent); color: var(--bull); }
+  .support-item__tag--dismissed { background: color-mix(in srgb, var(--text-faint) 20%, transparent); color: var(--text-faint); }
+  .feedback-status-select {
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-alt);
+    color: var(--text);
+  }
   .support-item__text {
     margin-top: 6px;
     font-size: 13.5px;
@@ -595,6 +607,12 @@
     <div id="support-list"></div>
     <div class="users-empty" id="support-empty">Loading…</div>
   </div>
+
+  <div class="support-card">
+    <div class="users-card__head">Feature requests &amp; feedback</div>
+    <div id="feedback-list"></div>
+    <div class="users-empty" id="feedback-empty">Loading…</div>
+  </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
@@ -632,6 +650,7 @@
     loadBriefing(authHeader);
     loadHealth(authHeader);
     loadSupport(authHeader);
+    loadFeedback(authHeader);
     wireQ2Toggle(authHeader);
     loadOrders(authHeader);
     loadLinkClicks(authHeader);
@@ -1111,6 +1130,69 @@
               else btn.disabled = false;
             } catch {
               btn.disabled = false;
+            }
+          });
+        });
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    async function loadFeedback(authHeader) {
+      const listEl = document.getElementById("feedback-list");
+      const emptyEl = document.getElementById("feedback-empty");
+      try {
+        const res = await fetch("/api/admin/feedback", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load feedback.";
+          return;
+        }
+        const items = (data && Array.isArray(data.items)) ? data.items : [];
+        if (items.length === 0) {
+          emptyEl.textContent = "No suggestions yet.";
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = "";
+        items.forEach((m) => {
+          const item = document.createElement("div");
+          item.className = "support-item";
+          item.style.flexDirection = "column";
+          item.style.alignItems = "stretch";
+          const when = (() => { try { return new Date(m.created_at).toLocaleString(); } catch { return ""; } })();
+
+          item.innerHTML = `
+            <div class="support-item__meta">
+              <span class="support-item__tag support-item__tag--${escapeHtml(m.status)}">${escapeHtml(m.status)}</span>
+              <span>${escapeHtml(m.email || "")}</span>
+              <span>· ${escapeHtml(when)}</span>
+              <select class="feedback-status-select" data-status-select="${m.id}" style="margin-left: auto;">
+                <option value="new"${m.status === "new" ? " selected" : ""}>New</option>
+                <option value="planned"${m.status === "planned" ? " selected" : ""}>Planned</option>
+                <option value="done"${m.status === "done" ? " selected" : ""}>Done</option>
+                <option value="dismissed"${m.status === "dismissed" ? " selected" : ""}>Dismissed</option>
+              </select>
+            </div>
+            <div class="support-item__text">${escapeHtml(m.message)}</div>
+          `;
+          listEl.appendChild(item);
+        });
+
+        listEl.querySelectorAll("[data-status-select]").forEach((sel) => {
+          sel.addEventListener("change", async () => {
+            const id = sel.dataset.statusSelect;
+            const status = sel.value;
+            sel.disabled = true;
+            try {
+              await fetch(`/api/admin/feedback/${id}/status`, {
+                method: "POST",
+                headers: { ...authHeader, "Content-Type": "application/json" },
+                body: JSON.stringify({ status })
+              });
+              loadFeedback(authHeader);
+            } catch {
+              sel.disabled = false;
             }
           });
         });

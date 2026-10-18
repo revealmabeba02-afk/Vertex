@@ -663,6 +663,19 @@
       <p class="settings-row__title" style="margin-bottom: 12px;">Your messages</p>
       <div id="help-history-list"></div>
     </div>
+
+    <h2 class="result-section__title" style="margin-top: 36px;">Suggest a feature</h2>
+    <p class="hero__lede" style="margin-top: 4px;">Want something changed or added? Tell us — every suggestion lands straight on our build list.</p>
+
+    <form id="feedback-form" class="settings-card" style="padding: 22px 24px; margin-top: 14px;">
+      <label class="field__label" for="feedback-message">What should we add or change?</label>
+      <textarea id="feedback-message" class="input" rows="5" maxlength="2000" placeholder="e.g. Add a dark mode toggle for the chart, let me export my scan history…" style="margin-top: 8px; resize: vertical; font-family: inherit;" required></textarea>
+      <button type="submit" id="feedback-submit-btn" class="scan-btn" style="margin-top: 16px;">
+        <span class="scan-btn__label">Send suggestion</span>
+        <span class="scan-btn__spinner" aria-hidden="true"></span>
+      </button>
+      <p id="feedback-status" class="credits-status" hidden></p>
+    </form>
   </section>
 
   <!-- ============ SETTINGS (own tab) ============ -->

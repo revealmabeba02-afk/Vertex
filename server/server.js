@@ -2110,6 +2110,56 @@ app.post("/api/admin/support/:id/reply", requireUser, async (req, res) => {
   }
 });
 
+// --- Feedback / feature requests --------------------------------------------
+// Separate from support: this is "tell us what to change", not a question
+// needing an answer. Submitted from the same Help tab, but it lands on its
+// own build list in the admin page instead of the support inbox.
+app.post("/api/feedback", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const message = String(req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ error: "Enter a message first." });
+  if (message.length > 2000) return res.status(400).json({ error: "That message is too long." });
+  try {
+    await supabaseRpc("create_feedback_message", { p_message: message }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Feedback submit error:", err.message);
+    res.status(502).json({ error: "Could not send your suggestion. Please try again." });
+  }
+});
+
+app.get("/api/admin/feedback", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const items = await supabaseRpc("admin_list_feedback", {}, req.user.token);
+    res.json({ items: Array.isArray(items) ? items : [] });
+  } catch (err) {
+    console.error("Admin feedback list error:", err.message);
+    res.status(502).json({ error: "Could not load feedback. Has supabase/feedback_setup.sql been run?" });
+  }
+});
+
+app.post("/api/admin/feedback/:id/status", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const status = String(req.body?.status || "").trim();
+  if (!["new", "planned", "done", "dismissed"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status." });
+  }
+  try {
+    await supabaseRpc("admin_set_feedback_status", { p_id: req.params.id, p_status: status }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin feedback status error:", err.message);
+    res.status(502).json({ error: "Could not update that item." });
+  }
+});
+
 // Belt-and-braces against two /api/analyze requests for the same user
 // landing back-to-back (a double-click, a retried network request, etc.)
 // each spending their own scan. Only one request per user id is allowed to
