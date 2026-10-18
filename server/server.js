@@ -424,6 +424,23 @@ async function aiTriageSupportMessage(message) {
   }
 }
 
+// "Q2" — the admin-facing name for fully-autonomous support mode. Off by
+// default: the AI only auto-replies to messages it's confident about, and
+// anything else waits as a draft for a human. With Q2 on, its best-effort
+// answer goes out immediately for every message, no review. Read fresh each
+// time (cheap single-row lookup) rather than cached, so flipping the switch
+// in the admin page takes effect on the very next message, not after a
+// restart or a cache expiry.
+async function getQ2Autopilot() {
+  try {
+    const result = await supabaseRpc("get_q2_autopilot", {}, SUPABASE_ANON_KEY);
+    return result === true;
+  } catch (err) {
+    console.error("Q2 autopilot read failed:", err.message);
+    return false; // fail closed — never silently go autonomous on an error
+  }
+}
+
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.
 function jwtRole(token) {
@@ -1990,13 +2007,16 @@ app.post("/api/support", requireUser, async (req, res) => {
     // error response. If this fails, the message just sits as a normal
     // open message with no suggestion, same as if AI wasn't configured.
     if (row && row.id) {
-      aiTriageSupportMessage(message)
-        .then((result) => {
+      Promise.all([aiTriageSupportMessage(message), getQ2Autopilot()])
+        .then(([result, q2On]) => {
           if (!result) return;
-          const args =
-            result.confidence === "high"
-              ? { p_id: row.id, p_reply: result.reply, p_suggestion: null, p_secret: CREDIT_FULFILL_SECRET }
-              : { p_id: row.id, p_reply: null, p_suggestion: result.reply, p_secret: CREDIT_FULFILL_SECRET };
+          // Q2 on: send the AI's answer either way. Q2 off (default): only
+          // auto-send what it's actually confident about; anything else is
+          // left as a draft for a human to review from the admin page.
+          const autoSend = q2On || result.confidence === "high";
+          const args = autoSend
+            ? { p_id: row.id, p_reply: result.reply, p_suggestion: null, p_secret: CREDIT_FULFILL_SECRET }
+            : { p_id: row.id, p_reply: null, p_suggestion: result.reply, p_secret: CREDIT_FULFILL_SECRET };
           return supabaseRpc("system_set_ai_reply", args, SUPABASE_ANON_KEY);
         })
         .catch((err) => console.error("Support AI reply save failed:", err.message));
@@ -2040,6 +2060,37 @@ app.get("/api/admin/support", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Admin support list error:", err.message);
     res.status(502).json({ error: "Could not load support messages. Has supabase/support_setup.sql been run?" });
+  }
+});
+
+// Q2 — fully-autonomous support mode (see getQ2Autopilot above). Off by
+// default; both routes require the admin's own session, same as every other
+// /api/admin/* endpoint.
+app.get("/api/admin/q2", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const enabled = await getQ2Autopilot();
+    res.json({ enabled });
+  } catch (err) {
+    console.error("Q2 status read error:", err.message);
+    res.status(502).json({ error: "Could not read Q2 status." });
+  }
+});
+
+app.post("/api/admin/q2", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const enabled = await supabaseRpc("admin_set_q2_autopilot", { p_enabled: req.body?.enabled === true }, req.user.token);
+    res.json({ enabled: enabled === true });
+  } catch (err) {
+    console.error("Q2 toggle error:", err.message);
+    res.status(502).json({ error: "Could not update Q2. Has supabase/q2_autopilot.sql been run?" });
   }
 });
 

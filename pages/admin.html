@@ -150,6 +150,73 @@
     color: var(--text);
   }
 
+  .q2-card {
+    margin-top: 28px;
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--panel) 65%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .q2-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .q2-card__title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text);
+  }
+  .q2-card__desc {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-faint);
+    max-width: 460px;
+  }
+  .q2-toggle {
+    flex: none;
+    width: 52px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--panel-alt);
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .q2-toggle__knob {
+    position: absolute;
+    top: 2.5px;
+    left: 3px;
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .q2-toggle[aria-checked="true"] {
+    background: color-mix(in srgb, var(--bull) 28%, transparent);
+    border-color: var(--bull);
+  }
+  .q2-toggle[aria-checked="true"] .q2-toggle__knob {
+    transform: translateX(22px);
+    background: var(--bull);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--bull) 55%, transparent);
+  }
+  .q2-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+  .q2-card__status {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    min-height: 16px;
+  }
+
   .health-card {
     margin-top: 28px;
     padding: 22px 24px;
@@ -435,6 +502,19 @@
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
   </div>
 
+  <div class="q2-card">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Q2 — autonomous support</div>
+        <div class="q2-card__desc" id="q2-desc">Off: AI only auto-answers what it's confident about; anything else waits for you to review and send.</div>
+      </div>
+      <button type="button" class="q2-toggle" id="q2-toggle" role="switch" aria-checked="false" aria-label="Toggle Q2 autonomous support">
+        <span class="q2-toggle__knob"></span>
+      </button>
+    </div>
+    <div class="q2-card__status" id="q2-status"></div>
+  </div>
+
   <div class="health-card">
     <div>
       <div class="health-card__percent" id="health-percent">—</div>
@@ -552,6 +632,7 @@
     loadBriefing(authHeader);
     loadHealth(authHeader);
     loadSupport(authHeader);
+    wireQ2Toggle(authHeader);
     loadOrders(authHeader);
     loadLinkClicks(authHeader);
     loadContentPosts(authHeader);
@@ -896,6 +977,59 @@
         percentEl.textContent = "—";
         checksEl.innerHTML = '<div class="health-check">Could not reach the server.</div>';
       }
+    }
+
+    async function wireQ2Toggle(authHeader) {
+      const toggleEl = document.getElementById("q2-toggle");
+      const descEl = document.getElementById("q2-desc");
+      const statusEl = document.getElementById("q2-status");
+
+      const DESC_OFF = "Off: AI only auto-answers what it's confident about; anything else waits for you to review and send.";
+      const DESC_ON = "On: AI answers every support message immediately, no review — including refund and account questions it can't be certain about.";
+
+      function render(enabled) {
+        toggleEl.setAttribute("aria-checked", enabled ? "true" : "false");
+        descEl.textContent = enabled ? DESC_ON : DESC_OFF;
+      }
+
+      try {
+        const res = await fetch("/api/admin/q2", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          statusEl.textContent = (data && data.error) || "Could not load Q2 status.";
+          toggleEl.disabled = true;
+          return;
+        }
+        render(data.enabled === true);
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        toggleEl.disabled = true;
+        return;
+      }
+
+      toggleEl.addEventListener("click", async () => {
+        const next = toggleEl.getAttribute("aria-checked") !== "true";
+        toggleEl.disabled = true;
+        statusEl.textContent = "Saving…";
+        try {
+          const res = await fetch("/api/admin/q2", {
+            method: "POST",
+            headers: { ...authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: next })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not update Q2.";
+            return;
+          }
+          render(data.enabled === true);
+          statusEl.textContent = data.enabled ? "Q2 is live — replying to support on its own." : "Q2 is off.";
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+        } finally {
+          toggleEl.disabled = false;
+        }
+      });
     }
 
     async function loadSupport(authHeader) {
