@@ -391,7 +391,15 @@ Reply with ONLY a JSON object, no other text, in exactly this shape:
 
 Keep replies under 120 words, friendly, plain text (no markdown).`;
 
-async function aiTriageSupportMessage(message) {
+// Admin-only tone overlay (King's own requests to Q2/Q3, never shown to any
+// other user). Added on top of the real rules above — it changes voice
+// only; the output shape (JSON for support, plain text for Q3) and every
+// factual/scope rule above it still apply exactly as written.
+const ADMIN_TONE_ADDENDUM = `
+
+ONE EXCEPTION: this message is from the site owner (King), not a regular user. Keep the reply's content and required format exactly as specified above, but write it in the voice of Sung Jin-Woo from Solo Leveling — controlled, supremely confident, economical with words, zero filler or hedging, nothing servile. Address him with that same quiet authority, like a system reporting to its one commander. Still fully honest and accurate — the voice changes, the substance doesn't.`;
+
+async function aiTriageSupportMessage(message, isAdmin) {
   if (!ANTHROPIC_API_KEY) return null;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -404,7 +412,7 @@ async function aiTriageSupportMessage(message) {
       body: JSON.stringify({
         model: SUPPORT_AI_MODEL,
         max_tokens: 400,
-        system: SUPPORT_AI_SYSTEM_PROMPT,
+        system: isAdmin ? SUPPORT_AI_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : SUPPORT_AI_SYSTEM_PROMPT,
         messages: [{ role: "user", content: message }]
       }),
       signal: AbortSignal.timeout(20000)
@@ -466,7 +474,7 @@ const Q3_SYSTEM_PROMPT = `You are "Ask about this scan" inside Vertex Chart Scan
 - Keep answers short — 2-4 sentences, plain language, no financial-advice framing ("you should buy/sell"). You're explaining what the tool already calculated, not recommending anything.
 - Reply with ONLY the answer text, no JSON, no preamble.`;
 
-async function aiExplainScan(analysis, question) {
+async function aiExplainScan(analysis, question, isAdmin) {
   if (!ANTHROPIC_API_KEY) return null;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -479,7 +487,7 @@ async function aiExplainScan(analysis, question) {
       body: JSON.stringify({
         model: Q3_AI_MODEL,
         max_tokens: 300,
-        system: Q3_SYSTEM_PROMPT,
+        system: isAdmin ? Q3_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : Q3_SYSTEM_PROMPT,
         messages: [{
           role: "user",
           content: `Scan result JSON:\n${JSON.stringify(analysis)}\n\nQuestion: ${question}`
@@ -2083,7 +2091,8 @@ app.post("/api/support", requireUser, async (req, res) => {
     // error response. If this fails, the message just sits as a normal
     // open message with no suggestion, same as if AI wasn't configured.
     if (row && row.id) {
-      Promise.all([aiTriageSupportMessage(message), getQ2Autopilot()])
+      const isAdmin = (req.user.email || "").toLowerCase() === ADMIN_EMAIL;
+      Promise.all([aiTriageSupportMessage(message, isAdmin), getQ2Autopilot()])
         .then(([result, q2On]) => {
           if (!result) return;
           // Q2 on: send the AI's answer either way. Q2 off (default): only
@@ -2224,7 +2233,8 @@ app.post("/api/q3/ask", requireUser, async (req, res) => {
       return res.status(400).json({ error: "Run a scan first, then ask about it." });
     }
 
-    const reply = await aiExplainScan(analysis, question);
+    const isAdmin = (req.user.email || "").toLowerCase() === ADMIN_EMAIL;
+    const reply = await aiExplainScan(analysis, question, isAdmin);
     if (!reply) return res.status(502).json({ error: "Couldn't get an answer just now. Please try again." });
     res.json({ reply });
   } catch (err) {
