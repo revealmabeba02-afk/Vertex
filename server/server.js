@@ -441,6 +441,65 @@ async function getQ2Autopilot() {
   }
 }
 
+// "Q3" — "Ask about this scan". Off by default. Unlike Q2 (which answers
+// support tickets), Q3 only ever explains a scan result the server itself
+// already produced for that user, and nothing else — it has no access to
+// other pairs, other users' data, or general trading advice, specifically
+// to keep this out of "is this a good trade" financial-advice territory.
+// Read fresh each time, same reasoning as getQ2Autopilot above.
+async function getQ3Insight() {
+  try {
+    const result = await supabaseRpc("get_q3_insight", {}, SUPABASE_ANON_KEY);
+    return result === true;
+  } catch (err) {
+    console.error("Q3 insight read failed:", err.message);
+    return false; // fail closed
+  }
+}
+
+const Q3_AI_MODEL = (process.env.Q3_AI_MODEL || SUPPORT_AI_MODEL || "claude-haiku-4-5-20251001").trim();
+
+const Q3_SYSTEM_PROMPT = `You are "Ask about this scan" inside Vertex Chart Scanner. You explain ONE chart scan result that the user is looking at right now — you are given that exact result as JSON. Rules, no exceptions:
+- Only explain the fields in the JSON you're given (bias, entry, stop, targets, structure, notes, top-down bias). Never introduce a number, level, or claim that isn't already in that JSON.
+- Never discuss any pair, timeframe or scan other than the one in the JSON. Never give a new trade idea, a different entry/stop/target, or advice on position sizing, leverage or money management.
+- If asked something outside this scan (another pair, "should I trade this", general market opinion, strategy advice unrelated to this result), decline briefly and say you can only explain the scan shown, then suggest they open a new scan or contact support for anything else.
+- Keep answers short — 2-4 sentences, plain language, no financial-advice framing ("you should buy/sell"). You're explaining what the tool already calculated, not recommending anything.
+- Reply with ONLY the answer text, no JSON, no preamble.`;
+
+async function aiExplainScan(analysis, question) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: Q3_AI_MODEL,
+        max_tokens: 300,
+        system: Q3_SYSTEM_PROMPT,
+        messages: [{
+          role: "user",
+          content: `Scan result JSON:\n${JSON.stringify(analysis)}\n\nQuestion: ${question}`
+        }]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      console.error("Q3 AI error:", r.status, data);
+      return null;
+    }
+    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("") : "";
+    return text.trim() || null;
+  } catch (err) {
+    console.error("Q3 explain failed:", err.message);
+    return null;
+  }
+}
+
 // Read the "role" claim of a JWT-style key without verifying it. Used only to
 // refuse a service_role key; never logged or returned.
 function jwtRole(token) {
@@ -2108,6 +2167,69 @@ app.post("/api/admin/q2", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Q2 toggle error:", err.message);
     res.status(502).json({ error: "Could not update Q2. Has supabase/q2_autopilot.sql been run?" });
+  }
+});
+
+app.get("/api/admin/q3", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const enabled = await getQ3Insight();
+    res.json({ enabled });
+  } catch (err) {
+    console.error("Q3 status read error:", err.message);
+    res.status(502).json({ error: "Could not read Q3 status." });
+  }
+});
+
+app.post("/api/admin/q3", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const enabled = await supabaseRpc("admin_set_q3_insight", { p_enabled: req.body?.enabled === true }, req.user.token);
+    res.json({ enabled: enabled === true });
+  } catch (err) {
+    console.error("Q3 toggle error:", err.message);
+    res.status(502).json({ error: "Could not update Q3. Has supabase/q3_insight.sql been run?" });
+  }
+});
+
+// Public (to any logged-in user) read of whether Q3 is on, so the frontend
+// knows whether to show the "Ask about this scan" box at all.
+app.get("/api/q3/status", requireUser, async (req, res) => {
+  try {
+    const enabled = await getQ3Insight();
+    res.json({ enabled });
+  } catch (err) {
+    res.json({ enabled: false });
+  }
+});
+
+app.post("/api/q3/ask", requireUser, async (req, res) => {
+  try {
+    const enabled = await getQ3Insight();
+    if (!enabled) return res.status(403).json({ error: "This feature is currently off." });
+
+    const question = String(req.body?.question || "").trim();
+    const analysis = req.body?.analysis;
+    if (!question) return res.status(400).json({ error: "Ask a question first." });
+    if (question.length > 300) return res.status(400).json({ error: "Keep it under 300 characters." });
+    // A light shape check — not a security boundary (the AI itself is told
+    // to stick to this JSON), just a guard against obviously wrong payloads.
+    if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+      return res.status(400).json({ error: "Run a scan first, then ask about it." });
+    }
+
+    const reply = await aiExplainScan(analysis, question);
+    if (!reply) return res.status(502).json({ error: "Couldn't get an answer just now. Please try again." });
+    res.json({ reply });
+  } catch (err) {
+    console.error("Q3 ask error:", err.message);
+    res.status(502).json({ error: "Something went wrong. Please try again." });
   }
 });
 

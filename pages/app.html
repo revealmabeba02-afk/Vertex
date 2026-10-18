@@ -453,6 +453,17 @@
           <h2 class="result-section__title">Top-down bias</h2>
           <div id="res-topdown" class="topdown-list"></div>
         </section>
+
+        <section class="result-section result-section--wide q3-ask" id="res-q3-wrap" hidden>
+          <h2 class="result-section__title">Ask about this scan</h2>
+          <p class="result-section__body">Not sure why it called it this way? Ask — it only explains the result above, nothing else.</p>
+          <div id="q3-thread" class="q3-thread" hidden></div>
+          <form id="q3-ask-form" class="q3-ask__form">
+            <textarea id="q3-ask-input" class="input" rows="2" maxlength="300" placeholder="e.g. Why is the stop there? What would invalidate this?" required></textarea>
+            <button type="submit" id="q3-ask-btn" class="ghost-btn">Ask</button>
+          </form>
+          <p id="q3-ask-status" class="credits-status" hidden></p>
+        </section>
       </div>
 
       <p id="res-disclaimer" class="result__disclaimer"></p>

@@ -1037,7 +1037,96 @@
       });
       topdownWrap.hidden = false;
     }
+
+    resetQ3Thread();
+    if (q3Enabled) document.getElementById("res-q3-wrap").hidden = false;
   }
+
+  // --------------------------------------------------------------
+  // Q3: "Ask about this scan" — explains the result just rendered above,
+  // nothing else. Off unless the admin has it switched on, so check once
+  // up front and just hide the box entirely when it's off.
+  // --------------------------------------------------------------
+  let q3Enabled = false;
+
+  function resetQ3Thread() {
+    const thread = document.getElementById("q3-thread");
+    thread.innerHTML = "";
+    thread.hidden = true;
+    const status = document.getElementById("q3-ask-status");
+    status.hidden = true;
+    status.className = "credits-status";
+    const input = document.getElementById("q3-ask-input");
+    if (input) input.value = "";
+  }
+
+  function addQ3Bubble(text, who) {
+    const thread = document.getElementById("q3-thread");
+    const bubble = document.createElement("div");
+    bubble.className = "q3-bubble " + (who === "user" ? "q3-bubble--user" : "q3-bubble--ai");
+    bubble.textContent = text;
+    thread.appendChild(bubble);
+    thread.hidden = false;
+  }
+
+  async function checkQ3Status() {
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const r = await fetch("/api/q3/status", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const data = await r.json();
+      q3Enabled = !!(r.ok && data.enabled);
+    } catch {
+      q3Enabled = false;
+    }
+  }
+
+  function wireQ3Ask() {
+    const form = document.getElementById("q3-ask-form");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("q3-ask-input");
+      const btn = document.getElementById("q3-ask-btn");
+      const status = document.getElementById("q3-ask-status");
+      const question = input.value.trim();
+      if (!question || !lastResultForCopy) return;
+
+      addQ3Bubble(question, "user");
+      input.value = "";
+      btn.disabled = true;
+      status.hidden = true;
+
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const r = await fetch("/api/q3/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ question, analysis: lastResultForCopy.a })
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          status.textContent = data.error || "Couldn't get an answer just now.";
+          status.className = "credits-status credits-status--error";
+          status.hidden = false;
+        } else {
+          addQ3Bubble(data.reply, "ai");
+        }
+      } catch {
+        status.textContent = "Could not reach the server.";
+        status.className = "credits-status credits-status--error";
+        status.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  checkQ3Status();
+  wireQ3Ask();
 
   function buildEntryCard(entry) {
     const card = document.createElement("div");

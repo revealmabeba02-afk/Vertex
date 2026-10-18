@@ -1376,6 +1376,50 @@ body.scanning .scan-hud {
 
 .result-section__body--dim { color: var(--text-dim); font-size: 14px; }
 
+/* "Ask about this scan" (Q3) — explains the result above only, never
+   open-ended trading chat. See wireQ3Ask() in app.js. */
+.q3-ask__form {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 14px;
+}
+.q3-ask__form textarea {
+  flex: 1;
+  min-height: 44px;
+}
+.q3-ask__form .ghost-btn {
+  width: auto;
+  flex: none;
+  padding: 0 20px;
+  align-self: stretch;
+}
+.q3-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.q3-bubble {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.q3-bubble--user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--action-ink);
+}
+.q3-bubble--ai {
+  align-self: flex-start;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+}
+
 .chip-row { margin: 12px 0 4px; }
 
 .chip {

@@ -576,6 +576,19 @@
     <div class="q2-card__status" id="q2-status"></div>
   </div>
 
+  <div class="q2-card">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Q3 — ask about this scan</div>
+        <div class="q2-card__desc" id="q3-desc">Off: no "ask about this scan" box on results. On: users can ask a question about their own scan result and the AI explains it — it can't discuss other pairs, give new trade ideas, or financial advice, only the scan already shown to them.</div>
+      </div>
+      <button type="button" class="q2-toggle" id="q3-toggle" role="switch" aria-checked="false" aria-label="Toggle Q3 ask about this scan">
+        <span class="q2-toggle__knob"></span>
+      </button>
+    </div>
+    <div class="q2-card__status" id="q3-status"></div>
+  </div>
+
   <div class="health-card">
     <div>
       <div class="health-card__percent" id="health-percent">—</div>
@@ -709,6 +722,7 @@
     loadSupport(authHeader);
     loadFeedback(authHeader);
     wireQ2Toggle(authHeader);
+    wireQ3Toggle(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
     loadLinkClicks(authHeader);
@@ -1158,6 +1172,54 @@
           }
           render(data.enabled === true);
           statusEl.textContent = data.enabled ? "Q2 is live — replying to support on its own." : "Q2 is off.";
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+        } finally {
+          toggleEl.disabled = false;
+        }
+      });
+    }
+
+    async function wireQ3Toggle(authHeader) {
+      const toggleEl = document.getElementById("q3-toggle");
+      const statusEl = document.getElementById("q3-status");
+
+      function render(enabled) {
+        toggleEl.setAttribute("aria-checked", enabled ? "true" : "false");
+      }
+
+      try {
+        const res = await fetch("/api/admin/q3", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          statusEl.textContent = (data && data.error) || "Could not load Q3 status.";
+          toggleEl.disabled = true;
+          return;
+        }
+        render(data.enabled === true);
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        toggleEl.disabled = true;
+        return;
+      }
+
+      toggleEl.addEventListener("click", async () => {
+        const next = toggleEl.getAttribute("aria-checked") !== "true";
+        toggleEl.disabled = true;
+        statusEl.textContent = "Saving…";
+        try {
+          const res = await fetch("/api/admin/q3", {
+            method: "POST",
+            headers: { ...authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: next })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not update Q3.";
+            return;
+          }
+          render(data.enabled === true);
+          statusEl.textContent = data.enabled ? "Q3 is live — users can ask about their scans." : "Q3 is off.";
         } catch {
           statusEl.textContent = "Could not reach the server.";
         } finally {
