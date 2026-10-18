@@ -136,20 +136,60 @@
   const tabs = document.querySelectorAll(".navpill[data-view]");
   const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#help": "help", "#settings": "settings" };
 
-  function applyView() {
-    const name = HASH_TO_VIEW[location.hash] || "scan";
+  // Each section should feel like turning to its own page, not a tab
+  // crossfading on top of the last one. So the old page fully leaves
+  // (fades + slides out) before the new page is shown and slides in —
+  // sequential, never both visible at once — unless the person has
+  // asked their OS for reduced motion, in which case we just swap.
+  const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const PAGE_LEAVE_MS = 150;
+  let viewTransitioning = false;
+
+  function showView(name) {
     Object.entries(views).forEach(([key, el]) => { el.hidden = key !== name; });
     tabs.forEach((tab) => {
       const active = tab.dataset.view === name;
       tab.classList.toggle("is-active", active);
       tab.setAttribute("aria-selected", String(active));
     });
+    const nextEl = views[name];
+    if (nextEl) {
+      nextEl.classList.remove("view--leaving");
+      nextEl.classList.add("view--entering");
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        nextEl.classList.remove("view--entering");
+      }));
+    }
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
     if (name === "credits") refreshBalance();
     if (name === "help") loadHelpHistory();
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
     if (name === "settings") loadReferral();
+  }
+
+  function applyView() {
+    const name = HASH_TO_VIEW[location.hash] || "scan";
+    const currentEl = Object.values(views).find((el) => el && !el.hidden);
+    const nextEl = views[name];
+
+    if (!currentEl || currentEl === nextEl || REDUCED_MOTION) {
+      showView(name);
+      return;
+    }
+
+    // Let a page already mid-transition finish on its own terms rather
+    // than stacking timers if someone taps tabs quickly.
+    if (viewTransitioning) {
+      currentEl.classList.remove("view--leaving", "view--entering");
+    }
+    viewTransitioning = true;
+    currentEl.classList.add("view--leaving");
+    setTimeout(() => {
+      currentEl.classList.remove("view--leaving");
+      viewTransitioning = false;
+      showView(name);
+    }, PAGE_LEAVE_MS);
   }
 
   window.addEventListener("hashchange", applyView);

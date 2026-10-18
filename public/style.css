@@ -1872,12 +1872,42 @@ body.scanning .scan-hud {
   text-align: center;
 }
 
-/* Tab switch: fade the incoming view in rather than snapping. */
-.view:not([hidden]) { animation: view-in 0.28s ease both; }
+/* Page turn: each section leaves fully (fade + slide out) before the
+   next one is shown and slides in — a book's pages, never two tabs
+   crossfading over each other at once. See showView()/applyView() in
+   app.js, which adds/removes these classes around the hidden toggle. */
+.view:not([hidden]) {
+  animation: view-page-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 
-@keyframes view-in {
-  from { opacity: 0; transform: translateY(6px); }
+.view.view--entering {
+  animation: none;
+  opacity: 0;
+  transform: translateY(10px) scale(0.992);
+}
+
+.view.view--leaving {
+  animation: view-page-out 0.15s ease both;
+}
+
+@keyframes view-page-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.992); }
   to   { opacity: 1; transform: none; }
+}
+
+@keyframes view-page-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.992); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view:not([hidden]),
+  .view.view--entering,
+  .view.view--leaving {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 .how__cta {
