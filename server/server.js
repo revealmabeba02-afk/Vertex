@@ -2558,11 +2558,48 @@ async function runAnalyze(req, res, symbol, timeframe) {
     const analysis = mapFxSynapseToAnalysis(fxData);
     res.json({ analysis, timeframe: timeframe || null });
     saveHistoryRow(req.user, analysis, timeframe || null); // fire-and-forget, never blocks the response
+    autoPostScanVideo(req.user, analysis); // fire-and-forget, King's own scans only
   } catch (err) {
     console.error("Analysis error:", err);
     await refundIfSpent(req.user, scanSource);
     saveScanFailure(req.user, symbol, timeframe, err.message || "Unknown server error");
     res.status(502).json({ error: "Something went wrong while analyzing that chart. Please try again." });
+  }
+}
+
+// When King scans a pair himself and it comes back with an actual trade plan
+// (not just "no clean setup"), automatically build a recap video and upload
+// it to YouTube. Never blocks or affects the scan response — any failure
+// here is just logged, since this is a bonus, not something the user is
+// waiting on.
+async function autoPostScanVideo(user, analysis) {
+  try {
+    if ((user.email || "").toLowerCase() !== ADMIN_EMAIL) return;
+    const entry = analysis.potential_entries?.[0];
+    const target = analysis.take_profit?.[0];
+    if (!entry || !target || analysis.stop_loss?.value_raw == null) return; // "no clean setup" scans stay quiet
+    const direction = entry.type === "Long" ? "BUY" : "SELL";
+    const videoPath = await generateTradeVideo({
+      pair: analysis.pair_guess || "—",
+      direction,
+      entry: entry.entry_zone,
+      sl: analysis.stop_loss.suggestion,
+      tp: target.target,
+      confidence: analysis.confidence,
+      handle: "@VertexScanner"
+    });
+    try {
+      const result = await uploadToYoutube(videoPath, {
+        title: `${analysis.pair_guess} ${direction} Signal`,
+        description: "Vertex Signal — not financial advice, trade your own plan.",
+        tags: ["forex", "trading", "signals", analysis.pair_guess].filter(Boolean)
+      });
+      console.log("Auto-posted scan video to YouTube:", result.url);
+    } finally {
+      require("fs").unlink(videoPath, () => {});
+    }
+  } catch (err) {
+    console.error("Auto-post scan video failed:", err.message);
   }
 }
 
