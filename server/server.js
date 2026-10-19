@@ -821,6 +821,62 @@ app.get("/api/admin/youtube/callback", async (req, res) => {
   }
 });
 
+// --- Trade-recap video generator --------------------------------------------
+// Builds a short vertical video (pair + direction, stats over the chart,
+// outro) from a scan's details, and can upload it straight to YouTube.
+// PIN-gated like the routes above — this is an admin tool, not a user one.
+const { generateTradeVideo } = require("./video/generateTradeVideo");
+const { uploadVideo: uploadToYoutube } = require("./video/youtubeUpload");
+
+app.post("/api/admin/videos/generate", upload.single("chart"), async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin first." });
+  }
+  const { pair, direction, entry, sl, tp, confidence, handle, uploadToYoutube: shouldUpload, title, description } = req.body || {};
+  if (!pair || !direction || !entry || !sl || !tp) {
+    return res.status(400).json({ error: "pair, direction, entry, sl and tp are required." });
+  }
+  let chartImagePath = null;
+  const fs = require("fs");
+  const os = require("os");
+  try {
+    if (req.file) {
+      chartImagePath = path.join(os.tmpdir(), `vx-chart-${crypto.randomBytes(6).toString("hex")}.png`);
+      fs.writeFileSync(chartImagePath, req.file.buffer);
+    }
+    const videoPath = await generateTradeVideo({
+      pair,
+      direction,
+      entry,
+      sl,
+      tp,
+      confidence: confidence != null && confidence !== "" ? Number(confidence) : undefined,
+      chartImagePath,
+      handle: handle || "@VertexScanner"
+    });
+    try {
+      if (String(shouldUpload) === "true") {
+        const result = await uploadToYoutube(videoPath, {
+          title: title || `${pair} ${String(direction).toUpperCase()} Signal`,
+          description: description || "Vertex Signal — not financial advice, trade your own plan.",
+          tags: ["forex", "trading", "signals", pair]
+        });
+        return res.json({ uploaded: true, ...result });
+      }
+      res.set("Content-Type", "video/mp4");
+      res.set("Content-Disposition", 'attachment; filename="vertex-signal.mp4"');
+      return fs.createReadStream(videoPath).pipe(res).on("close", () => fs.unlink(videoPath, () => {}));
+    } finally {
+      if (String(shouldUpload) === "true") fs.unlink(videoPath, () => {});
+    }
+  } catch (err) {
+    console.error("Video generation failed:", err.message);
+    res.status(502).json({ error: err.message || "Could not generate the video." });
+  } finally {
+    if (chartImagePath) fs.unlink(chartImagePath, () => {});
+  }
+});
+
 // Tracked social links — put these in TikTok/Instagram/YouTube/Facebook
 // bios instead of the raw profile URLs. Logging and the email alert are
 // both fire-and-forget: a slow Supabase or Resend call never delays the
