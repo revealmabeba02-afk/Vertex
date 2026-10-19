@@ -828,6 +828,44 @@ app.get("/api/admin/youtube/callback", async (req, res) => {
 const { generateTradeVideo } = require("./video/generateTradeVideo");
 const { uploadVideo: uploadToYoutube } = require("./video/youtubeUpload");
 
+// One-click version of the route below for when typing into a form isn't
+// convenient — same PIN gate, just reads from the URL's query string and
+// always uploads straight to YouTube. Example:
+// /api/admin/videos/quick-post?pair=XAUUSD&direction=BUY&entry=3640&sl=3630&tp=3660
+app.get("/api/admin/videos/quick-post", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).send("Unlock /admin with the PIN first, then try this link again.");
+  }
+  const { pair, direction, entry, sl, tp, confidence } = req.query || {};
+  if (!pair || !direction || !entry || !sl || !tp) {
+    return res.status(400).send("Need pair, direction, entry, sl and tp in the link.");
+  }
+  try {
+    const videoPath = await generateTradeVideo({
+      pair,
+      direction: String(direction).toUpperCase(),
+      entry,
+      sl,
+      tp,
+      confidence: confidence != null && confidence !== "" ? Number(confidence) : undefined,
+      handle: "@VertexScanner"
+    });
+    try {
+      const result = await uploadToYoutube(videoPath, {
+        title: `${pair} ${String(direction).toUpperCase()} Signal`,
+        description: "Vertex Signal — not financial advice, trade your own plan.",
+        tags: ["forex", "trading", "signals", pair]
+      });
+      res.type("html").send(`<body style="font-family:system-ui;background:#0a0d12;color:#dde3ea;padding:40px;"><h2>Posted ✅</h2><p><a href="${result.url}" style="color:#3ddc84;">${result.url}</a></p></body>`);
+    } finally {
+      require("fs").unlink(videoPath, () => {});
+    }
+  } catch (err) {
+    console.error("Quick-post video failed:", err.message);
+    res.status(502).send(`Failed: ${err.message}`);
+  }
+});
+
 app.post("/api/admin/videos/generate", upload.single("chart"), async (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     return res.status(401).json({ error: "Unlock /admin first." });
@@ -2567,40 +2605,87 @@ async function runAnalyze(req, res, symbol, timeframe) {
   }
 }
 
-// When King scans a pair himself and it comes back with an actual trade plan
-// (not just "no clean setup"), automatically build a recap video and upload
-// it to YouTube. Never blocks or affects the scan response — any failure
-// here is just logged, since this is a bonus, not something the user is
-// waiting on.
+// Shared by both auto-post paths below: builds the video for a given
+// analysis and uploads it to YouTube, if the analysis actually has a trade
+// plan (not a "no clean setup" read). Never throws — failures are logged
+// only, since nothing is ever waiting on this.
+async function postTradeVideoIfValid(analysis) {
+  const entry = analysis.potential_entries?.[0];
+  const target = analysis.take_profit?.[0];
+  if (!entry || !target || analysis.stop_loss?.value_raw == null) return false; // "no clean setup" scans stay quiet
+  const direction = entry.type === "Long" ? "BUY" : "SELL";
+  const videoPath = await generateTradeVideo({
+    pair: analysis.pair_guess || "—",
+    direction,
+    entry: entry.entry_zone,
+    sl: analysis.stop_loss.suggestion,
+    tp: target.target,
+    confidence: analysis.confidence,
+    handle: "@VertexScanner"
+  });
+  try {
+    const result = await uploadToYoutube(videoPath, {
+      title: `${analysis.pair_guess} ${direction} Signal`,
+      description: "Vertex Signal — not financial advice, trade your own plan.",
+      tags: ["forex", "trading", "signals", analysis.pair_guess].filter(Boolean)
+    });
+    console.log("Auto-posted scan video to YouTube:", result.url);
+    return true;
+  } finally {
+    require("fs").unlink(videoPath, () => {});
+  }
+}
+
+// When King scans a pair himself and it comes back with an actual trade plan,
+// automatically build a recap video and upload it to YouTube. Never blocks
+// or affects the scan response — any failure here is just logged.
 async function autoPostScanVideo(user, analysis) {
   try {
     if ((user.email || "").toLowerCase() !== ADMIN_EMAIL) return;
-    const entry = analysis.potential_entries?.[0];
-    const target = analysis.take_profit?.[0];
-    if (!entry || !target || analysis.stop_loss?.value_raw == null) return; // "no clean setup" scans stay quiet
-    const direction = entry.type === "Long" ? "BUY" : "SELL";
-    const videoPath = await generateTradeVideo({
-      pair: analysis.pair_guess || "—",
-      direction,
-      entry: entry.entry_zone,
-      sl: analysis.stop_loss.suggestion,
-      tp: target.target,
-      confidence: analysis.confidence,
-      handle: "@VertexScanner"
-    });
-    try {
-      const result = await uploadToYoutube(videoPath, {
-        title: `${analysis.pair_guess} ${direction} Signal`,
-        description: "Vertex Signal — not financial advice, trade your own plan.",
-        tags: ["forex", "trading", "signals", analysis.pair_guess].filter(Boolean)
-      });
-      console.log("Auto-posted scan video to YouTube:", result.url);
-    } finally {
-      require("fs").unlink(videoPath, () => {});
-    }
+    await postTradeVideoIfValid(analysis);
   } catch (err) {
     console.error("Auto-post scan video failed:", err.message);
   }
+}
+
+// --- Automatic scan-and-post cycle ------------------------------------------
+// Runs on its own, independent of anyone opening the app: every
+// AUTO_POST_INTERVAL_MS it scans the next pair in rotation directly against
+// FXSynapse (no logged-in user needed, no credits spent — this hits the
+// provider the same way a manual scan does but doesn't touch scan/credit
+// limits since nothing here is billed to an account) and posts a video if
+// there's an actual trade plan. Off entirely unless YouTube is connected.
+const AUTO_POST_INTERVAL_MS = 40 * 60 * 1000;
+const AUTO_POST_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "US30", "NAS100"];
+const AUTO_POST_TIMEFRAME = "M15";
+let autoPostSymbolIndex = 0;
+
+async function runAutoPostCycle() {
+  const symbol = AUTO_POST_SYMBOLS[autoPostSymbolIndex % AUTO_POST_SYMBOLS.length];
+  autoPostSymbolIndex += 1;
+  try {
+    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_CHART_PATH}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${FXSYNAPSE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, timeframe: AUTO_POST_TIMEFRAME, top_down: true }),
+      signal: AbortSignal.timeout(55000)
+    });
+    if (!fxRes.ok) {
+      console.error(`Auto-post cycle: FXSynapse ${fxRes.status} for ${symbol}`);
+      return;
+    }
+    const fxData = await fxRes.json();
+    const analysis = mapFxSynapseToAnalysis(fxData);
+    const posted = await postTradeVideoIfValid(analysis);
+    if (!posted) console.log(`Auto-post cycle: no clean setup on ${symbol}, skipped.`);
+  } catch (err) {
+    console.error(`Auto-post cycle failed for ${symbol}:`, err.message);
+  }
+}
+
+if ((process.env.YOUTUBE_REFRESH_TOKEN || "").trim()) {
+  setInterval(runAutoPostCycle, AUTO_POST_INTERVAL_MS);
+  console.log(`Auto-post cycle active: scanning + posting every ${AUTO_POST_INTERVAL_MS / 60000} minutes.`);
 }
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.
