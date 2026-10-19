@@ -740,6 +740,87 @@ app.post("/api/admin/unlock", adminPinLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
+// --- YouTube auto-post connection -------------------------------------------
+// One-time admin step: King authorizes Vertex's Google Cloud OAuth client to
+// upload videos to his YouTube channel. Google hands back a refresh_token,
+// which is what lets the server upload videos later without King logging in
+// again. Render's disk isn't persistent across deploys, so instead of saving
+// the refresh_token to a file, this just displays it once for King to copy —
+// it then gets set as the YOUTUBE_REFRESH_TOKEN env var on Render.
+const YOUTUBE_CLIENT_ID = (process.env.YOUTUBE_CLIENT_ID || "").trim();
+const YOUTUBE_CLIENT_SECRET = (process.env.YOUTUBE_CLIENT_SECRET || "").trim();
+const YOUTUBE_REDIRECT_URI = (process.env.YOUTUBE_REDIRECT_URI || "").trim();
+const YOUTUBE_OAUTH_STATE_COOKIE = "vx_yt_oauth_state";
+
+// Gated the same way as /admin itself (PIN cookie), since this is a sensitive
+// one-time setup action, not a regular logged-in-user feature.
+app.get("/api/admin/youtube/connect", (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).send("Unlock /admin with the PIN first, then try this link again.");
+  }
+  if (!YOUTUBE_CLIENT_ID || !YOUTUBE_REDIRECT_URI) {
+    return res.status(500).send("YOUTUBE_CLIENT_ID / YOUTUBE_REDIRECT_URI are not set on the server yet.");
+  }
+  const state = crypto.randomBytes(16).toString("hex");
+  res.set(
+    "Set-Cookie",
+    `${YOUTUBE_OAUTH_STATE_COOKIE}=${state}; Max-Age=600; Path=/; HttpOnly; SameSite=Lax${req.secure ? "; Secure" : ""}`
+  );
+  const params = new URLSearchParams({
+    client_id: YOUTUBE_CLIENT_ID,
+    redirect_uri: YOUTUBE_REDIRECT_URI,
+    response_type: "code",
+    scope: "https://www.googleapis.com/auth/youtube.upload",
+    access_type: "offline",
+    prompt: "consent",
+    state
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+});
+
+app.get("/api/admin/youtube/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return res.status(400).send(`Google said: ${error}`);
+  const cookieMatch = /(?:^|;\s*)vx_yt_oauth_state=([^;]+)/.exec(req.headers.cookie || "");
+  const expectedState = cookieMatch ? cookieMatch[1] : null;
+  if (!state || !expectedState || state !== expectedState) {
+    return res.status(400).send("State mismatch — please start again from the Connect YouTube link.");
+  }
+  if (!code) return res.status(400).send("Missing code from Google.");
+  try {
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: YOUTUBE_CLIENT_ID,
+        client_secret: YOUTUBE_CLIENT_SECRET,
+        redirect_uri: YOUTUBE_REDIRECT_URI,
+        grant_type: "authorization_code"
+      })
+    });
+    const data = await tokenRes.json();
+    if (!tokenRes.ok || !data.refresh_token) {
+      console.error("YouTube token exchange failed:", data);
+      return res
+        .status(502)
+        .send(
+          `Google did not return a refresh token (${data.error || "unknown error"}). This usually means you've already connected once before — remove Vertex's access at https://myaccount.google.com/permissions and try the Connect link again.`
+        );
+    }
+    res.type("html").send(`
+      <body style="font-family:system-ui;background:#0a0d12;color:#dde3ea;padding:40px;">
+        <h2>YouTube connected</h2>
+        <p>Copy this and send it back in chat — it will be saved as a server setting, then this page is done being needed:</p>
+        <textarea readonly style="width:100%;max-width:600px;height:80px;font-family:monospace;font-size:13px;">${data.refresh_token}</textarea>
+      </body>
+    `);
+  } catch (err) {
+    console.error("YouTube OAuth callback error:", err.message);
+    res.status(502).send("Could not reach Google to finish connecting. Try the Connect link again.");
+  }
+});
+
 // Tracked social links — put these in TikTok/Instagram/YouTube/Facebook
 // bios instead of the raw profile URLs. Logging and the email alert are
 // both fire-and-forget: a slow Supabase or Resend call never delays the
