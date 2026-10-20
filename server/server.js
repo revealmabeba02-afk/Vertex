@@ -828,11 +828,24 @@ app.get("/api/admin/youtube/callback", async (req, res) => {
 const { generateTradeVideo } = require("./video/generateTradeVideo");
 const { uploadVideo: uploadToYoutube } = require("./video/youtubeUpload");
 
+// No-parameter version for a plain link that can't get mangled by a
+// messaging app trimming a URL at its "&" characters — fixed demo numbers,
+// just proves the generate-and-upload pipeline itself works end to end.
+app.get("/api/admin/videos/demo-post", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).send("Unlock /admin with the PIN first, then try this link again.");
+  }
+  req.query = { pair: "XAUUSD", direction: "BUY", entry: "3640", sl: "3630", tp: "3660" };
+  return quickPostHandler(req, res);
+});
+
 // One-click version of the route below for when typing into a form isn't
 // convenient — same PIN gate, just reads from the URL's query string and
 // always uploads straight to YouTube. Example:
 // /api/admin/videos/quick-post?pair=XAUUSD&direction=BUY&entry=3640&sl=3630&tp=3660
-app.get("/api/admin/videos/quick-post", async (req, res) => {
+app.get("/api/admin/videos/quick-post", quickPostHandler);
+
+async function quickPostHandler(req, res) {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     return res.status(401).send("Unlock /admin with the PIN first, then try this link again.");
   }
@@ -864,7 +877,7 @@ app.get("/api/admin/videos/quick-post", async (req, res) => {
     console.error("Quick-post video failed:", err.message);
     res.status(502).send(`Failed: ${err.message}`);
   }
-});
+}
 
 app.post("/api/admin/videos/generate", upload.single("chart"), async (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
