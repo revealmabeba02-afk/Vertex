@@ -546,6 +546,13 @@
     background: var(--panel-alt);
     border-color: var(--border);
   }
+  .command-rail a.is-active {
+    color: #0a0d12;
+    background: var(--bull, #3ddc84);
+    border-color: var(--bull, #3ddc84);
+  }
+  .command-panel { display: none; }
+  .command-panel.is-active { display: block; }
   .command-main {
     flex: 1;
     min-width: 0;
@@ -660,20 +667,21 @@
 <div class="command-shell">
 <nav class="command-rail" aria-label="Admin sections">
   <div class="command-rail__mark" aria-hidden="true"></div>
-  <a href="#sec-overview" title="Overview" data-full="Overview">OV</a>
-  <a href="#sec-video" title="Post a video" data-full="Video">VD</a>
-  <a href="#sec-ai" title="Q2 / Q3" data-full="AI">AI</a>
-  <a href="#sec-health" title="Health" data-full="Health">HP</a>
-  <a href="#sec-orders" title="Orders" data-full="Orders">$</a>
-  <a href="#sec-stats" title="Stats" data-full="Stats">#</a>
-  <a href="#sec-users" title="Users" data-full="Users">U</a>
-  <a href="#sec-clicks" title="Link clicks" data-full="Clicks">LK</a>
-  <a href="#sec-planner" title="Content planner" data-full="Planner">PL</a>
-  <a href="#sec-support" title="Support" data-full="Support">SU</a>
-  <a href="#sec-feedback" title="Feedback" data-full="Feedback">FB</a>
+  <a href="#overview" data-panel-link="overview" title="Overview" data-full="Overview">OV</a>
+  <a href="#video" data-panel-link="video" title="Post a video" data-full="Video">VD</a>
+  <a href="#ai" data-panel-link="ai" title="Q2 / Q3" data-full="AI">AI</a>
+  <a href="#health" data-panel-link="health" title="Health" data-full="Health">HP</a>
+  <a href="#orders" data-panel-link="orders" title="Orders" data-full="Orders">$</a>
+  <a href="#stats" data-panel-link="stats" title="Stats" data-full="Stats">#</a>
+  <a href="#users" data-panel-link="users" title="Users" data-full="Users">U</a>
+  <a href="#clicks" data-panel-link="clicks" title="Link clicks" data-full="Clicks">LK</a>
+  <a href="#planner" data-panel-link="planner" title="Content planner" data-full="Planner">PL</a>
+  <a href="#support" data-panel-link="support" title="Support" data-full="Support">SU</a>
+  <a href="#feedback" data-panel-link="feedback" title="Feedback" data-full="Feedback">FB</a>
 </nav>
 <main class="admin-wrap command-main">
-  <p class="eyebrow" id="sec-overview">
+<div class="command-panel" data-panel="overview">
+  <p class="eyebrow">
     <span class="eyebrow__dot" aria-hidden="true"></span>
     Admin
   </p>
@@ -684,7 +692,9 @@
     <div class="briefing-card__label"><span class="briefing-card__dot" aria-hidden="true"></span>Vertex Scanner Briefing</div>
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="video">
   <div class="q2-card" id="sec-video">
     <div class="q2-card__head">
       <div>
@@ -694,7 +704,9 @@
       <a href="/api/admin/videos/upload-raw-form" style="flex-shrink:0;padding:10px 18px;border-radius:10px;background:var(--bull,#3ddc84);color:#0a0d12;font-weight:700;text-decoration:none;white-space:nowrap;">Open</a>
     </div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="ai">
   <div class="q2-card" id="sec-ai">
     <div class="q2-card__head">
       <div>
@@ -720,7 +732,9 @@
     </div>
     <div class="q2-card__status" id="q3-status"></div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="health">
   <div class="health-card" id="sec-health">
     <div>
       <div class="health-card__percent" id="health-percent">—</div>
@@ -730,13 +744,17 @@
       <div class="health-check">Loading health…</div>
     </div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="orders">
   <div class="orders-card" id="sec-orders">
     <div class="users-card__head">Pending payments</div>
     <div id="orders-list"></div>
     <div class="users-empty" id="orders-empty">Loading…</div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="stats">
   <div class="admin-stats" id="sec-stats">
     <div class="stat-card">
       <div class="stat-card__label">Total signed-up users</div>
@@ -761,7 +779,9 @@
   </div>
 
   <p class="admin-status" id="admin-status">Loading…</p>
+</div>
 
+<div class="command-panel" data-panel="users">
   <div class="users-card" id="sec-users">
     <div class="users-card__head">Users</div>
     <div class="users-table-wrap">
@@ -780,13 +800,17 @@
       <div class="users-empty" id="users-empty">Loading…</div>
     </div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="clicks">
   <div class="clicks-card" id="sec-clicks">
     <div class="users-card__head">Link clicks (TikTok · Instagram · YouTube · Facebook)</div>
     <div id="clicks-list"></div>
     <div class="users-empty" id="clicks-empty">Loading…</div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="planner">
   <div class="planner-card" id="sec-planner">
     <div class="users-card__head">Content planner</div>
     <form class="planner-form" id="planner-form">
@@ -803,18 +827,23 @@
     <div id="planner-list"></div>
     <div class="users-empty" id="planner-empty">Loading…</div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="support">
   <div class="support-card" id="sec-support">
     <div class="users-card__head">Support messages</div>
     <div id="support-list"></div>
     <div class="users-empty" id="support-empty">Loading…</div>
   </div>
+</div>
 
+<div class="command-panel" data-panel="feedback">
   <div class="support-card" id="sec-feedback">
     <div class="users-card__head">Feature requests &amp; feedback</div>
     <div id="feedback-list"></div>
     <div class="users-empty" id="feedback-empty">Loading…</div>
   </div>
+</div>
 </main>
 </div>
 
@@ -827,6 +856,33 @@
       a.textContent = a.getAttribute("data-full");
     });
   }
+
+  (function () {
+    const links = document.querySelectorAll(".command-rail a[data-panel-link]");
+    const panels = document.querySelectorAll(".command-panel[data-panel]");
+    function showPanel(name) {
+      let matched = false;
+      panels.forEach((p) => {
+        const on = p.getAttribute("data-panel") === name;
+        p.classList.toggle("is-active", on);
+        if (on) matched = true;
+      });
+      if (!matched && panels.length) panels[0].classList.add("is-active");
+      links.forEach((l) => l.classList.toggle("is-active", l.getAttribute("data-panel-link") === name));
+    }
+    links.forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const name = link.getAttribute("data-panel-link");
+        showPanel(name);
+        history.replaceState(null, "", "#" + name);
+        link.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+    const initial = (location.hash || "#overview").slice(1);
+    showPanel(initial);
+  })();
 </script>
 <script>
   (async () => {
