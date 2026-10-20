@@ -2696,10 +2696,16 @@ async function runAutoPostCycle() {
   }
 }
 
-if ((process.env.YOUTUBE_REFRESH_TOKEN || "").trim()) {
-  setInterval(runAutoPostCycle, AUTO_POST_INTERVAL_MS);
-  console.log(`Auto-post cycle active: scanning + posting every ${AUTO_POST_INTERVAL_MS / 60000} minutes.`);
-}
+// Disabled for now: this was running fine for 4.5 hours, then the server
+// started OOM-killing itself every few minutes on Render's free 512MB plan
+// shortly after being turned on. Root cause isn't confirmed yet — rather
+// than risk the whole site crash-looping overnight again, the automatic
+// timer is off until that's tracked down. runAutoPostCycle() still works
+// fine called on demand (e.g. from a route or an external scheduled ping).
+// if ((process.env.YOUTUBE_REFRESH_TOKEN || "").trim()) {
+//   setInterval(runAutoPostCycle, AUTO_POST_INTERVAL_MS);
+//   console.log(`Auto-post cycle active: scanning + posting every ${AUTO_POST_INTERVAL_MS / 60000} minutes.`);
+// }
 
 // Unknown API routes get JSON; unknown pages go back to the landing page.
 app.use("/api", (req, res) => res.status(404).json({ error: "Not found." }));
