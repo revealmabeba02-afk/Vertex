@@ -576,7 +576,33 @@
   }
   .command-section-label:first-of-type { margin-top: 6px; }
   @media (max-width: 760px) {
-    .command-rail { display: none; }
+    .command-shell { flex-direction: column; }
+    .command-rail {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      width: 100%;
+      height: auto;
+      flex-direction: row;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: visible;
+      padding: 10px 12px;
+      gap: 8px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .command-rail__mark { display: none; }
+    .command-rail a {
+      width: auto;
+      height: 32px;
+      padding: 0 12px;
+      flex: none;
+      white-space: nowrap;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      font-size: 12px;
+    }
   }
 </style>
 </head>
@@ -634,16 +660,17 @@
 <div class="command-shell">
 <nav class="command-rail" aria-label="Admin sections">
   <div class="command-rail__mark" aria-hidden="true"></div>
-  <a href="#sec-overview" title="Overview">OV</a>
-  <a href="#sec-ai" title="Q2 / Q3">AI</a>
-  <a href="#sec-health" title="Health">HP</a>
-  <a href="#sec-orders" title="Orders">$</a>
-  <a href="#sec-stats" title="Stats">#</a>
-  <a href="#sec-users" title="Users">U</a>
-  <a href="#sec-clicks" title="Link clicks">LK</a>
-  <a href="#sec-planner" title="Content planner">PL</a>
-  <a href="#sec-support" title="Support">SU</a>
-  <a href="#sec-feedback" title="Feedback">FB</a>
+  <a href="#sec-overview" title="Overview" data-full="Overview">OV</a>
+  <a href="#sec-video" title="Post a video" data-full="Video">VD</a>
+  <a href="#sec-ai" title="Q2 / Q3" data-full="AI">AI</a>
+  <a href="#sec-health" title="Health" data-full="Health">HP</a>
+  <a href="#sec-orders" title="Orders" data-full="Orders">$</a>
+  <a href="#sec-stats" title="Stats" data-full="Stats">#</a>
+  <a href="#sec-users" title="Users" data-full="Users">U</a>
+  <a href="#sec-clicks" title="Link clicks" data-full="Clicks">LK</a>
+  <a href="#sec-planner" title="Content planner" data-full="Planner">PL</a>
+  <a href="#sec-support" title="Support" data-full="Support">SU</a>
+  <a href="#sec-feedback" title="Feedback" data-full="Feedback">FB</a>
 </nav>
 <main class="admin-wrap command-main">
   <p class="eyebrow" id="sec-overview">
@@ -794,6 +821,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <script src="/config.js"></script>
 <script src="/auth-client.js"></script>
+<script>
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    document.querySelectorAll(".command-rail a[data-full]").forEach((a) => {
+      a.textContent = a.getAttribute("data-full");
+    });
+  }
+</script>
 <script>
   (async () => {
     const { Auth } = window;
