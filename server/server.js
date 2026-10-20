@@ -897,6 +897,44 @@ const uploadRawVideo = multer({
   }
 });
 
+// Simple phone-friendly upload form — pick a video, type a title, hit post.
+app.get("/api/admin/videos/upload-raw-form", (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).send("Unlock /admin with the PIN first, then try this link again.");
+  }
+  res.type("html").send(`
+    <body style="font-family:system-ui;background:#0a0d12;color:#dde3ea;padding:24px;max-width:480px;margin:0 auto;">
+      <h2>Post a video to YouTube</h2>
+      <form id="f" style="display:flex;flex-direction:column;gap:12px;">
+        <label>Video file<br><input type="file" name="video" accept="video/*" required></label>
+        <label>Title<br><input type="text" name="title" placeholder="Vertex Signal" style="width:100%;padding:8px;"></label>
+        <label>Description<br><textarea name="description" style="width:100%;padding:8px;height:70px;"></textarea></label>
+        <label><input type="checkbox" name="public" id="pub"> Post as public (default: unlisted)</label>
+        <button type="submit" style="padding:12px;font-size:16px;background:#3ddc84;border:0;border-radius:8px;">Upload & Post</button>
+      </form>
+      <p id="status" style="margin-top:16px;"></p>
+      <script>
+        document.getElementById('f').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const status = document.getElementById('status');
+          status.textContent = 'Uploading...';
+          const fd = new FormData(e.target);
+          if (document.getElementById('pub').checked) fd.set('privacyStatus', 'public');
+          fd.delete('public');
+          try {
+            const res = await fetch('/api/admin/videos/upload-raw', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || res.status);
+            status.innerHTML = 'Posted! <a href="' + data.url + '" style="color:#3ddc84;">' + data.url + '</a>';
+          } catch (err) {
+            status.textContent = 'Failed: ' + err.message;
+          }
+        });
+      </script>
+    </body>
+  `);
+});
+
 app.post("/api/admin/videos/upload-raw", uploadRawVideo.single("video"), async (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     require("fs").unlink(req.file?.path || "", () => {});
