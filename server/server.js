@@ -879,6 +879,49 @@ async function quickPostHandler(req, res) {
   }
 }
 
+// Posts a video King already made/recorded himself, straight to YouTube —
+// no generation step, just upload. Disk storage (not memory) since these
+// files run tens of MB, which would be a bad idea to hold in RAM on a
+// 512MB instance; the temp file is deleted right after upload either way.
+const uploadRawVideo = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, require("os").tmpdir()),
+    filename: (req, file, cb) => cb(null, `vx-raw-${crypto.randomBytes(6).toString("hex")}.mp4`)
+  }),
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!/^video\//.test(file.mimetype)) {
+      return cb(new Error("Please upload a video file."));
+    }
+    cb(null, true);
+  }
+});
+
+app.post("/api/admin/videos/upload-raw", uploadRawVideo.single("video"), async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    require("fs").unlink(req.file?.path || "", () => {});
+    return res.status(401).json({ error: "Unlock /admin first." });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "No video file received (field name must be 'video')." });
+  }
+  const { title, description, privacyStatus } = req.body || {};
+  try {
+    const result = await uploadToYoutube(req.file.path, {
+      title: title || "Vertex Signal",
+      description: description || "Not financial advice — trade your own plan.",
+      tags: ["forex", "trading", "signals"],
+      privacyStatus: privacyStatus || "unlisted"
+    });
+    res.json({ uploaded: true, ...result });
+  } catch (err) {
+    console.error("Raw video upload failed:", err.message);
+    res.status(502).json({ error: err.message });
+  } finally {
+    require("fs").unlink(req.file.path, () => {});
+  }
+});
+
 app.post("/api/admin/videos/generate", upload.single("chart"), async (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     return res.status(401).json({ error: "Unlock /admin first." });
