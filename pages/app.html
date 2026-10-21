@@ -36,6 +36,18 @@
 <style>.auth-check body { visibility: hidden; }</style>
 <noscript><style>.auth-check body { visibility: visible; }</style></noscript>
 <script>setTimeout(function () { document.documentElement.classList.remove("auth-check"); }, 4000);</script>
+<!-- Flat corners on the scan-result screen only, to match the admin page's
+     new look — the rest of the app (landing, login, etc.) is untouched. -->
+<style>
+  #state-result,
+  #state-result *,
+  #state-result button,
+  #state-result input,
+  #state-result select,
+  #state-result textarea {
+    border-radius: 0 !important;
+  }
+</style>
 </head>
 <body>
 
