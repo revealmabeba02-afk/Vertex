@@ -2235,6 +2235,79 @@ app.post("/api/admin/q2", requireUser, async (req, res) => {
   }
 });
 
+// Q2 Insight — "what do people actually think of the app". Pulls recent
+// support messages and feedback, and has the same AI read between the lines
+// for real sentiment/pain points rather than just listing the raw messages
+// back. On-demand (button in admin), not automatic — keeps it cheap and
+// means it never runs without King asking for it.
+const Q2_INSIGHT_SYSTEM_PROMPT = `You are a sharp, honest intelligence aide reporting to the owner of "Vertex Chart Scanner" on what users actually think of the app, based on their real support messages and feedback submissions. Address the owner as "sir". Be direct and unflattering where warranted — this is a status report, not PR. Call out: recurring complaints or bugs, anything people praise, feature requests worth taking seriously, and the overall mood (frustrated, happy, indifferent). If there's too little data to say anything meaningful, say so plainly rather than inventing a read. Keep it under 150 words, plain text, no markdown.`;
+
+async function aiQ2Insight(supportMessages, feedbackMessages) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 400,
+        system: Q2_INSIGHT_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: JSON.stringify({ supportMessages, feedbackMessages })
+          }
+        ]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const result = await r.json();
+    if (!r.ok) {
+      console.error("Q2 insight AI error:", r.status, result);
+      return null;
+    }
+    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
+    return text.trim() || null;
+  } catch (err) {
+    console.error("Q2 insight AI failed:", err.message);
+    return null;
+  }
+}
+
+app.get("/api/admin/q2/insight", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const [supportMessages, feedbackMessages] = await Promise.all([
+      supabaseRpc("admin_list_support_messages", {}, req.user.token).catch(() => []),
+      supabaseRpc("admin_list_feedback", {}, req.user.token).catch(() => [])
+    ]);
+    const supportCount = Array.isArray(supportMessages) ? supportMessages.length : 0;
+    const feedbackCount = Array.isArray(feedbackMessages) ? feedbackMessages.length : 0;
+    if (!supportCount && !feedbackCount) {
+      return res.json({ summary: "No support messages or feedback yet, sir — nothing to read into." });
+    }
+    const summary = await aiQ2Insight(
+      (Array.isArray(supportMessages) ? supportMessages : []).slice(0, 30),
+      (Array.isArray(feedbackMessages) ? feedbackMessages : []).slice(0, 30)
+    );
+    res.json({
+      summary: summary || `Could not reach the AI right now, sir. Raw counts: ${supportCount} support message(s), ${feedbackCount} feedback item(s).`,
+      supportCount,
+      feedbackCount
+    });
+  } catch (err) {
+    console.error("Q2 insight error:", err.message);
+    res.status(502).json({ error: "Could not build the insight report." });
+  }
+});
+
 app.get("/api/admin/q3", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {

@@ -756,6 +756,17 @@
     </div>
     <div class="q2-card__status" id="q3-status"></div>
   </div>
+
+  <div class="q2-card">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Q2 Insight — what people think</div>
+        <div class="q2-card__desc">Reads your support messages and feedback and reports back honestly: complaints, praise, mood, what's worth fixing. Runs on demand, not automatically.</div>
+      </div>
+      <button type="button" class="btn btn--primary" id="q2-insight-run" style="flex-shrink:0;white-space:nowrap;">Run report</button>
+    </div>
+    <div class="q2-card__status" id="q2-insight-status" style="white-space:pre-wrap;"></div>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="health">
@@ -943,6 +954,7 @@
     loadFeedback(authHeader);
     wireQ2Toggle(authHeader);
     wireQ3Toggle(authHeader);
+    wireQ2Insight(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
     loadLinkClicks(authHeader);
@@ -1396,6 +1408,32 @@
           statusEl.textContent = "Could not reach the server.";
         } finally {
           toggleEl.disabled = false;
+        }
+      });
+    }
+
+    async function wireQ2Insight(authHeader) {
+      const btn = document.getElementById("q2-insight-run");
+      const statusEl = document.getElementById("q2-insight-status");
+      if (!btn || !statusEl) return;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = "Reading…";
+        statusEl.textContent = "";
+        try {
+          const res = await fetch("/api/admin/q2/insight", { headers: authHeader });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not build the report.";
+            return;
+          }
+          statusEl.textContent = data.summary || "Nothing came back.";
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original;
         }
       });
     }
