@@ -767,6 +767,17 @@
     </div>
     <div class="q2-card__status" id="q2-insight-status" style="white-space:pre-wrap;"></div>
   </div>
+
+  <div class="q2-card">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Q2 Insight — YouTube comments</div>
+        <div class="q2-card__desc">Reads comments on your recent YouTube videos and reports real viewer reactions: praise, doubt, questions, what's landing and what isn't.</div>
+      </div>
+      <button type="button" class="btn btn--primary" id="q2-yt-insight-run" style="flex-shrink:0;white-space:nowrap;">Run report</button>
+    </div>
+    <div class="q2-card__status" id="q2-yt-insight-status" style="white-space:pre-wrap;"></div>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="health">
@@ -955,6 +966,7 @@
     wireQ2Toggle(authHeader);
     wireQ3Toggle(authHeader);
     wireQ2Insight(authHeader);
+    wireQ2YoutubeInsight(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
     loadLinkClicks(authHeader);
@@ -1423,6 +1435,32 @@
         statusEl.textContent = "";
         try {
           const res = await fetch("/api/admin/q2/insight", { headers: authHeader });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not build the report.";
+            return;
+          }
+          statusEl.textContent = data.summary || "Nothing came back.";
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      });
+    }
+
+    async function wireQ2YoutubeInsight(authHeader) {
+      const btn = document.getElementById("q2-yt-insight-run");
+      const statusEl = document.getElementById("q2-yt-insight-status");
+      if (!btn || !statusEl) return;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = "Reading…";
+        statusEl.textContent = "";
+        try {
+          const res = await fetch("/api/admin/q2/youtube-insight", { headers: authHeader });
           const data = await res.json().catch(() => null);
           if (!res.ok) {
             statusEl.textContent = (data && data.error) || "Could not build the report.";

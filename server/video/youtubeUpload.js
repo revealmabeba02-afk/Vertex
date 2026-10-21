@@ -72,4 +72,62 @@ async function uploadVideo(filePath, { title, description, tags, privacyStatus =
   return { videoId: data.id, url: `https://youtube.com/shorts/${data.id}` };
 }
 
-module.exports = { uploadVideo, getAccessToken };
+// --- Reading comments back (the "spy" side) --------------------------------
+// Used by Q2 Insight's YouTube report: pulls recent videos from the channel,
+// then the top comments on each, so the AI can read real viewer reactions
+// instead of just upload counts.
+
+async function listRecentVideos(accessToken, maxVideos = 5) {
+  // mine=true needs the uploader's own OAuth token (which is what we have) —
+  // no channel ID to hardcode or keep in sync.
+  const channelRes = await fetch(
+    "https://www.googleapis.com/youtube/v3/channels?part=contentDetails&mine=true",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const channelData = await channelRes.json();
+  if (!channelRes.ok) {
+    throw new Error(`Could not read channel: ${JSON.stringify(channelData.error || channelData)}`);
+  }
+  const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylistId) return [];
+
+  const itemsRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxVideos}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const itemsData = await itemsRes.json();
+  if (!itemsRes.ok) {
+    throw new Error(`Could not list videos: ${JSON.stringify(itemsData.error || itemsData)}`);
+  }
+  return (itemsData.items || []).map((item) => ({
+    videoId: item.snippet?.resourceId?.videoId,
+    title: item.snippet?.title,
+    publishedAt: item.snippet?.publishedAt
+  })).filter((v) => v.videoId);
+}
+
+// Comments are disabled/unavailable on some videos (e.g. still processing,
+// or comments off) — that's normal, not an error, so this returns [] rather
+// than throwing when the API says so.
+async function listComments(accessToken, videoId, maxComments = 20) {
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=${maxComments}&order=relevance&textFormat=plainText`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    // commentsDisabled, videoNotFound, etc. — skip quietly rather than fail
+    // the whole report over one video.
+    return [];
+  }
+  return (data.items || []).map((item) => {
+    const top = item.snippet?.topLevelComment?.snippet;
+    return {
+      author: top?.authorDisplayName || "—",
+      text: top?.textDisplay || "",
+      likeCount: top?.likeCount ?? 0
+    };
+  });
+}
+
+module.exports = { uploadVideo, getAccessToken, listRecentVideos, listComments };

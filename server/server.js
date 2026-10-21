@@ -2308,6 +2308,79 @@ app.get("/api/admin/q2/insight", requireUser, async (req, res) => {
   }
 });
 
+// Same idea as /api/admin/q2/insight, but reading YouTube comments instead
+// of in-app support/feedback — what actual viewers say under the videos,
+// not just the people who bothered to message support.
+const Q2_YOUTUBE_INSIGHT_SYSTEM_PROMPT = `You are a sharp, honest intelligence aide reporting to the owner of "Vertex Chart Scanner" on how viewers are reacting to his YouTube videos, based on real comment data (video title, and each comment's text and like count). Address the owner as "sir". Be direct — this is a status report, not PR. Call out: genuine praise vs skepticism/doubt (e.g. "is this real?"), questions people keep asking, anything mocked or criticized, and the overall mood. Note which specific video is getting the strongest reaction if one stands out. If there's too little data to say anything meaningful, say so plainly rather than inventing a read. Keep it under 150 words, plain text, no markdown.`;
+
+async function aiQ2YoutubeInsight(videosWithComments) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 400,
+        system: Q2_YOUTUBE_INSIGHT_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: JSON.stringify(videosWithComments) }]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const result = await r.json();
+    if (!r.ok) {
+      console.error("Q2 YouTube insight AI error:", r.status, result);
+      return null;
+    }
+    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
+    return text.trim() || null;
+  } catch (err) {
+    console.error("Q2 YouTube insight AI failed:", err.message);
+    return null;
+  }
+}
+
+app.get("/api/admin/q2/youtube-insight", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const { getAccessToken, listRecentVideos, listComments } = require("./video/youtubeUpload");
+    const accessToken = await getAccessToken();
+    const videos = await listRecentVideos(accessToken, 5);
+    if (!videos.length) {
+      return res.json({ summary: "No videos found on the connected YouTube channel yet, sir." });
+    }
+    const videosWithComments = [];
+    let totalComments = 0;
+    for (const v of videos) {
+      const comments = await listComments(accessToken, v.videoId, 20);
+      totalComments += comments.length;
+      videosWithComments.push({ title: v.title, publishedAt: v.publishedAt, comments });
+    }
+    if (!totalComments) {
+      return res.json({
+        summary: "No comments yet on the recent videos, sir — too early to read reactions.",
+        videoCount: videos.length,
+        commentCount: 0
+      });
+    }
+    const summary = await aiQ2YoutubeInsight(videosWithComments);
+    res.json({
+      summary: summary || `Could not reach the AI right now, sir. Raw counts: ${videos.length} video(s), ${totalComments} comment(s).`,
+      videoCount: videos.length,
+      commentCount: totalComments
+    });
+  } catch (err) {
+    console.error("Q2 YouTube insight error:", err.message);
+    res.status(502).json({ error: err.message || "Could not build the YouTube report." });
+  }
+});
+
 app.get("/api/admin/q3", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
