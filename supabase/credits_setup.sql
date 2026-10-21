@@ -334,7 +334,7 @@ begin
   end if;
 
   return query
-    select co.id, co.user_id, u.email, co.bundle, co.scans, co.amount_usd, co.created_at
+    select co.id, co.user_id, u.email::text, co.bundle, co.scans, co.amount_usd, co.created_at
     from public.credit_orders co
     join auth.users u on u.id = co.user_id
     where co.status = 'pending'

@@ -975,9 +975,21 @@
       panels.forEach((p) => {
         const on = p.getAttribute("data-panel") === name;
         p.classList.toggle("is-active", on);
-        if (on) matched = true;
+        if (on) {
+          matched = true;
+          // Some panels (clicks, q2 insight, etc.) get their content
+          // written into the DOM by a fetch that resolves while the panel
+          // is still display:none (before the user ever clicks its tab).
+          // Mobile Safari sometimes fails to repaint that content once the
+          // panel becomes visible — forcing a layout read here makes it
+          // recompute and actually paint the already-populated content.
+          void p.offsetHeight;
+        }
       });
-      if (!matched && panels.length) panels[0].classList.add("is-active");
+      if (!matched && panels.length) {
+        panels[0].classList.add("is-active");
+        void panels[0].offsetHeight;
+      }
       links.forEach((l) => l.classList.toggle("is-active", l.getAttribute("data-panel-link") === name));
     }
     links.forEach((link) => {
