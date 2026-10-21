@@ -553,6 +553,30 @@
   }
   .command-panel { display: none; }
   .command-panel.is-active { display: block; }
+
+  /* King doesn't like rounded corners on this page — flatten everything. */
+  .command-shell,
+  .command-rail,
+  .command-rail a,
+  .command-main .briefing-card,
+  .command-main .q2-card,
+  .command-main .q2-toggle,
+  .command-main .health-card,
+  .command-main .orders-card,
+  .command-main .pattern-card,
+  .command-main .users-card,
+  .command-main .clicks-card,
+  .command-main .planner-card,
+  .command-main .support-card,
+  .command-main .stat-card,
+  .command-main .users-table,
+  .command-main input,
+  .command-main select,
+  .command-main textarea,
+  .command-main button,
+  .command-main a {
+    border-radius: 0 !important;
+  }
   .command-main {
     flex: 1;
     min-width: 0;
