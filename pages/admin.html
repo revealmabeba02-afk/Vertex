@@ -554,6 +554,55 @@
   .command-panel { display: none; }
   .command-panel.is-active { display: block; }
 
+  .q2-chat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 60vh;
+  }
+  .q2-chat-card__title { font-size: 18px; font-weight: 800; }
+  .q2-chat-card__desc { font-size: 13px; color: var(--text-faint); margin-top: 4px; }
+  .q2-chat-log {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .q2-chat-msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+  .q2-chat-msg--user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #0a0d12;
+  }
+  .q2-chat-msg--q2 {
+    align-self: flex-start;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .q2-chat-msg--pending { opacity: 0.6; font-style: italic; }
+  .q2-chat-form { display: flex; gap: 8px; }
+  .q2-chat-form input {
+    flex: 1;
+    padding: 12px 14px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 14px;
+  }
+
   /* King doesn't like rounded corners on this page — flatten everything. */
   .command-shell,
   .command-rail,
@@ -692,6 +741,7 @@
 <nav class="command-rail" aria-label="Admin sections">
   <div class="command-rail__mark" aria-hidden="true"></div>
   <a href="#overview" data-panel-link="overview" title="Overview" data-full="Overview">OV</a>
+  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2" data-full="Q2">Q2</a>
   <a href="#video" data-panel-link="video" title="Post a video" data-full="Video">VD</a>
   <a href="#ai" data-panel-link="ai" title="Q2 / Q3" data-full="AI">AI</a>
   <a href="#health" data-panel-link="health" title="Health" data-full="Health">HP</a>
@@ -715,6 +765,20 @@
   <div class="briefing-card">
     <div class="briefing-card__label"><span class="briefing-card__dot" aria-hidden="true"></span>Vertex Scanner Briefing</div>
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="q2chat">
+  <div class="q2-chat-card">
+    <div class="q2-chat-card__head">
+      <div class="q2-chat-card__title">Q2</div>
+      <div class="q2-chat-card__desc">Talk to Q2 directly. It sees live numbers (users, support, feedback) and can discuss the app — it can't change settings or deploy code from here.</div>
+    </div>
+    <div class="q2-chat-log" id="q2-chat-log"></div>
+    <form class="q2-chat-form" id="q2-chat-form">
+      <input type="text" id="q2-chat-input" placeholder="Say something to Q2…" autocomplete="off" />
+      <button type="submit" class="btn btn--primary" id="q2-chat-send">Send</button>
+    </form>
   </div>
 </div>
 
@@ -967,6 +1031,7 @@
     wireQ3Toggle(authHeader);
     wireQ2Insight(authHeader);
     wireQ2YoutubeInsight(authHeader);
+    wireQ2Chat(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
     loadLinkClicks(authHeader);
@@ -1446,6 +1511,72 @@
         } finally {
           btn.disabled = false;
           btn.textContent = original;
+        }
+      });
+    }
+
+    async function wireQ2Chat(authHeader) {
+      const form = document.getElementById("q2-chat-form");
+      const input = document.getElementById("q2-chat-input");
+      const log = document.getElementById("q2-chat-log");
+      const sendBtn = document.getElementById("q2-chat-send");
+      if (!form || !input || !log) return;
+
+      const STORAGE_KEY = "vx_q2_chat_history";
+      let history = [];
+      try {
+        history = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "[]");
+      } catch {
+        history = [];
+      }
+
+      function addBubble(role, text) {
+        const el = document.createElement("div");
+        el.className = "q2-chat-msg " + (role === "user" ? "q2-chat-msg--user" : "q2-chat-msg--q2");
+        el.textContent = text;
+        log.appendChild(el);
+        log.scrollTop = log.scrollHeight;
+        return el;
+      }
+
+      if (history.length) {
+        history.forEach((h) => addBubble(h.role, h.content));
+      } else {
+        addBubble("assistant", "Evening, sir. What are you thinking?");
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        addBubble("user", text);
+        history.push({ role: "user", content: text });
+        sendBtn.disabled = true;
+        input.disabled = true;
+        const pending = addBubble("assistant", "…");
+        pending.classList.add("q2-chat-msg--pending");
+        try {
+          const res = await fetch("/api/admin/q2/chat", {
+            method: "POST",
+            headers: { ...authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, history })
+          });
+          const data = await res.json().catch(() => null);
+          pending.remove();
+          const reply = res.ok ? (data && data.reply) || "…" : (data && data.error) || "Could not reach Q2.";
+          addBubble("assistant", reply);
+          history.push({ role: "assistant", content: reply });
+          try {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(-40)));
+          } catch {}
+        } catch {
+          pending.remove();
+          addBubble("assistant", "Could not reach the server.");
+        } finally {
+          sendBtn.disabled = false;
+          input.disabled = false;
+          input.focus();
         }
       });
     }

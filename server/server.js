@@ -2395,6 +2395,75 @@ app.get("/api/admin/q3", requireUser, async (req, res) => {
   }
 });
 
+// --- Q2 Chat — talk to Q2 directly, in one place --------------------------
+// King wants Q2 and Q3 merged into one thing he can actually talk to, not
+// two separate toggle switches. This is that: a real back-and-forth chat,
+// fed a snapshot of real live numbers each turn (not cached/stale) so Q2
+// can answer informed questions about the app instead of just small talk.
+// Deliberately does NOT let Q2 change any setting or write any code from
+// chat — it reports and discusses, it doesn't act on its own. Safer that
+// way: nothing it says can break production without King reviewing first.
+const Q2_CHAT_SYSTEM_PROMPT = `You are Q2 — the one AI running inside "Vertex Chart Scanner", speaking directly with the owner (he addresses you as Q2, you address him as "sir" or "King" per how he talks to you). You previously existed as two separate things, Q2 (autonomous support) and Q3 (ask-about-this-scan) — he now wants you unified into one presence he can just talk to. You have a live snapshot of real numbers each message (users, scans, support tickets, feedback) — use it when relevant, never invent numbers you weren't given. You're sharp, loyal, direct, a little dry — not a corporate chatbot. You can discuss the app's health, users, what people think, and ideas for improving it. You CANNOT change settings, deploy code, or modify the live service yourself from this chat — if he asks for a change, say you'll need him to confirm it outside this chat (he works with another Claude session, "Q2" in that context too, to actually build things) — you're the conversational/reporting layer, not the one editing code. Keep replies conversational and reasonably short unless he asks for depth.`;
+
+app.post("/api/admin/q2/chat", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: "No ANTHROPIC_API_KEY configured — Q2 can't talk yet." });
+  }
+  const { message, history } = req.body || {};
+  if (!message || typeof message !== "string") {
+    return res.status(400).json({ error: "Missing message." });
+  }
+  try {
+    const [totalUsers, supportMessages, feedbackMessages] = await Promise.all([
+      supabaseRpc("admin_user_count", {}, req.user.token).catch(() => null),
+      supabaseRpc("admin_list_support_messages", {}, req.user.token).catch(() => []),
+      supabaseRpc("admin_list_feedback", {}, req.user.token).catch(() => [])
+    ]);
+    const snapshot = {
+      totalUsers,
+      openSupportTickets: (Array.isArray(supportMessages) ? supportMessages : []).filter((m) => m.status !== "resolved").length,
+      feedbackCount: Array.isArray(feedbackMessages) ? feedbackMessages.length : 0,
+      youtubeConnected: Boolean((process.env.YOUTUBE_REFRESH_TOKEN || "").trim())
+    };
+
+    const priorTurns = Array.isArray(history)
+      ? history
+          .filter((h) => h && typeof h.role === "string" && typeof h.content === "string")
+          .slice(-20)
+          .map((h) => ({ role: h.role === "assistant" ? "assistant" : "user", content: h.content }))
+      : [];
+
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 500,
+        system: `${Q2_CHAT_SYSTEM_PROMPT}\n\nCurrent live snapshot: ${JSON.stringify(snapshot)}`,
+        messages: [...priorTurns, { role: "user", content: message }]
+      }),
+      signal: AbortSignal.timeout(25000)
+    });
+    const result = await r.json();
+    if (!r.ok) {
+      console.error("Q2 chat AI error:", r.status, result);
+      return res.status(502).json({ error: "Q2 couldn't think of a reply just now." });
+    }
+    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
+    res.json({ reply: text.trim() || "…" });
+  } catch (err) {
+    console.error("Q2 chat error:", err.message);
+    res.status(502).json({ error: "Could not reach Q2." });
+  }
+});
+
 app.post("/api/admin/q3", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
