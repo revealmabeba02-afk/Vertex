@@ -1759,6 +1759,40 @@ body.scanning .scan-hud {
 .trade-stat--rr .trade-stat__label { color: color-mix(in srgb, var(--accent) 75%, var(--text-faint)); }
 .trade-stat--rr .trade-stat__value { color: var(--accent); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
 
+.session-clock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.session-clock__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.session-clock__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.session-clock__pill.is-open {
+  color: var(--bull);
+  border-color: color-mix(in srgb, var(--bull) 40%, var(--border));
+  background: color-mix(in srgb, var(--bull) 10%, var(--panel));
+}
+.session-clock__pill.is-open .session-clock__dot {
+  background: var(--bull);
+  box-shadow: 0 0 6px var(--bull);
+}
+
 .result-news {
   margin-top: 16px;
   padding: 14px 16px;

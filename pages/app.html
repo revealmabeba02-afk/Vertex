@@ -207,6 +207,13 @@
     <h1 class="hero__title">Scan a pair</h1>
     <p class="hero__lede">Live structure, levels and a trade plan in about 30 seconds.</p>
 
+    <div class="session-clock" id="session-clock" aria-label="Market session status">
+      <div class="session-clock__pill" data-session="sydney"><span class="session-clock__dot"></span><span class="session-clock__name">Sydney</span></div>
+      <div class="session-clock__pill" data-session="tokyo"><span class="session-clock__dot"></span><span class="session-clock__name">Tokyo</span></div>
+      <div class="session-clock__pill" data-session="london"><span class="session-clock__dot"></span><span class="session-clock__name">London</span></div>
+      <div class="session-clock__pill" data-session="newyork"><span class="session-clock__dot"></span><span class="session-clock__name">New York</span></div>
+    </div>
+
     <p class="setup-notice" id="setup-notice" hidden>Accounts are not connected yet, so scanning is switched off. Add the Supabase keys to <code>server/.env</code> and restart. See SUPABASE_SETUP.md.</p>
 
     <form id="scan-form" class="scanform" novalidate>

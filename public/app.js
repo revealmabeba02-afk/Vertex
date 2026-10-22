@@ -20,6 +20,35 @@
   const revealPage = () => root.classList.remove("auth-check");
   const toLogin = () => location.replace("/login?next=" + encodeURIComponent("/app" + location.hash));
 
+  // --------------------------------------------------------------
+  // Session clock: which forex sessions are open right now, by UTC hour.
+  // Approximate standard hours (doesn't shift for each region's own DST,
+  // which is a reasonable trade-off for an at-a-glance widget) —
+  // Sydney 22:00-07:00 UTC, Tokyo 00:00-09:00, London 08:00-17:00,
+  // New York 13:00-22:00.
+  // --------------------------------------------------------------
+  function isSessionOpen(name, utcHour) {
+    switch (name) {
+      case "sydney": return utcHour >= 22 || utcHour < 7;
+      case "tokyo": return utcHour >= 0 && utcHour < 9;
+      case "london": return utcHour >= 8 && utcHour < 17;
+      case "newyork": return utcHour >= 13 && utcHour < 22;
+      default: return false;
+    }
+  }
+  function updateSessionClock() {
+    const wrap = document.getElementById("session-clock");
+    if (!wrap) return;
+    const utcHour = new Date().getUTCHours();
+    wrap.querySelectorAll(".session-clock__pill").forEach((pill) => {
+      const name = pill.dataset.session;
+      const open = isSessionOpen(name, utcHour);
+      pill.classList.toggle("is-open", open);
+    });
+  }
+  updateSessionClock();
+  setInterval(updateSessionClock, 60000);
+
   // Maintenance mode: a cheap, fail-open check (any error or non-OK response
   // just lets the app load as normal — this must never be what breaks the
   // site). Runs once on load, not blocking the rest of the page's own auth
