@@ -968,6 +968,7 @@
     <a href="#health" data-panel-link="health" title="Health">Health</a>
     <a href="#orders" data-panel-link="orders" title="Orders">Orders</a>
     <a href="#stats" data-panel-link="stats" title="Stats">Stats</a>
+    <a href="#analytics" data-panel-link="analytics" title="Usage analytics">Analytics</a>
     <a href="#users" data-panel-link="users" title="Users">Users</a>
     <a href="#support" data-panel-link="support" title="Support">Support</a>
     <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
@@ -1115,6 +1116,26 @@
   </div>
 
   <p class="admin-status" id="admin-status">Loading…</p>
+</div>
+
+<div class="command-panel" data-panel="analytics">
+  <div class="pattern-card">
+    <div class="users-card__head">Scans per day (last 14 days)</div>
+    <div id="analytics-perday-empty" class="users-empty">Loading…</div>
+    <div id="analytics-perday-bars" class="analytics-bars" hidden></div>
+  </div>
+
+  <div class="pattern-card">
+    <div class="users-card__head">Top pairs (last 30 days)</div>
+    <div id="analytics-pairs-empty" class="users-empty">Loading…</div>
+    <div id="analytics-pairs-list" class="analytics-pairs" hidden></div>
+  </div>
+
+  <div class="pattern-card">
+    <div class="users-card__head">Busiest hours (last 30 days, UTC)</div>
+    <div id="analytics-hours-empty" class="users-empty">Loading…</div>
+    <div id="analytics-hours-bars" class="analytics-bars analytics-bars--hours" hidden></div>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="users">
@@ -1310,6 +1331,7 @@
     wireQ2Chat(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
+    loadAnalytics(authHeader);
     loadLinkClicks(authHeader);
     loadContentPosts(authHeader);
     wirePlannerForm(authHeader);
@@ -1440,6 +1462,99 @@
         barsEl.appendChild(note);
       } catch {
         emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    async function loadAnalytics(authHeader) {
+      const perDayEmpty = document.getElementById("analytics-perday-empty");
+      const perDayBars = document.getElementById("analytics-perday-bars");
+      const pairsEmpty = document.getElementById("analytics-pairs-empty");
+      const pairsList = document.getElementById("analytics-pairs-list");
+      const hoursEmpty = document.getElementById("analytics-hours-empty");
+      const hoursBars = document.getElementById("analytics-hours-bars");
+
+      try {
+        const res = await fetch("/api/admin/analytics", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg = (data && data.error) || "Could not load usage analytics.";
+          perDayEmpty.textContent = msg;
+          pairsEmpty.textContent = msg;
+          hoursEmpty.textContent = msg;
+          return;
+        }
+
+        const perDay = Array.isArray(data.per_day) ? data.per_day : [];
+        if (perDay.length === 0 || perDay.every((d) => Number(d.scans) === 0)) {
+          perDayEmpty.textContent = "No scans yet in the last 14 days.";
+        } else {
+          perDayEmpty.hidden = true;
+          perDayBars.hidden = false;
+          perDayBars.innerHTML = "";
+          const maxScans = Math.max(1, ...perDay.map((d) => Number(d.scans || 0)));
+          perDay.forEach((d) => {
+            const count = Number(d.scans || 0);
+            const pct = Math.round((count / maxScans) * 100);
+            const label = new Date(d.day + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+            const row = document.createElement("div");
+            row.className = "pattern-row";
+            row.innerHTML = `
+              <div class="pattern-row__label">${label}</div>
+              <div class="pattern-row__track"><div class="pattern-row__fill" style="width:${pct}%"></div></div>
+              <div class="pattern-row__count">${count} scan${count === 1 ? "" : "s"}</div>
+            `;
+            perDayBars.appendChild(row);
+          });
+        }
+
+        const topPairs = Array.isArray(data.top_pairs) ? data.top_pairs : [];
+        if (topPairs.length === 0) {
+          pairsEmpty.textContent = "No scans with a recognized pair in the last 30 days.";
+        } else {
+          pairsEmpty.hidden = true;
+          pairsList.hidden = false;
+          pairsList.innerHTML = "";
+          const maxPairScans = Math.max(1, ...topPairs.map((p) => Number(p.scans || 0)));
+          topPairs.forEach((p) => {
+            const count = Number(p.scans || 0);
+            const pct = Math.round((count / maxPairScans) * 100);
+            const row = document.createElement("div");
+            row.className = "pattern-row";
+            row.innerHTML = `
+              <div class="pattern-row__label">${escapeHtml(p.pair || "—")}</div>
+              <div class="pattern-row__track"><div class="pattern-row__fill" style="width:${pct}%"></div></div>
+              <div class="pattern-row__count">${count} scan${count === 1 ? "" : "s"}</div>
+            `;
+            pairsList.appendChild(row);
+          });
+        }
+
+        const byHour = Array.isArray(data.by_hour) ? data.by_hour : [];
+        if (byHour.length === 0) {
+          hoursEmpty.textContent = "No scans yet in the last 30 days.";
+        } else {
+          hoursEmpty.hidden = true;
+          hoursBars.hidden = false;
+          hoursBars.innerHTML = "";
+          const byHourMap = new Map(byHour.map((h) => [Number(h.hour), Number(h.scans)]));
+          const maxHourScans = Math.max(1, ...byHour.map((h) => Number(h.scans || 0)));
+          for (let hour = 0; hour < 24; hour++) {
+            const count = byHourMap.get(hour) || 0;
+            const pct = Math.round((count / maxHourScans) * 100);
+            const row = document.createElement("div");
+            row.className = "pattern-row";
+            row.innerHTML = `
+              <div class="pattern-row__label">${String(hour).padStart(2, "0")}:00</div>
+              <div class="pattern-row__track"><div class="pattern-row__fill" style="width:${pct}%"></div></div>
+              <div class="pattern-row__count">${count}</div>
+            `;
+            hoursBars.appendChild(row);
+          }
+        }
+      } catch {
+        perDayEmpty.textContent = "Could not reach the server.";
+        pairsEmpty.textContent = "Could not reach the server.";
+        hoursEmpty.textContent = "Could not reach the server.";
       }
     }
 

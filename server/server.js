@@ -1738,6 +1738,24 @@ app.get("/api/admin/stats", requireUser, async (req, res) => {
   }
 });
 
+// Usage analytics: scans/day (last 14), top pairs (30d), busiest hour (30d).
+// See supabase/scan_history.sql's companion admin_scan_analytics() function.
+app.get("/api/admin/analytics", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) {
+    return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  }
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const data = await supabaseRpc("admin_scan_analytics", {}, req.user.token);
+    res.json(data || { per_day: [], top_pairs: [], by_hour: [] });
+  } catch (err) {
+    console.error("Admin analytics error:", err.message);
+    res.status(502).json({ error: "Could not load usage analytics. Has the admin_scan_analytics() migration been run?" });
+  }
+});
+
 // Which day of the week credits actually get bought on — a read-only report
 // off existing paid orders, no scheduled job needed: it's just grouped by
 // weekday fresh every time the admin page asks.
