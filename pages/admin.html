@@ -1321,34 +1321,67 @@
     async function loadLinkClicks(authHeader) {
       const listEl = document.getElementById("clicks-list");
       const emptyEl = document.getElementById("clicks-empty");
+      // Belt-and-braces: whatever happens below, never leave this panel
+      // silently blank — if we bail out for any reason that isn't one of
+      // the normal paths, fall back to a visible message rather than a
+      // hidden emptyEl + empty listEl (which looks like nothing loaded).
+      let handled = false;
       try {
         const res = await fetch("/api/admin/link-clicks", { headers: authHeader });
         const data = await res.json().catch(() => null);
         if (!res.ok) {
+          emptyEl.hidden = false;
           emptyEl.textContent = (data && data.error) || "Could not load link clicks.";
+          handled = true;
           return;
         }
         const rows = (data && Array.isArray(data.clicks)) ? data.clicks : [];
         if (rows.length === 0) {
+          emptyEl.hidden = false;
           emptyEl.textContent = "No clicks yet — put the /go/ links in your bios to start tracking.";
+          handled = true;
           return;
         }
-        emptyEl.hidden = true;
         listEl.innerHTML = "";
+        let rendered = 0;
         rows.forEach((row) => {
-          const div = document.createElement("div");
-          div.className = "click-row";
-          div.innerHTML = `
-            <span class="click-row__name">${escapeHtml(PLATFORM_NAMES[row.platform] || row.platform)}</span>
-            <span class="click-row__nums">
-              <span class="click-row__total">${Number(row.total || 0)}</span>
-              <span class="click-row__day">${Number(row.last_24h || 0)} in last 24h</span>
-            </span>
-          `;
-          listEl.appendChild(div);
+          // One malformed row used to be able to throw mid-loop and abort
+          // the whole render with emptyEl already hidden — nothing visible
+          // at all. Each row is now isolated so the rest still show.
+          try {
+            const div = document.createElement("div");
+            div.className = "click-row";
+            div.innerHTML = `
+              <span class="click-row__name">${escapeHtml(PLATFORM_NAMES[row.platform] || row.platform || "—")}</span>
+              <span class="click-row__nums">
+                <span class="click-row__total">${Number(row.total || 0)}</span>
+                <span class="click-row__day">${Number(row.last_24h || 0)} in last 24h</span>
+              </span>
+            `;
+            listEl.appendChild(div);
+            rendered++;
+          } catch (rowErr) {
+            console.error("Link click row render error:", rowErr);
+          }
         });
-      } catch {
+        if (rendered > 0) {
+          emptyEl.hidden = true;
+          handled = true;
+        } else {
+          emptyEl.hidden = false;
+          emptyEl.textContent = "Could not display click data — check the console.";
+          handled = true;
+        }
+      } catch (err) {
+        emptyEl.hidden = false;
         emptyEl.textContent = "Could not reach the server.";
+        handled = true;
+        console.error("Link clicks load error:", err);
+      } finally {
+        if (!handled) {
+          emptyEl.hidden = false;
+          emptyEl.textContent = "Could not load link clicks.";
+        }
       }
     }
 
