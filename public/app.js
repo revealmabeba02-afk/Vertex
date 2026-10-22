@@ -602,6 +602,168 @@
     });
   }
 
+  // One-tap "share as image": renders the current plan as a branded card
+  // (canvas, drawn client-side — no server round trip) with a QR code back
+  // to Vertex, ready to post or share. Uses the Web Share API on mobile
+  // (native share sheet) and falls back to a plain download on desktop.
+  const shareImageBtn = document.getElementById("res-share-image-btn");
+  if (shareImageBtn) {
+    shareImageBtn.addEventListener("click", async () => {
+      if (!lastResultForCopy) return;
+      const label = shareImageBtn.querySelector("span");
+      const prevLabel = label.textContent;
+      label.textContent = "Building…";
+      shareImageBtn.disabled = true;
+      try {
+        const blob = await buildShareCard(lastResultForCopy);
+        const file = new File([blob], "vertex-plan.png", { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "Vertex trade plan" });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "vertex-plan.png";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") console.error("Share card failed:", err);
+      } finally {
+        label.textContent = prevLabel;
+        shareImageBtn.disabled = false;
+      }
+    });
+  }
+
+  function buildShareCard({ a, timeframe }) {
+    return new Promise((resolve, reject) => {
+      try {
+        const W = 1080, H = 1350;
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+
+        const pair = a.pair_guess ? friendlySymbol(a.pair_guess) : "Vertex scan";
+        const tf = timeframe ? (TF_LABELS[timeframe] || timeframe) : "—";
+        const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+        const side = (firstEntry?.type || "").toLowerCase();
+        const isLong = side === "long";
+        const signal = side === "long" ? "BUY" : side === "short" ? "SELL" : "NO TRADE";
+        const bullColor = "#39D98A";
+        const bearColor = "#FF5C7A";
+        const signalColor = side === "long" ? bullColor : side === "short" ? bearColor : "#9BB0C9";
+        const entryLine = firstEntry?.entry || firstEntry?.zone || "—";
+        const sl = a.stop_loss?.suggestion || "—";
+        const targets = Array.isArray(a.take_profit) ? a.take_profit : [];
+        const tpLine = targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
+        const confidence = typeof a.confidence === "number" ? a.confidence : null;
+
+        // Background
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, "#0B1118");
+        grad.addColorStop(1, "#05080C");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Brand
+        ctx.fillStyle = "#EDF3FA";
+        ctx.font = "800 44px 'Inter Tight', sans-serif";
+        ctx.fillText("VERTEX", 64, 100);
+        ctx.fillStyle = "#6B8299";
+        ctx.font = "600 22px 'Inter', sans-serif";
+        ctx.fillText("AI chart analysis", 64, 132);
+
+        // Pair + timeframe
+        ctx.fillStyle = "#EDF3FA";
+        ctx.font = "800 64px 'Inter Tight', sans-serif";
+        ctx.fillText(pair, 64, 230);
+        ctx.fillStyle = "#9BB0C9";
+        ctx.font = "600 28px 'Inter', sans-serif";
+        ctx.fillText(tf, 64, 270);
+
+        // Signal badge
+        ctx.fillStyle = signalColor;
+        ctx.font = "900 120px 'Inter Tight', sans-serif";
+        ctx.fillText(signal, 64, 420);
+
+        // Stats block
+        const statsY = 520;
+        const stats = [
+          ["ENTRY", entryLine],
+          ["STOP LOSS", sl],
+          ["TAKE PROFIT", tpLine]
+        ];
+        let y = statsY;
+        stats.forEach(([lbl, val]) => {
+          ctx.fillStyle = "#6B8299";
+          ctx.font = "700 24px 'Inter', sans-serif";
+          ctx.fillText(lbl, 64, y);
+          ctx.fillStyle = "#EDF3FA";
+          ctx.font = "700 40px 'IBM Plex Mono', monospace";
+          ctx.fillText(String(val), 64, y + 50);
+          y += 110;
+        });
+
+        if (confidence !== null) {
+          ctx.fillStyle = "#6B8299";
+          ctx.font = "700 24px 'Inter', sans-serif";
+          ctx.fillText("CONFIDENCE", 64, y);
+          ctx.fillStyle = "#EDF3FA";
+          ctx.font = "700 40px 'IBM Plex Mono', monospace";
+          ctx.fillText(confidence + "%", 64, y + 50);
+        }
+
+        // Footer + QR
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(64, H - 180);
+        ctx.lineTo(W - 64, H - 180);
+        ctx.stroke();
+
+        ctx.fillStyle = "#9BB0C9";
+        ctx.font = "600 24px 'Inter', sans-serif";
+        ctx.fillText("Scanned with Vertex AI", 64, H - 130);
+        ctx.fillStyle = "#4A5C70";
+        ctx.font = "500 20px 'Inter', sans-serif";
+        ctx.fillText("Not financial advice.", 64, H - 95);
+
+        try {
+          const qr = qrcode(4, "M");
+          qr.addData("https://vertex-9s4c.onrender.com/signup?ref=share");
+          qr.make();
+          const qrSize = 140;
+          const modules = qr.getModuleCount();
+          const cell = qrSize / modules;
+          const qrX = W - 64 - qrSize;
+          const qrY = H - 180 + 20;
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+          ctx.fillStyle = "#05080C";
+          for (let row = 0; row < modules; row++) {
+            for (let col = 0; col < modules; col++) {
+              if (qr.isDark(row, col)) {
+                ctx.fillRect(qrX + col * cell, qrY + row * cell, cell, cell);
+              }
+            }
+          }
+        } catch (qrErr) {
+          console.error("QR render skipped:", qrErr.message);
+        }
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob); else reject(new Error("Could not render image."));
+        }, "image/png");
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // Steps the loading checklist walks through while a scan is running. There
   // is no real progress signal from the server (a single API call, not a
   // stream), so this is a paced simulation that holds on the last step
