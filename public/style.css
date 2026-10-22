@@ -1729,6 +1729,10 @@ body.scanning .scan-hud {
 .trade-stat--sl .trade-stat__value { color: var(--bear); text-shadow: 0 0 18px color-mix(in srgb, var(--bear) 40%, transparent); }
 .trade-stat--tp .trade-stat__value { color: var(--bull); text-shadow: 0 0 18px color-mix(in srgb, var(--bull) 40%, transparent); }
 
+.trade-stat--rr { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.trade-stat--rr .trade-stat__label { color: color-mix(in srgb, var(--accent) 75%, var(--text-faint)); }
+.trade-stat--rr .trade-stat__value { color: var(--accent); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
+
 .trade-plan__invalidation {
   margin: 16px 2px 0;
   font-size: 13px;

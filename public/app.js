@@ -1013,6 +1013,7 @@
       targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
     document.getElementById("res-invalidation").textContent = a.invalidation || "";
 
+    renderRiskReward(firstEntry, sl, targets);
     buildTradeLadder(firstEntry, sl, targets, side);
 
     const notesWrap = document.getElementById("res-notes-wrap");
@@ -1149,6 +1150,48 @@
 
   checkQ3Status();
   wireQ3Ask();
+
+  // Risk:reward ratio — how many R the nearest target is worth relative to
+  // the stop distance. Uses the same clean numeric fields (entry_raw,
+  // value_raw, target_raw) the trade ladder already relies on, so this only
+  // ever shows when we actually have real numbers, never a guess.
+  function renderRiskReward(entry, sl, targets) {
+    const stat = document.getElementById("res-rr-stat");
+    const valueEl = document.getElementById("res-rr-value");
+
+    const entryVal = entry && typeof entry.entry_raw === "number" ? entry.entry_raw : null;
+    const slVal = sl && typeof sl.value_raw === "number" ? sl.value_raw : null;
+    const targetVals = (targets || [])
+      .map((t) => t.target_raw)
+      .filter((v) => typeof v === "number");
+
+    if (entryVal === null || slVal === null || targetVals.length === 0) {
+      stat.hidden = true;
+      return;
+    }
+
+    const risk = Math.abs(entryVal - slVal);
+    if (risk === 0) {
+      stat.hidden = true;
+      return;
+    }
+
+    // Nearest target to entry is the one actually likely to be hit first —
+    // that's the R:R worth showing, not the biggest/furthest one.
+    const nearest = targetVals.reduce((closest, t) =>
+      Math.abs(t - entryVal) < Math.abs(closest - entryVal) ? t : closest
+    , targetVals[0]);
+    const reward = Math.abs(nearest - entryVal);
+    const ratio = reward / risk;
+
+    if (!isFinite(ratio) || ratio <= 0) {
+      stat.hidden = true;
+      return;
+    }
+
+    valueEl.textContent = "1 : " + ratio.toFixed(1);
+    stat.hidden = false;
+  }
 
   function buildEntryCard(entry) {
     const card = document.createElement("div");
