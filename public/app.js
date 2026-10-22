@@ -32,6 +32,8 @@
         .then((session) => {
           if (!session) return toLogin();
           document.getElementById("account-email").textContent = session.user.email || "";
+          const settingsEmailEl = document.getElementById("settings-account-email");
+          if (settingsEmailEl) settingsEmailEl.textContent = session.user.email || "—";
           document.getElementById("account").hidden = false;
           revealPage();
         })
@@ -61,6 +63,8 @@
   }
 
   document.getElementById("logout-btn").addEventListener("click", () => Auth.signOut());
+  const settingsLogoutBtn = document.getElementById("settings-logout-btn");
+  if (settingsLogoutBtn) settingsLogoutBtn.addEventListener("click", () => Auth.signOut());
 
   const form = document.getElementById("scan-form");
   const symbolInput = document.getElementById("symbol-input");
