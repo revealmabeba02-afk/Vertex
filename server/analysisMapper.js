@@ -54,22 +54,48 @@ function computeRR(entry, stop, target) {
 // timeframes agree with the call, the risk/reward on offer, and whether the
 // market is actually trending vs just ranging. Clamped to 35-95 so it never
 // reads as a guarantee (100%) or as "don't bother" (near 0%).
+// Returns { score, breakdown } — breakdown is the plain-language list of what
+// moved the score up or down, so the result page can show its work instead
+// of a bare percentage. Each factor's label matches the logic below exactly,
+// so there's no risk of the explanation drifting from what actually ran.
 function computeConfidence({ planOk, rrRatio, topDown, bias, structureLabel }) {
   let score = 50;
-  if (planOk) score += 12;
-  if (typeof rrRatio === "number") {
-    if (rrRatio >= 3) score += 15;
-    else if (rrRatio >= 2) score += 10;
-    else if (rrRatio >= 1) score += 4;
-    else score -= 6;
+  const breakdown = [{ label: "Base read", delta: 0 }];
+
+  if (planOk) {
+    score += 12;
+    breakdown.push({ label: "Clean, valid trade plan", delta: 12 });
+  } else {
+    score -= 10;
+    breakdown.push({ label: "No clean plan available", delta: -10 });
   }
+
+  if (typeof rrRatio === "number") {
+    let rrDelta = -6;
+    let rrLabel = "Weak risk:reward (<1R)";
+    if (rrRatio >= 3) { rrDelta = 15; rrLabel = "Strong risk:reward (3R+)"; }
+    else if (rrRatio >= 2) { rrDelta = 10; rrLabel = "Good risk:reward (2R+)"; }
+    else if (rrRatio >= 1) { rrDelta = 4; rrLabel = "Acceptable risk:reward (1R+)"; }
+    score += rrDelta;
+    breakdown.push({ label: rrLabel, delta: rrDelta });
+  }
+
   if (Array.isArray(topDown) && topDown.length) {
     const aligned = topDown.filter((td) => td?.bias && bias && String(td.bias).toLowerCase() === String(bias).toLowerCase()).length;
-    score += Math.round((aligned / topDown.length) * 18) - 4;
+    const tdDelta = Math.round((aligned / topDown.length) * 18) - 4;
+    breakdown.push({
+      label: `${aligned}/${topDown.length} higher timeframes agree on bias`,
+      delta: tdDelta
+    });
+    score += tdDelta;
   }
-  if (structureLabel && !/range/i.test(structureLabel)) score += 6;
-  if (!planOk) score -= 10;
-  return Math.max(35, Math.min(95, Math.round(score)));
+
+  if (structureLabel && !/range/i.test(structureLabel)) {
+    score += 6;
+    breakdown.push({ label: `${structureLabel} market structure (not ranging)`, delta: 6 });
+  }
+
+  return { score: Math.max(35, Math.min(95, Math.round(score))), breakdown };
 }
 
 function conceptSummary(concepts) {
@@ -198,11 +224,13 @@ function mapFxSynapseToAnalysis(fx) {
   }
 
   const structureLabel = (fx.marketStructure || "range").replace(/^\w/, (c) => c.toUpperCase());
+  const confidenceResult = computeConfidence({ planOk, rrRatio, topDown: fx.topDown, bias, structureLabel });
 
   return {
     pair_guess: fx.symbol || null,
     market_bias: bias,
-    confidence: computeConfidence({ planOk, rrRatio, topDown: fx.topDown, bias, structureLabel }),
+    confidence: confidenceResult.score,
+    confidence_breakdown: confidenceResult.breakdown,
     bars: typeof fx.bars === "number" ? fx.bars : null,
     digits,
     candles: extractCandles(fx),

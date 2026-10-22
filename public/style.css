@@ -1733,6 +1733,40 @@ body.scanning .scan-hud {
 .trade-stat--rr .trade-stat__label { color: color-mix(in srgb, var(--accent) 75%, var(--text-faint)); }
 .trade-stat--rr .trade-stat__value { color: var(--accent); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
 
+.confidence-why {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.confidence-why summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-weight: 700;
+  list-style: none;
+}
+.confidence-why summary::-webkit-details-marker { display: none; }
+.confidence-why summary::before { content: "▸ "; }
+.confidence-why[open] summary::before { content: "▾ "; }
+.confidence-why__list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.confidence-why__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--panel);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.confidence-why__item--up strong { color: var(--bull); }
+.confidence-why__item--down strong { color: var(--bear); }
+
 .trade-plan__invalidation {
   margin: 16px 2px 0;
   font-size: 13px;

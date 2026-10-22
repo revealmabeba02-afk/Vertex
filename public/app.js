@@ -973,6 +973,7 @@
     document.getElementById("res-confidence").textContent = a.bars ? String(a.bars) : "—";
 
     renderConfidence(typeof a.confidence === "number" ? a.confidence : null);
+    renderConfidenceBreakdown(Array.isArray(a.confidence_breakdown) ? a.confidence_breakdown : null);
 
     const structure = a.market_structure || {};
     document.getElementById("res-trend").textContent = structure.trend || "Not enough data to describe trend.";
@@ -1191,6 +1192,36 @@
 
     valueEl.textContent = "1 : " + ratio.toFixed(1);
     stat.hidden = false;
+  }
+
+  // Breaks the confidence % down into the factors that moved it, straight
+  // from the server's computeConfidence() reasoning — never invented here.
+  function renderConfidenceBreakdown(breakdown) {
+    const wrap = document.getElementById("res-confidence-why-wrap");
+    const list = document.getElementById("res-confidence-why-list");
+    if (!wrap || !list) return;
+
+    if (!breakdown || breakdown.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+
+    list.innerHTML = "";
+    breakdown.forEach((factor) => {
+      const li = document.createElement("li");
+      const sign = factor.delta > 0 ? "+" : "";
+      li.className = "confidence-why__item " +
+        (factor.delta > 0 ? "confidence-why__item--up" : factor.delta < 0 ? "confidence-why__item--down" : "");
+      li.innerHTML = `<span>${escapeHtmlClient(factor.label)}</span><strong>${factor.delta === 0 ? "—" : sign + factor.delta}</strong>`;
+      list.appendChild(li);
+    });
+    wrap.hidden = false;
+  }
+
+  function escapeHtmlClient(str) {
+    const div = document.createElement("div");
+    div.textContent = String(str == null ? "" : str);
+    return div.innerHTML;
   }
 
   function buildEntryCard(entry) {
