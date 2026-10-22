@@ -1313,10 +1313,64 @@
   const historyEmpty = document.getElementById("history-empty");
   const historyNoMatch = document.getElementById("history-no-match");
   const historyList = document.getElementById("history-list");
+  const historyPinsWrap = document.getElementById("history-pins");
   const historySearchWrap = document.getElementById("history-search-wrap");
   const historySearchInput = document.getElementById("history-search");
   let historyLoaded = false;
   let historyItems = [];
+
+  // Pinned pairs: a pure per-device convenience (quick-filter chips), not
+  // account data worth a migration/table for, so it lives in localStorage.
+  // Vertex scans by uploading a chart image rather than picking a pair from
+  // a list, so "favorite pairs" means pinning ones you re-scan often to the
+  // top of History instead of a pair-picker.
+  const PINS_KEY = "vertex_pinned_pairs";
+  function getPinnedPairs() {
+    try {
+      const raw = localStorage.getItem(PINS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+  function setPinnedPairs(arr) {
+    try { localStorage.setItem(PINS_KEY, JSON.stringify(arr)); } catch { /* storage may be unavailable */ }
+  }
+  function togglePinnedPair(pair) {
+    if (!pair) return;
+    const pins = getPinnedPairs();
+    const idx = pins.indexOf(pair);
+    if (idx === -1) pins.push(pair); else pins.splice(idx, 1);
+    setPinnedPairs(pins);
+    renderPinChips();
+    renderHistory(historySearchInput && historySearchInput.value.trim()
+      ? historyItems.filter((item) => (item.pair || "").toLowerCase().includes(historySearchInput.value.trim().toLowerCase()))
+      : historyItems);
+  }
+
+  function renderPinChips() {
+    const pins = getPinnedPairs();
+    historyPinsWrap.innerHTML = "";
+    if (pins.length === 0) {
+      historyPinsWrap.hidden = true;
+      return;
+    }
+    historyPinsWrap.hidden = false;
+    pins.forEach((pair) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "history-pin-chip";
+      chip.textContent = "★ " + pair;
+      chip.addEventListener("click", () => {
+        if (historySearchInput) {
+          historySearchInput.value = pair;
+          historySearchInput.dispatchEvent(new Event("input"));
+        }
+      });
+      historyPinsWrap.appendChild(chip);
+    });
+  }
 
   async function loadHistory() {
     if (historyLoaded) return;
@@ -1329,6 +1383,7 @@
       if (!res.ok) return;
       const data = await res.json();
       historyItems = Array.isArray(data.items) ? data.items : [];
+      renderPinChips();
       renderHistory(historyItems);
       historyLoaded = true;
     } catch {
@@ -1397,6 +1452,21 @@
         date.textContent = "";
       }
       main.appendChild(date);
+
+      if (item.pair) {
+        const pinBtn = document.createElement("button");
+        pinBtn.type = "button";
+        pinBtn.className = "history-pin-btn";
+        const isPinned = getPinnedPairs().includes(item.pair);
+        pinBtn.classList.toggle("is-pinned", isPinned);
+        pinBtn.setAttribute("aria-label", isPinned ? "Unpin " + item.pair : "Pin " + item.pair);
+        pinBtn.textContent = "★";
+        pinBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          togglePinnedPair(item.pair);
+        });
+        main.appendChild(pinBtn);
+      }
 
       const right = document.createElement("div");
       right.className = "history-item__right";
