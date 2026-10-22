@@ -1111,6 +1111,21 @@
       }
     }
 
+    // Declared here, before the first await, on purpose: this whole function
+    // fires off a batch of independent async loaders (loadLinkClicks,
+    // loadContentPosts, etc.) that are never awaited, then itself awaits
+    // Auth.getSession() and a Promise.all() further down. Any const/let
+    // declared AFTER those awaits sits in the temporal dead zone until its
+    // own line actually executes — and since this function suspends at each
+    // await, a fast-resolving fire-and-forget call (like a link-clicks fetch
+    // that comes back before the users/stats Promise.all does) can resume
+    // and hit that TDZ window, throwing "Cannot access before initialization"
+    // on every single row. That intermittent timing bug is exactly what was
+    // making the Clicks panel go blank. PLATFORM_NAMES used to be declared
+    // much further down, after that await — moved up here so it's always
+    // ready before anything else can possibly run.
+    const PLATFORM_NAMES = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", facebook: "Facebook" };
+
     const session = await Auth.getSession();
     if (!session) {
       location.replace("/login?next=/admin");
@@ -1315,8 +1330,6 @@
         emptyEl.textContent = "Could not reach the server.";
       }
     }
-
-    const PLATFORM_NAMES = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", facebook: "Facebook" };
 
     async function loadLinkClicks(authHeader) {
       const listEl = document.getElementById("clicks-list");
