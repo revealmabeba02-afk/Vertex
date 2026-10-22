@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vertex Status</title>
+<meta name="description" content="Live status of Vertex Chart Scanner's core systems." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<style>
+  body.status-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .status-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg, 16px);
+    padding: 32px 28px;
+  }
+  .status-card__head { text-align: center; margin-bottom: 26px; }
+  .status-card__brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .status-overall {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .status-overall--up { background: color-mix(in srgb, var(--bull) 15%, var(--panel)); color: var(--bull); }
+  .status-overall--down { background: color-mix(in srgb, var(--bear) 15%, var(--panel)); color: var(--bear); }
+  .status-overall__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+  .status-list { display: flex; flex-direction: column; gap: 10px; }
+  .status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .status-row__name { color: var(--text); font-weight: 600; }
+  .status-row__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .status-row__dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-row--up .status-row__state { color: var(--bull); }
+  .status-row--up .status-row__dot { background: var(--bull); box-shadow: 0 0 6px var(--bull); }
+  .status-row--down .status-row__state { color: var(--bear); }
+  .status-row--down .status-row__dot { background: var(--bear); box-shadow: 0 0 6px var(--bear); }
+
+  .status-footer {
+    margin-top: 22px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .status-footer a { color: var(--accent); }
+</style>
+</head>
+<body class="status-page">
+  <div class="status-card">
+    <div class="status-card__head">
+      <div class="status-card__brand">Vertex</div>
+      <div id="status-overall" class="status-overall status-overall--up">
+        <span class="status-overall__dot" aria-hidden="true"></span>
+        <span id="status-overall-text">Checking systems…</span>
+      </div>
+    </div>
+    <div id="status-list" class="status-list"></div>
+    <p class="status-footer">Last checked <span id="status-time">—</span> · <a href="/app">Back to Vertex</a></p>
+  </div>
+
+  <script>
+    async function loadStatus() {
+      const overallEl = document.getElementById("status-overall");
+      const overallTextEl = document.getElementById("status-overall-text");
+      const listEl = document.getElementById("status-list");
+      const timeEl = document.getElementById("status-time");
+
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.checks)) throw new Error("bad response");
+
+        overallEl.classList.toggle("status-overall--up", data.allOk);
+        overallEl.classList.toggle("status-overall--down", !data.allOk);
+        overallTextEl.textContent = data.allOk ? "All systems operational" : "Some systems are having trouble";
+
+        listEl.innerHTML = "";
+        data.checks.forEach((c) => {
+          const row = document.createElement("div");
+          row.className = "status-row " + (c.ok ? "status-row--up" : "status-row--down");
+          row.innerHTML =
+            '<span class="status-row__name"></span>' +
+            '<span class="status-row__state"><span class="status-row__dot" aria-hidden="true"></span><span class="status-row__label"></span></span>';
+          row.querySelector(".status-row__name").textContent = c.name;
+          row.querySelector(".status-row__label").textContent = c.ok ? "Operational" : "Issue";
+          listEl.appendChild(row);
+        });
+
+        try {
+          timeEl.textContent = new Date(data.checkedAt).toLocaleTimeString();
+        } catch {
+          timeEl.textContent = "just now";
+        }
+      } catch {
+        overallEl.classList.remove("status-overall--up");
+        overallEl.classList.add("status-overall--down");
+        overallTextEl.textContent = "Could not load status right now";
+        listEl.innerHTML = "";
+        timeEl.textContent = "—";
+      }
+    }
+
+    loadStatus();
+    setInterval(loadStatus, 30000);
+  </script>
+</body>
+</html>

@@ -709,6 +709,7 @@ app.get("/welcome", (req, res) => sendFreshPage(res, "splash.html"));
 app.get("/login", (req, res) => sendFreshPage(res, "login.html"));
 app.get("/signup", (req, res) => sendFreshPage(res, "signup.html"));
 app.get("/app", (req, res) => sendFreshPage(res, "app.html"));
+app.get("/status", (req, res) => sendFreshPage(res, "status.html"));
 app.get("/admin", (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     res.set("Cache-Control", "no-store");
@@ -2029,6 +2030,47 @@ async function checkAiAssistant() {
     return { ok: false, detail: `Could not reach Anthropic: ${err.message}` };
   }
 }
+
+// Public, unauthenticated status endpoint — same underlying checks as the
+// admin health panel, but stripped down to name + up/down only. Never
+// includes the admin-only `detail` strings (those can mention key names,
+// billing state, etc.) and never requires a login, since the whole point is
+// a page anyone — including a worried user — can check without an account.
+async function checkDatabasePublic() {
+  if (!SUPABASE_READY) return { ok: false };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+      headers: { apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(6000)
+    });
+    // Any response at all (even a 401 on the root) means the service is up.
+    return { ok: r.status < 500 };
+  } catch {
+    return { ok: false };
+  }
+}
+
+app.get("/api/status", async (req, res) => {
+  try {
+    const [database, scanProvider, paymentsReachable, aiAssistant] = await Promise.all([
+      checkDatabasePublic(),
+      checkScanProvider(),
+      checkPaymentsReachable(),
+      checkAiAssistant()
+    ]);
+    const checks = [
+      { name: "Vertex accounts", ok: database.ok },
+      { name: "Chart scanning", ok: scanProvider.ok },
+      { name: "Payments", ok: paymentsReachable.ok },
+      { name: "Q2 assistant", ok: aiAssistant.ok }
+    ];
+    const allOk = checks.every((c) => c.ok);
+    res.json({ allOk, checks, checkedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("Public status error:", err.message);
+    res.status(502).json({ error: "Could not check status right now." });
+  }
+});
 
 app.get("/api/admin/health", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
