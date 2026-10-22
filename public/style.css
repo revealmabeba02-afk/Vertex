@@ -1193,31 +1193,54 @@ body.scanning .scan-hud {
   flex-direction: column;
 }
 
+/* Big-banner header: full-bleed, centered, color tinted by the live
+   signal so the headline call is the first thing a glance lands on. */
 .result__head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 22px;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 30px 18px 26px;
+  margin: -4px -4px 0;
   border-bottom: 1px solid var(--border);
+  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--neutral) 20%, transparent), transparent 70%);
+}
+/* Driven off the signal-tag's own class (set by app.js) rather than a new
+   attribute on the header, so no JS changes were needed for this tint. */
+.result__head:has(.signal-tag--buy) {
+  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--bull) 24%, transparent), transparent 70%);
+}
+.result__head:has(.signal-tag--sell) {
+  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--bear) 24%, transparent), transparent 70%);
 }
 
+/* The pair-row/meta pair is still wrapped in an unstyled <div> in the
+   markup — make it a pass-through so its children become direct flex
+   items of .result__head and the order rules below actually apply. */
+.result__head > div:first-child { display: contents; }
+
+.result__pair-row { order: 2; display: flex; align-items: center; gap: 8px; justify-content: center; }
+
 .result__pair {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(26px, 3vw, 34px);
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 .result__meta {
+  order: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: 8px;
   font-family: var(--font-mono);
   font-size: 12.5px;
+  color: var(--text-faint);
 }
 
 .result__tf { color: var(--text-dim); }
@@ -1242,36 +1265,36 @@ body.scanning .scan-hud {
 .bias-tag--neutral { color: var(--neutral); border-color: color-mix(in srgb, var(--neutral) 40%, transparent); background: color-mix(in srgb, var(--neutral) 10%, transparent); }
 
 .result__head-right {
+  order: 3;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
-/* The headline call: a solid, high-contrast BUY/SELL badge, separate from
-   the softer bias-tag so it reads as the actionable signal, not just mood. */
+/* The headline call: now the biggest thing on the page, not a pill — the
+   BUY/SELL word itself is the banner's focal point. */
 .signal-tag {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: clamp(38px, 9vw, 56px);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: -0.01em;
   text-transform: uppercase;
-  padding: 12px 22px;
-  border-radius: 999px;
-  white-space: nowrap;
+  line-height: 1;
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  border-radius: 0;
 }
 
 .signal-tag--buy {
-  color: #0C1F16;
-  background: var(--bull);
-  box-shadow: 0 0 32px color-mix(in srgb, var(--bull) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--bull) 70%, transparent) inset;
+  color: var(--bull);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--bull) 65%, transparent);
   animation: signal-pulse 2.2s ease-in-out infinite;
 }
 .signal-tag--sell {
-  color: #2A0E10;
-  background: var(--bear);
-  box-shadow: 0 0 32px color-mix(in srgb, var(--bear) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--bear) 70%, transparent) inset;
+  color: var(--bear);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--bear) 65%, transparent);
   animation: signal-pulse 2.2s ease-in-out infinite;
 }
 @keyframes signal-pulse {
@@ -1284,8 +1307,7 @@ body.scanning .scan-hud {
 .signal-tag--none { display: none; }
 .signal-tag--wait {
   color: var(--text-dim);
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
+  text-shadow: none;
 }
 
 .chart-wrap {
@@ -2149,7 +2171,6 @@ body.scanning .scan-hud {
   .chip-tf span { height: 44px; font-size: 14px; }
 
   .output { margin-top: 32px; padding: 18px 14px; border-radius: 18px; scroll-margin-top: 78px; }
-  .result__head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .result-section { padding: 16px; }
   .entry-list { grid-template-columns: 1fr; }
   .ghost-btn,
@@ -2658,17 +2679,24 @@ body.scanning .scan-hud {
   font-size: 13px;
 }
 
+/* Reworked for the banner header: a small pill under the big BUY/SELL
+   word, with the same ring-fill mechanics/animation app.js already drives
+   via stroke-dashoffset — just smaller and inline instead of a corner badge. */
 .confidence-badge {
   position: relative;
-  width: 44px;
-  height: 44px;
-  display: flex;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 7px 14px 7px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-sizing: content-box;
 }
 .confidence-badge__ring {
-  width: 44px;
-  height: 44px;
+  width: 22px;
+  height: 22px;
   transform: rotate(-90deg);
 }
 .confidence-badge__track {
@@ -2686,10 +2714,10 @@ body.scanning .scan-hud {
   transition: stroke-dashoffset 1.1s cubic-bezier(.3,.9,.3,1);
 }
 .confidence-badge__pct {
-  position: absolute;
+  margin-left: 6px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text);
 }
 
