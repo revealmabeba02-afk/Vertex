@@ -793,7 +793,22 @@
     outputPanel.classList.toggle("is-idle", name === "empty");
     // Full-screen takeover while a scan is in flight (see .scanning in
     // style.css); dropped the moment it resolves to result or error.
-    document.body.classList.toggle("scanning", name === "loading");
+    // body.scanning uses position:fixed to stop the page from scrolling or
+    // bouncing behind the HUD on mobile — that removes the page from normal
+    // flow, so we save/restore the real scroll position around it to avoid
+    // a visible jump when the scan finishes.
+    var isLoading = name === "loading";
+    var wasLoading = document.body.classList.contains("scanning");
+    if (isLoading && !wasLoading) {
+      document.body.dataset.scrollLock = String(window.scrollY || window.pageYOffset || 0);
+      document.body.style.top = "-" + document.body.dataset.scrollLock + "px";
+      document.body.classList.add("scanning");
+    } else if (!isLoading && wasLoading) {
+      document.body.classList.remove("scanning");
+      var y = parseInt(document.body.dataset.scrollLock || "0", 10);
+      document.body.style.top = "";
+      window.scrollTo(0, y);
+    }
     if (name !== "empty" && name !== "loading") {
       outputPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }

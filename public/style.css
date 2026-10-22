@@ -944,13 +944,15 @@ body::after {
 /* While a scan is running, the HUD takes over the whole screen like its
    own page: sidebar hidden, output card unpinned from the layout and
    centered edge-to-edge. body.scanning is toggled in app.js. */
-body.scanning { overflow: hidden; }
+body.scanning { overflow: hidden; position: fixed; inset: 0; width: 100%; height: 100%; }
 body.scanning .sidebar,
 body.scanning .sidebar-open-btn { display: none; }
 body.scanning .output {
   position: fixed;
   inset: 0;
   z-index: 300;
+  width: 100%;
+  height: 100dvh;
   max-width: none;
   margin: 0;
   border: 0;
@@ -959,12 +961,15 @@ body.scanning .output {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(16px, 4vw, 40px);
+  padding: 0;
 }
 body.scanning .scan-hud {
   width: 100%;
-  max-width: 640px;
-  min-height: min(70vh, 520px);
+  height: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  border-radius: 0;
+  border: 0;
 }
 
 /* ---- Scan HUD: the uploaded chart, blurred, behind a scanning readout ---- */
