@@ -1007,30 +1007,6 @@ body.scanning .scan-hud {
     radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, #040b08 35%, transparent) 60%, #040b08 100%);
 }
 
-/* A single glowing line that sweeps left-to-right across the chart while a
-   scan is running — steady horizontal motion only, nothing that bobs or
-   bounces vertically. Replaces the old candle-bar pulsing, which read as
-   jittery "up and down" movement that King didn't like. */
-.scan-hud__sweep {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 85%, white) 50%, transparent);
-  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 60%, transparent);
-  animation: hud-sweep 3.2s linear infinite;
-  opacity: 0.85;
-}
-@keyframes hud-sweep {
-  0% { left: 0%; opacity: 0; }
-  8% { opacity: 0.85; }
-  92% { opacity: 0.85; }
-  100% { left: 100%; opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .scan-hud__sweep { display: none; }
-}
-
 .scan-hud__center {
   position: relative;
   display: flex;
@@ -1038,6 +1014,40 @@ body.scanning .scan-hud {
   align-items: center;
   gap: 18px;
   text-align: center;
+}
+
+/* AI scan rings — concentric pulses that expand outward from the Vertex
+   badge and fade, like a sonar ping / AI reading the chart. Pure scale +
+   opacity, centered on the badge, so there's no bounce, no sideways motion,
+   nothing that drifts off-center. This is what sits "behind" the badge
+   instead of the old sweeping line. */
+.scan-hud__rings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 84px;
+  height: 84px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.scan-hud__rings span {
+  position: absolute;
+  inset: 0;
+  border-radius: 42px;
+  border: 1.5px solid color-mix(in srgb, #4FE3A0 70%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, #4FE3A0 35%, transparent);
+  opacity: 0;
+  animation: hud-ring-ping 2.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+.scan-hud__rings span:nth-child(1) { animation-delay: 0s; }
+.scan-hud__rings span:nth-child(2) { animation-delay: 0.9s; }
+.scan-hud__rings span:nth-child(3) { animation-delay: 1.8s; }
+@keyframes hud-ring-ping {
+  0% { transform: scale(1); opacity: 0.65; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-hud__rings span { animation: none; display: none; }
 }
 
 /* A small strip of candles that keeps printing left to right for as long as
