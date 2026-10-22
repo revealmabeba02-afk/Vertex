@@ -766,6 +766,10 @@
         link.className = "error-link";
         link.textContent = "Buy more credits →";
         errorText.appendChild(link);
+      } else if (err.name === "TypeError" && /fetch|network/i.test(err.message || "")) {
+        // The browser's raw fetch failure (offline, DNS, no connection) —
+        // never surface "Failed to fetch" verbatim.
+        errorText.textContent = "Couldn't reach Vertex. Check your internet connection and try again.";
       } else {
         errorText.textContent = err.message || "Something went wrong. Please try again.";
       }

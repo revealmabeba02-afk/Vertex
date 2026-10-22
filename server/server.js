@@ -2704,7 +2704,7 @@ async function runAnalyze(req, res, symbol, timeframe) {
       // log the user out.
       const message =
         fxRes.status === 401 || fxRes.status === 403
-          ? "Analysis provider rejected the request (no active API plan or invalid key)."
+          ? "Vertex's analysis engine is temporarily unavailable. We've been notified — please try again shortly."
           : fxRes.status === 404
           ? `FXSynapse doesn't carry prices for "${symbol}". Try a major pair, metal or index (e.g. EURUSD, XAUUSD, US30, NAS100).`
           : fxRes.status === 429
