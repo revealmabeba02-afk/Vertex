@@ -1220,8 +1220,7 @@
     const targets = Array.isArray(a.take_profit) ? a.take_profit : [];
 
     document.getElementById("res-sl-value").textContent = sl.suggestion || "—";
-    document.getElementById("res-tp-value").textContent =
-      targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
+    renderTpList(firstEntry, sl, targets);
     document.getElementById("res-invalidation").textContent = a.invalidation || "";
 
     renderRiskReward(firstEntry, sl, targets);
@@ -1361,6 +1360,49 @@
 
   checkQ3Status();
   wireQ3Ask();
+
+  // Multi-target take profit: each TP level its own row with a per-level R
+  // multiple, instead of squashing every target into one joined string.
+  // Falls back to the plain target text when raw numbers aren't available.
+  function renderTpList(entry, sl, targets) {
+    const wrap = document.getElementById("res-tp-list");
+    wrap.innerHTML = "";
+
+    if (!targets || targets.length === 0) {
+      wrap.textContent = "—";
+      return;
+    }
+
+    const entryVal = entry && typeof entry.entry_raw === "number" ? entry.entry_raw : null;
+    const slVal = sl && typeof sl.value_raw === "number" ? sl.value_raw : null;
+    const risk = (entryVal !== null && slVal !== null) ? Math.abs(entryVal - slVal) : null;
+
+    targets.forEach((t, i) => {
+      const row = document.createElement("div");
+      row.className = "tp-list__row";
+
+      const labelEl = document.createElement("span");
+      labelEl.className = "tp-list__label";
+      labelEl.textContent = targets.length > 1 ? `TP${i + 1}` : "Target";
+
+      const valueEl = document.createElement("span");
+      valueEl.className = "tp-list__value";
+      valueEl.textContent = t.target || "—";
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+
+      if (risk && risk > 0 && entryVal !== null && typeof t.target_raw === "number") {
+        const ratio = Math.abs(t.target_raw - entryVal) / risk;
+        if (isFinite(ratio) && ratio > 0) {
+          const rEl = document.createElement("span");
+          rEl.className = "tp-list__r";
+          rEl.textContent = ratio.toFixed(1) + "R";
+          row.appendChild(rEl);
+        }
+      }
+      wrap.appendChild(row);
+    });
+  }
 
   // Risk:reward ratio — how many R the nearest target is worth relative to
   // the stop distance. Uses the same clean numeric fields (entry_raw,

@@ -1729,6 +1729,32 @@ body.scanning .scan-hud {
 .trade-stat--sl .trade-stat__value { color: var(--bear); text-shadow: 0 0 18px color-mix(in srgb, var(--bear) 40%, transparent); }
 .trade-stat--tp .trade-stat__value { color: var(--bull); text-shadow: 0 0 18px color-mix(in srgb, var(--bull) 40%, transparent); }
 
+.tp-list { display: flex; flex-direction: column; gap: 4px; }
+.tp-list__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+}
+.tp-list__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--bull) 70%, var(--text-faint));
+  min-width: 32px;
+}
+.tp-list__value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--bull);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--bull) 40%, transparent);
+  overflow-wrap: anywhere;
+}
+.tp-list__r {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
 .trade-stat--rr { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
 .trade-stat--rr .trade-stat__label { color: color-mix(in srgb, var(--accent) 75%, var(--text-faint)); }
 .trade-stat--rr .trade-stat__value { color: var(--accent); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
