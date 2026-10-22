@@ -122,6 +122,35 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
+  /* System alert banner — plain, impossible to miss, front and center on
+     Overview. Red for a real problem (e.g. out of API credit), never
+     silently buried in a log King has to go dig through. */
+  .system-alert {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border: 1px solid color-mix(in srgb, var(--bear) 45%, var(--border));
+    background: color-mix(in srgb, var(--bear) 12%, var(--panel));
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .system-alert__icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bear);
+    color: #2A0E10;
+    font-weight: 800;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .system-alert__text strong { display: block; margin-bottom: 2px; color: var(--text); }
+  .system-alert__text span { color: var(--text-dim); }
   .briefing-card__label {
     display: flex;
     align-items: center;
@@ -953,6 +982,12 @@
   <h1 class="hero__title" style="font-size: clamp(28px, 4vw, 38px);">Vertex Scanner</h1>
   <p class="hero__lede" style="margin-bottom: 0;">Only you can see this page.</p>
 
+  <!-- System status banner — King explicitly asked that the system tell
+       him plainly when something is broken (like Anthropic credit running
+       out) instead of him having to dig through logs to find out. Only
+       shows up when something is actually failing; hidden otherwise. -->
+  <div class="system-alert" id="system-alert" hidden></div>
+
   <div class="briefing-card">
     <div class="briefing-card__label"><span class="briefing-card__dot" aria-hidden="true"></span>Vertex Scanner Briefing</div>
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
@@ -1671,6 +1706,22 @@
       requestAnimationFrame(tick);
     }
 
+    function renderSystemAlert(checks) {
+      const alertEl = document.getElementById("system-alert");
+      if (!alertEl) return;
+      const failing = (checks || []).filter((c) => !c.ok);
+      if (failing.length === 0) {
+        alertEl.hidden = true;
+        alertEl.innerHTML = "";
+        return;
+      }
+      alertEl.hidden = false;
+      alertEl.innerHTML = failing.map((c) => `
+        <div class="system-alert__icon">!</div>
+        <div class="system-alert__text"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.detail || "Not working right now.")}</span></div>
+      `).join("");
+    }
+
     async function loadHealth(authHeader) {
       const percentEl = document.getElementById("health-percent");
       const statusEl = document.getElementById("health-status");
@@ -1684,6 +1735,7 @@
           checksEl.innerHTML = `<div class="health-check">${escapeHtml((data && data.error) || "Could not load health.")}</div>`;
           return;
         }
+        renderSystemAlert(data.checks);
         const level = data.percent >= 100 ? "ok" : data.percent >= 50 ? "warn" : "bad";
         animateHealthPercent(percentEl, data.percent);
         percentEl.className = "health-card__percent " + (level === "ok" ? "" : "is-" + level);

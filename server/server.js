@@ -1993,22 +1993,61 @@ async function checkPaymentsReachable() {
   }
 }
 
+// King specifically asked for the system to tell him plainly when the
+// Anthropic API runs out of credit, rather than him finding out by Q2 going
+// silent and him having to dig through logs. A tiny 1-token request is cheap
+// enough to run on every health check and surfaces billing problems here,
+// front and center, instead of buried in console.error calls.
+async function checkAiAssistant() {
+  if (!ANTHROPIC_API_KEY) return { ok: false, detail: "ANTHROPIC_API_KEY not configured — Q2 can't talk at all." };
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }]
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (r.ok) return { ok: true, detail: "Anthropic API reachable, key valid." };
+    const data = await r.json().catch(() => null);
+    const message = data?.error?.message || `HTTP ${r.status}`;
+    const isCredit = /credit balance is too low/i.test(message);
+    return {
+      ok: false,
+      detail: isCredit
+        ? "Out of Anthropic credit — Q2 chat, Q2 Insight and the AI briefing have all stopped working. Add credit at console.anthropic.com."
+        : `Anthropic API error: ${message}`
+    };
+  } catch (err) {
+    return { ok: false, detail: `Could not reach Anthropic: ${err.message}` };
+  }
+}
+
 app.get("/api/admin/health", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
   }
   try {
-    const [accounts, scanProvider, paymentsConfigured, paymentsReachable] = await Promise.all([
+    const [accounts, scanProvider, paymentsConfigured, paymentsReachable, aiAssistant] = await Promise.all([
       checkAccounts(req.user.token),
       checkScanProvider(),
       checkPaymentsConfigured(),
-      checkPaymentsReachable()
+      checkPaymentsReachable(),
+      checkAiAssistant()
     ]);
     const checks = [
       { name: "Accounts & database", ...accounts },
       { name: "Scan provider (FXSynapse)", ...scanProvider },
       { name: "Payments configured", ...paymentsConfigured },
-      { name: "Payments network (Binance)", ...paymentsReachable }
+      { name: "Payments network (Binance)", ...paymentsReachable },
+      { name: "AI assistant (Q2 / Anthropic)", ...aiAssistant }
     ];
     const okCount = checks.filter((c) => c.ok).length;
     res.json({ percent: Math.round((okCount / checks.length) * 100), checks });

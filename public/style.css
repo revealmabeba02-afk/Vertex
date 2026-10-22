@@ -1007,6 +1007,30 @@ body.scanning .scan-hud {
     radial-gradient(120% 90% at 50% 20%, transparent 0%, color-mix(in srgb, #040b08 35%, transparent) 60%, #040b08 100%);
 }
 
+/* A single glowing line that sweeps left-to-right across the chart while a
+   scan is running — steady horizontal motion only, nothing that bobs or
+   bounces vertically. Replaces the old candle-bar pulsing, which read as
+   jittery "up and down" movement that King didn't like. */
+.scan-hud__sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 85%, white) 50%, transparent);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: hud-sweep 3.2s linear infinite;
+  opacity: 0.85;
+}
+@keyframes hud-sweep {
+  0% { left: 0%; opacity: 0; }
+  8% { opacity: 0.85; }
+  92% { opacity: 0.85; }
+  100% { left: 100%; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-hud__sweep { display: none; }
+}
+
 .scan-hud__center {
   position: relative;
   display: flex;
