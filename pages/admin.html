@@ -587,22 +587,34 @@
     color: var(--text-dim);
     text-decoration: none;
     border: 1px solid transparent;
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, color 0.15s ease;
   }
+  /* "Magnetic" feel on desktop hover — a small lift + glow instead of a
+     flat background swap. Touch devices never fire :hover persistently,
+     so this only ever shows on a real pointer. */
   .command-rail a:hover {
     color: var(--text);
     background: var(--panel-alt);
-    border-color: var(--border);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    transform: translateX(3px) scale(1.015);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 4px 18px -4px color-mix(in srgb, var(--accent) 35%, transparent);
   }
+  .command-rail a:active { transform: translateX(3px) scale(0.985); }
   .command-rail a.is-active {
     color: #0a0d12;
     background: var(--bull, #3ddc84);
     border-color: var(--bull, #3ddc84);
     font-weight: 700;
+    box-shadow: 0 0 22px color-mix(in srgb, var(--bull) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--bull) 60%, transparent) inset;
   }
+  .command-rail a.is-active:hover { transform: translateX(3px) scale(1.015); }
   /* Clicks is pinned high up and gets its own accent so it never gets
      lost among the rest — King specifically wants it easy to find. */
   .command-rail a.command-rail__pinned {
     border-left: 3px solid var(--accent);
+  }
+  .command-rail a.command-rail__pinned:not(.is-active) {
+    box-shadow: 0 0 14px -4px color-mix(in srgb, var(--accent) 50%, transparent);
   }
   .command-rail__group {
     margin-top: 10px;
@@ -630,8 +642,22 @@
   }
   .command-rail__group[open] summary::after { content: "–"; }
   .command-rail__group a { padding-left: 20px; font-size: 13.5px; }
-  .command-panel { display: none; }
-  .command-panel.is-active { display: block; }
+  .command-panel {
+    display: none;
+    opacity: 0;
+    transform: translateY(6px) scale(0.994);
+  }
+  .command-panel.is-active {
+    display: block;
+    animation: command-panel-in 0.22s ease forwards;
+  }
+  @keyframes command-panel-in {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .command-panel.is-active { animation: none; opacity: 1; transform: none; }
+    .command-rail a { transition: none; }
+  }
 
   .q2-chat-card {
     background: var(--panel);
@@ -726,6 +752,53 @@
     border-left: 2px solid var(--accent);
   }
   .command-main .admin-stats { margin-top: 18px; }
+
+  /* Every clickable thing in the admin area gets a consistent glow + lift
+     on hover, so it reads as "this is alive, touch it" — per King's ask
+     that "everything I wanna touch must glow". Scoped to .command-main so
+     it never bleeds into the landing/login pages. */
+  .command-main .btn,
+  .command-main .ghost-btn,
+  .command-main button,
+  .command-main .copy-plan-btn,
+  .command-main .support-item,
+  .command-main .click-row,
+  .command-main .planner-row,
+  .command-main .users-table tbody tr {
+    transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.15s ease;
+  }
+  .command-main .btn:hover,
+  .command-main .ghost-btn:hover,
+  .command-main button:not(:disabled):hover,
+  .command-main .copy-plan-btn:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 6px 20px -6px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .command-main .click-row:hover,
+  .command-main .planner-row:hover,
+  .command-main .support-item:hover,
+  .command-main .users-table tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .command-main .btn,
+    .command-main .ghost-btn,
+    .command-main button,
+    .command-main .copy-plan-btn,
+    .command-main .support-item,
+    .command-main .click-row,
+    .command-main .planner-row,
+    .command-main .users-table tbody tr {
+      transition: none;
+    }
+    .command-main .btn:hover,
+    .command-main .ghost-btn:hover,
+    .command-main button:not(:disabled):hover,
+    .command-main .copy-plan-btn:hover {
+      transform: none;
+    }
+  }
   .command-section-label {
     margin: 26px 0 -6px;
     font-size: 11px;
@@ -799,8 +872,8 @@
   </div>
 
   <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
-  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#clicks" data-panel-link="clicks" title="Link clicks" class="command-rail__pinned">Clicks</a>
+  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
