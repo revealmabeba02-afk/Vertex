@@ -1777,6 +1777,9 @@ body.scanning .scan-hud {
   padding-top: clamp(40px, 7vh, 84px);
 }
 
+.history-search-wrap { margin-top: 20px; }
+.history-search-wrap .input { width: 100%; }
+
 .history-empty {
   margin-top: 28px;
   padding: 40px 20px;

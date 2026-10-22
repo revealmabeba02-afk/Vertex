@@ -770,7 +770,11 @@
     <h1 class="hero__title">History</h1>
     <p class="hero__lede">Every chart you've scanned, saved to your account.</p>
 
+    <div id="history-search-wrap" class="history-search-wrap" hidden>
+      <input type="text" id="history-search" class="input" placeholder="Filter by pair (e.g. XAUUSD, EURUSD)…" aria-label="Filter scan history by pair">
+    </div>
     <div id="history-empty" class="history-empty">No scans yet — your results will show up here.</div>
+    <div id="history-no-match" class="history-empty" hidden>No scans match that pair.</div>
     <div id="history-list" class="history-list" hidden></div>
   </section>
 

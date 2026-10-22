@@ -1311,8 +1311,12 @@
   // runScan's /api/analyze call); this just reads them back.
   // --------------------------------------------------------------
   const historyEmpty = document.getElementById("history-empty");
+  const historyNoMatch = document.getElementById("history-no-match");
   const historyList = document.getElementById("history-list");
+  const historySearchWrap = document.getElementById("history-search-wrap");
+  const historySearchInput = document.getElementById("history-search");
   let historyLoaded = false;
+  let historyItems = [];
 
   async function loadHistory() {
     if (historyLoaded) return;
@@ -1324,21 +1328,46 @@
       });
       if (!res.ok) return;
       const data = await res.json();
-      renderHistory(Array.isArray(data.items) ? data.items : []);
+      historyItems = Array.isArray(data.items) ? data.items : [];
+      renderHistory(historyItems);
       historyLoaded = true;
     } catch {
       // History is a nice-to-have; a failed fetch just leaves the empty state.
     }
   }
 
-  function renderHistory(items) {
+  if (historySearchInput) {
+    historySearchInput.addEventListener("input", () => {
+      const q = historySearchInput.value.trim().toLowerCase();
+      const filtered = q
+        ? historyItems.filter((item) => (item.pair || "").toLowerCase().includes(q))
+        : historyItems;
+      renderHistory(filtered, { isFilter: true });
+    });
+  }
+
+  function renderHistory(items, opts) {
+    const isFilter = !!(opts && opts.isFilter);
     historyList.innerHTML = "";
-    if (items.length === 0) {
+
+    // The search box only makes sense once there's something to search —
+    // hide it on a genuinely empty history rather than show it for nothing.
+    historySearchWrap.hidden = historyItems.length === 0;
+
+    if (historyItems.length === 0) {
       historyEmpty.hidden = false;
+      historyNoMatch.hidden = true;
       historyList.hidden = true;
       return;
     }
     historyEmpty.hidden = true;
+
+    if (items.length === 0) {
+      historyNoMatch.hidden = !isFilter;
+      historyList.hidden = true;
+      return;
+    }
+    historyNoMatch.hidden = true;
     historyList.hidden = false;
 
     items.forEach((item) => {
