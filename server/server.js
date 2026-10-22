@@ -710,6 +710,7 @@ app.get("/login", (req, res) => sendFreshPage(res, "login.html"));
 app.get("/signup", (req, res) => sendFreshPage(res, "signup.html"));
 app.get("/app", (req, res) => sendFreshPage(res, "app.html"));
 app.get("/status", (req, res) => sendFreshPage(res, "status.html"));
+app.get("/maintenance", (req, res) => sendFreshPage(res, "maintenance.html"));
 app.get("/admin", (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
     res.set("Cache-Control", "no-store");
@@ -2067,6 +2068,42 @@ async function checkDatabasePublic() {
     return { ok: false };
   }
 }
+
+// Public maintenance-mode flag — anon RPC, no user token needed, since /app
+// has to be able to check this before anyone is logged in.
+app.get("/api/maintenance", async (req, res) => {
+  if (!SUPABASE_READY) return res.json({ enabled: false, message: null });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/public_get_maintenance`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!r.ok) return res.json({ enabled: false, message: null });
+    const data = await r.json().catch(() => null);
+    res.json({ enabled: !!(data && data.enabled), message: (data && data.message) || null });
+  } catch (err) {
+    console.error("Maintenance check error:", err.message);
+    res.json({ enabled: false, message: null }); // fail open — never lock users out because of a check failure
+  }
+});
+
+app.post("/api/admin/maintenance", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const enabled = !!req.body?.enabled;
+  const message = typeof req.body?.message === "string" ? req.body.message.slice(0, 500) : null;
+  try {
+    const row = await supabaseRpc("admin_set_maintenance", { p_enabled: enabled, p_message: message }, req.user.token);
+    res.json({ ok: true, enabled: row?.maintenance_mode ?? enabled, message: row?.maintenance_message ?? message });
+  } catch (err) {
+    console.error("Set maintenance error:", err.message);
+    res.status(502).json({ error: "Could not update maintenance mode." });
+  }
+});
 
 app.get("/api/status", async (req, res) => {
   try {

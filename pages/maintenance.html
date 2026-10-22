@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vertex — Down for maintenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<style>
+  body.maint-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    text-align: center;
+  }
+  .maint-card { max-width: 440px; }
+  .maint-card__brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 22px;
+    margin-bottom: 18px;
+    color: var(--text);
+  }
+  .maint-card__icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 20px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--accent) 15%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    animation: maint-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes maint-pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 30%, transparent)); }
+    50% { filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 55%, transparent)); }
+  }
+  @media (prefers-reduced-motion: reduce) { .maint-card__icon { animation: none; } }
+  .maint-card__title { font-size: 22px; font-weight: 800; color: var(--text); margin: 0 0 10px; }
+  .maint-card__body { font-size: 14.5px; line-height: 1.6; color: var(--text-dim); margin: 0 0 24px; }
+  .maint-card__footer { font-size: 12.5px; color: var(--text-faint); }
+  .maint-card__footer a { color: var(--accent); }
+</style>
+</head>
+<body class="maint-page">
+  <div class="maint-card">
+    <div class="maint-card__brand">VERTEX</div>
+    <div class="maint-card__icon" aria-hidden="true">⚙</div>
+    <h1 class="maint-card__title">Quick maintenance</h1>
+    <p class="maint-card__body" id="maint-message">Vertex is getting a quick upgrade. We'll be back shortly — thanks for your patience.</p>
+    <p class="maint-card__footer">Check <a href="/status">status</a> for live updates.</p>
+  </div>
+
+  <script>
+    // If maintenance mode gets switched off while someone's on this page,
+    // bounce them back to the app automatically instead of making them
+    // guess and refresh manually.
+    async function pollMaintenance() {
+      try {
+        const res = await fetch("/api/maintenance");
+        const data = await res.json();
+        if (data && data.message) {
+          document.getElementById("maint-message").textContent = data.message;
+        }
+        if (!data || !data.enabled) {
+          location.replace("/app");
+        }
+      } catch {
+        // Stay on the page; try again next tick.
+      }
+    }
+    pollMaintenance();
+    setInterval(pollMaintenance, 15000);
+  </script>
+</body>
+</html>

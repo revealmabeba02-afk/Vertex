@@ -1081,6 +1081,19 @@
       <div class="health-check">Loading health…</div>
     </div>
   </div>
+
+  <div class="pattern-card">
+    <div class="users-card__head">Maintenance mode</div>
+    <p class="settings-row__desc" style="margin: 6px 0 14px;">Shows every visitor a "down for maintenance" page instead of Vertex. Use this before a risky change, not for routine deploys.</p>
+    <div class="settings-row">
+      <div>
+        <p class="settings-row__title" id="maintenance-state">Off</p>
+      </div>
+      <button type="button" id="maintenance-toggle-btn" class="ghost-btn">Turn on</button>
+    </div>
+    <input type="text" id="maintenance-message-input" class="input" placeholder="Message shown to visitors (optional)" style="margin-top: 12px; width: 100%;">
+    <p class="admin-status" id="maintenance-status" hidden></p>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="orders">
@@ -1322,6 +1335,7 @@
     // block below — a failure in one never blocks the others from showing.
     loadBriefing(authHeader);
     loadHealth(authHeader);
+    wireMaintenanceToggle(authHeader);
     loadSupport(authHeader);
     loadFeedback(authHeader);
     wireQ2Toggle(authHeader);
@@ -1835,6 +1849,62 @@
         <div class="system-alert__icon">!</div>
         <div class="system-alert__text"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.detail || "Not working right now.")}</span></div>
       `).join("");
+    }
+
+    async function wireMaintenanceToggle(authHeader) {
+      const stateEl = document.getElementById("maintenance-state");
+      const btn = document.getElementById("maintenance-toggle-btn");
+      const msgInput = document.getElementById("maintenance-message-input");
+      const statusEl = document.getElementById("maintenance-status");
+      if (!btn) return;
+
+      let currentlyOn = false;
+
+      function render(enabled, message) {
+        currentlyOn = enabled;
+        stateEl.textContent = enabled ? "On — visitors see the maintenance page" : "Off";
+        stateEl.style.color = enabled ? "var(--bear)" : "";
+        btn.textContent = enabled ? "Turn off" : "Turn on";
+        if (typeof message === "string") msgInput.value = message;
+      }
+
+      try {
+        const res = await fetch("/api/maintenance");
+        const data = await res.json().catch(() => null);
+        render(!!(data && data.enabled), (data && data.message) || "");
+      } catch {
+        // Leave the default "Off" state showing; the toggle button still works.
+      }
+
+      btn.addEventListener("click", async () => {
+        const nextEnabled = !currentlyOn;
+        btn.disabled = true;
+        statusEl.hidden = true;
+        try {
+          const res = await fetch("/api/admin/maintenance", {
+            method: "POST",
+            headers: { ...authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: nextEnabled, message: msgInput.value.trim() || null })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not update maintenance mode.";
+            statusEl.classList.add("admin-status--error");
+            statusEl.hidden = false;
+            return;
+          }
+          render(data.enabled, data.message || "");
+          statusEl.textContent = nextEnabled ? "Maintenance mode is now ON." : "Maintenance mode is now OFF.";
+          statusEl.classList.remove("admin-status--error");
+          statusEl.hidden = false;
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+          statusEl.classList.add("admin-status--error");
+          statusEl.hidden = false;
+        } finally {
+          btn.disabled = false;
+        }
+      });
     }
 
     async function loadHealth(authHeader) {

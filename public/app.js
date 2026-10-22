@@ -20,6 +20,15 @@
   const revealPage = () => root.classList.remove("auth-check");
   const toLogin = () => location.replace("/login?next=" + encodeURIComponent("/app" + location.hash));
 
+  // Maintenance mode: a cheap, fail-open check (any error or non-OK response
+  // just lets the app load as normal — this must never be what breaks the
+  // site). Runs once on load, not blocking the rest of the page's own auth
+  // check below.
+  fetch("/api/maintenance")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => { if (data && data.enabled) location.replace("/maintenance"); })
+    .catch(() => {});
+
   if (!Auth.ready) {
     const notice = document.getElementById("setup-notice");
     const message = Auth.problemMessage();
