@@ -285,7 +285,10 @@ body::after {
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   transition: margin-left 0.2s ease, opacity 0.2s ease;
+  overflow-y: auto;
 }
+
+.sidenav { flex: 1 1 auto; min-height: 0; }
 
 /* Collapsed state: sidebar slides out, a small pill button opens it again. */
 :root[data-sidebar="collapsed"] .sidebar {
@@ -2364,11 +2367,15 @@ body.scanning .scan-hud {
     border-bottom: 0;
     transform: translateX(-100%);
     transition: transform 0.22s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .sidenav {
     flex-direction: column;
     flex-wrap: nowrap;
     overflow-x: visible;
+    flex: 1 1 auto;
+    min-height: 0;
   }
   .navpill {
     flex: 0 0 auto;
