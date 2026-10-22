@@ -1052,6 +1052,69 @@
     XAUUSD: "Gold", EURUSD: "Euro / Dollar", GBPUSD: "Pound / Dollar",
     BTCUSD: "Bitcoin", US30: "Dow Jones", NAS100: "Nasdaq 100"
   };
+  // Pulls the currency codes relevant to a scanned pair (EURUSD -> EUR, USD;
+  // XAUUSD -> XAU, USD) so the result page can show only the news events
+  // that actually matter for this chart, not the whole day's calendar.
+  function currenciesForPair(pair) {
+    if (!pair) return [];
+    const s = String(pair).toUpperCase().replace(/[^A-Z]/g, "");
+    if (s.length === 6) return [s.slice(0, 3), s.slice(3, 6)];
+    if (s.includes("XAU")) return ["XAU", "USD"];
+    if (s.includes("XAG")) return ["XAG", "USD"];
+    if (/^(US30|US500|USTEC|NAS100|SPX500|DJ30)/.test(s)) return ["USD"];
+    return [];
+  }
+
+  let pairNewsCache = { ts: 0, events: null };
+  const PAIR_NEWS_CACHE_MS = 2 * 60 * 1000;
+
+  async function renderPairNews(pairGuess) {
+    const wrap = document.getElementById("res-news-wrap");
+    const list = document.getElementById("res-news-list");
+    if (!wrap || !list) return;
+
+    const currencies = currenciesForPair(pairGuess);
+    if (currencies.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+
+    try {
+      if (!pairNewsCache.events || Date.now() - pairNewsCache.ts > PAIR_NEWS_CACHE_MS) {
+        const session = await Auth.getSession();
+        if (!session) { wrap.hidden = true; return; }
+        const res = await fetch("/api/news/calendar", {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (!res.ok) { wrap.hidden = true; return; }
+        const data = await res.json();
+        pairNewsCache = { ts: Date.now(), events: Array.isArray(data.events) ? data.events : [] };
+      }
+
+      const relevant = pairNewsCache.events.filter((ev) => currencies.includes(String(ev.currency || "").toUpperCase()));
+      if (relevant.length === 0) {
+        wrap.hidden = true;
+        return;
+      }
+
+      list.innerHTML = "";
+      relevant.slice(0, 4).forEach((ev) => {
+        const row = document.createElement("div");
+        row.className = "result-news__row" + (ev.big ? " result-news__row--big" : "");
+        let time = "—";
+        try { time = new Date(ev.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); } catch {}
+        row.innerHTML =
+          `<span class="result-news__time">${time}</span>` +
+          `<span class="result-news__name">${escapeHtmlClient(ev.event_name || "Event")}</span>` +
+          `<span class="result-news__currency">${escapeHtmlClient(ev.currency || "")}</span>`;
+        list.appendChild(row);
+      });
+      wrap.hidden = false;
+    } catch {
+      wrap.hidden = true;
+    }
+  }
+
   function friendlySymbol(sym) {
     if (!sym) return sym;
     const name = SYMBOL_NAMES[String(sym).toUpperCase()];
@@ -1238,6 +1301,7 @@
 
     renderRiskReward(firstEntry, sl, targets);
     buildTradeLadder(firstEntry, sl, targets, side);
+    renderPairNews(a.pair_guess);
 
     const notesWrap = document.getElementById("res-notes-wrap");
     if (a.notes) {

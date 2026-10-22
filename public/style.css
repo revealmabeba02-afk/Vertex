@@ -1759,6 +1759,43 @@ body.scanning .scan-hud {
 .trade-stat--rr .trade-stat__label { color: color-mix(in srgb, var(--accent) 75%, var(--text-faint)); }
 .trade-stat--rr .trade-stat__value { color: var(--accent); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
 
+.result-news {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.result-news__title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.result-news__list { display: flex; flex-direction: column; gap: 8px; }
+.result-news__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.result-news__time {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  min-width: 56px;
+}
+.result-news__name { flex: 1; color: var(--text-dim); }
+.result-news__currency {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+.result-news__row--big .result-news__name { color: var(--text); font-weight: 600; }
+.result-news__row--big .result-news__currency { color: var(--accent); }
+
 .confidence-why {
   margin-top: 14px;
   font-size: 13px;
