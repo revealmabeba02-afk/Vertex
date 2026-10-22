@@ -130,11 +130,12 @@
     news: document.getElementById("view-news"),
     how: document.getElementById("view-how"),
     history: document.getElementById("view-history"),
+    "whats-new": document.getElementById("view-whats-new"),
     help: document.getElementById("view-help"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#help": "help", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
 
   // Each section should feel like turning to its own page, not a tab
   // crossfading on top of the last one. So the old page fully leaves
@@ -168,6 +169,7 @@
     }
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
+    if (name === "whats-new") loadWhatsNew();
     if (name === "credits") refreshBalance();
     if (name === "help") loadHelpHistory();
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
@@ -821,6 +823,48 @@
   // --------------------------------------------------------------
   // Render
   // --------------------------------------------------------------
+  // --------------------------------------------------------------
+  // What's new. A hand-maintained list — newest entry first — rather than
+  // pulled from git history, so it only ever shows things actually worth
+  // telling a user about, in their own words.
+  // --------------------------------------------------------------
+  const CHANGELOG = [
+    { date: "2026-10-23", title: "Full-screen scan HUD", body: "The loading screen while Vertex builds your plan now takes over the whole screen, holds rock-steady on mobile, and shows an AI scan-ring animation instead of the old bouncing candles." },
+    { date: "2026-10-23", title: "Risk:reward on every plan", body: "Each trade plan now shows its risk:reward ratio (e.g. 1:2.4) right next to stop loss and take profit." },
+    { date: "2026-10-23", title: "Confidence, explained", body: "Tap \"Why this confidence score?\" on any result to see exactly what pushed the score up or down." },
+    { date: "2026-10-23", title: "Pin your favorite pairs", body: "Star a pair in History to pin it as a quick-filter chip, plus a new search box to find any past scan fast." },
+    { date: "2026-10-22", title: "Redesigned admin command center", body: "A full sidebar rebuild with a system health banner that flags problems automatically — no more digging through logs." },
+    { date: "2026-10-22", title: "Q2 got an upgrade", body: "Q2's chat panel now has a whole new look and feel to go with its sharper personality." }
+  ];
+
+  async function loadWhatsNew() {
+    const wrap = document.getElementById("whats-new-list");
+    if (!wrap || wrap.dataset.rendered) return;
+    wrap.innerHTML = "";
+    CHANGELOG.forEach((entry) => {
+      const item = document.createElement("div");
+      item.className = "whats-new-item";
+      const date = document.createElement("span");
+      date.className = "whats-new-item__date";
+      try {
+        date.textContent = new Date(entry.date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      } catch {
+        date.textContent = entry.date;
+      }
+      const title = document.createElement("h3");
+      title.className = "whats-new-item__title";
+      title.textContent = entry.title;
+      const body = document.createElement("p");
+      body.className = "whats-new-item__body";
+      body.textContent = entry.body;
+      item.appendChild(date);
+      item.appendChild(title);
+      item.appendChild(body);
+      wrap.appendChild(item);
+    });
+    wrap.dataset.rendered = "1";
+  }
+
   const TF_LABELS = {
     M1: "1 minute", M5: "5 minutes", M15: "15 minutes", M30: "30 minutes",
     H1: "1 hour", H4: "4 hours",
