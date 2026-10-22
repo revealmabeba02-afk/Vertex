@@ -498,48 +498,95 @@
   .planner-row__delete { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; }
   .planner-row__delete:hover { color: var(--bear); }
 
-  /* --- Command Deck layout (sidebar + dense grid) ------------------------ */
+  /* --- Command Deck layout (slide-out sidebar + dense grid) --------------
+     Driven entirely by a JS class toggle, not a width media query — the
+     old version depended on matchMedia(max-width:760px) to swap in full
+     labels, which wasn't firing reliably on King's phone, leaving him
+     stuck with 2-letter codes in a cramped desktop-style rail. This way
+     the same drawer behaves identically on any screen. */
   .command-shell {
     display: flex;
     align-items: flex-start;
     min-height: 100vh;
   }
-  .command-rail {
-    position: sticky;
-    top: 0;
+  .command-rail-toggle {
     flex: none;
-    width: 56px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .command-rail-toggle:hover { background: var(--panel-alt); }
+  .command-rail-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(0,0,0,0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  :root[data-rail="open"] .command-rail-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .command-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    flex: none;
+    width: min(260px, 82vw);
     height: 100vh;
-    background: color-mix(in srgb, var(--panel) 70%, #06040a);
+    background: color-mix(in srgb, var(--panel) 85%, #06040a);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding: 18px 0;
+    gap: 4px;
+    padding: 18px 14px 24px;
     overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+  }
+  :root[data-rail="open"] .command-rail {
+    transform: translateX(0);
+  }
+  .command-rail__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 8px 16px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
   }
   .command-rail__mark {
     width: 22px;
     height: 22px;
     border-radius: 7px;
     background: linear-gradient(135deg, var(--accent), var(--bull));
-    margin-bottom: 6px;
     flex: none;
   }
-  .command-rail a {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
+  .command-rail__title {
+    font-size: 13px;
     font-weight: 700;
     color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+  .command-rail a {
+    display: flex;
+    align-items: center;
+    padding: 11px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
     text-decoration: none;
     border: 1px solid transparent;
-    flex: none;
   }
   .command-rail a:hover {
     color: var(--text);
@@ -550,7 +597,39 @@
     color: #0a0d12;
     background: var(--bull, #3ddc84);
     border-color: var(--bull, #3ddc84);
+    font-weight: 700;
   }
+  /* Clicks is pinned high up and gets its own accent so it never gets
+     lost among the rest — King specifically wants it easy to find. */
+  .command-rail a.command-rail__pinned {
+    border-left: 3px solid var(--accent);
+  }
+  .command-rail__group {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .command-rail__group summary {
+    padding: 11px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .command-rail__group summary::-webkit-details-marker { display: none; }
+  .command-rail__group summary::after {
+    content: "+";
+    font-size: 15px;
+    color: var(--text-faint);
+  }
+  .command-rail__group[open] summary::after { content: "–"; }
+  .command-rail__group a { padding-left: 20px; font-size: 13.5px; }
   .command-panel { display: none; }
   .command-panel.is-active { display: block; }
 
@@ -655,35 +734,6 @@
     color: var(--text-faint);
   }
   .command-section-label:first-of-type { margin-top: 6px; }
-  @media (max-width: 760px) {
-    .command-shell { flex-direction: column; }
-    .command-rail {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      width: 100%;
-      height: auto;
-      flex-direction: row;
-      align-items: center;
-      overflow-x: auto;
-      overflow-y: visible;
-      padding: 10px 12px;
-      gap: 8px;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-    }
-    .command-rail__mark { display: none; }
-    .command-rail a {
-      width: auto;
-      height: 32px;
-      padding: 0 12px;
-      flex: none;
-      white-space: nowrap;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      font-size: 12px;
-    }
-  }
 </style>
 </head>
 <body>
@@ -709,6 +759,9 @@
 
 <header class="topbar">
   <div class="topbar__pill">
+    <button type="button" class="command-rail-toggle" id="command-rail-toggle" aria-label="Open menu" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+    </button>
     <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
       <span class="brand__mark" aria-hidden="true">
         <svg viewBox="0 0 200 200" width="20" height="20">
@@ -738,20 +791,29 @@
 </header>
 
 <div class="command-shell">
-<nav class="command-rail" aria-label="Admin sections">
-  <div class="command-rail__mark" aria-hidden="true"></div>
-  <a href="#overview" data-panel-link="overview" title="Overview" data-full="Overview">OV</a>
-  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2" data-full="Q2">Q2</a>
-  <a href="#video" data-panel-link="video" title="Post a video" data-full="Video">VD</a>
-  <a href="#ai" data-panel-link="ai" title="Q2 / Q3" data-full="AI">AI</a>
-  <a href="#health" data-panel-link="health" title="Health" data-full="Health">HP</a>
-  <a href="#orders" data-panel-link="orders" title="Orders" data-full="Orders">$</a>
-  <a href="#stats" data-panel-link="stats" title="Stats" data-full="Stats">#</a>
-  <a href="#users" data-panel-link="users" title="Users" data-full="Users">U</a>
-  <a href="#clicks" data-panel-link="clicks" title="Link clicks" data-full="Clicks">LK</a>
-  <a href="#planner" data-panel-link="planner" title="Content planner" data-full="Planner">PL</a>
-  <a href="#support" data-panel-link="support" title="Support" data-full="Support">SU</a>
-  <a href="#feedback" data-panel-link="feedback" title="Feedback" data-full="Feedback">FB</a>
+<div class="command-rail-backdrop" id="command-rail-backdrop"></div>
+<nav class="command-rail" aria-label="Admin sections" id="command-rail">
+  <div class="command-rail__head">
+    <div class="command-rail__mark" aria-hidden="true"></div>
+    <span class="command-rail__title">Vertex Admin</span>
+  </div>
+
+  <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
+  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
+  <a href="#clicks" data-panel-link="clicks" title="Link clicks" class="command-rail__pinned">Clicks</a>
+  <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
+  <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
+
+  <details class="command-rail__group">
+    <summary>Settings</summary>
+    <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
+    <a href="#health" data-panel-link="health" title="Health">Health</a>
+    <a href="#orders" data-panel-link="orders" title="Orders">Orders</a>
+    <a href="#stats" data-panel-link="stats" title="Stats">Stats</a>
+    <a href="#users" data-panel-link="users" title="Users">Users</a>
+    <a href="#support" data-panel-link="support" title="Support">Support</a>
+    <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
+  </details>
 </nav>
 <main class="admin-wrap command-main">
 <div class="command-panel" data-panel="overview">
@@ -961,11 +1023,25 @@
 <script src="/config.js"></script>
 <script src="/auth-client.js"></script>
 <script>
-  if (window.matchMedia("(max-width: 760px)").matches) {
-    document.querySelectorAll(".command-rail a[data-full]").forEach((a) => {
-      a.textContent = a.getAttribute("data-full");
+  (function () {
+    const rail = document.getElementById("command-rail");
+    const toggleBtn = document.getElementById("command-rail-toggle");
+    const backdrop = document.getElementById("command-rail-backdrop");
+    function openRail() {
+      document.documentElement.setAttribute("data-rail", "open");
+      toggleBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeRail() {
+      document.documentElement.removeAttribute("data-rail");
+      toggleBtn.setAttribute("aria-expanded", "false");
+    }
+    toggleBtn.addEventListener("click", () => {
+      if (document.documentElement.getAttribute("data-rail") === "open") closeRail();
+      else openRail();
     });
-  }
+    backdrop.addEventListener("click", closeRail);
+    rail.querySelectorAll("a").forEach((a) => a.addEventListener("click", closeRail));
+  })();
 
   (function () {
     const links = document.querySelectorAll(".command-rail a[data-panel-link]");
@@ -990,7 +1066,16 @@
         panels[0].classList.add("is-active");
         void panels[0].offsetHeight;
       }
-      links.forEach((l) => l.classList.toggle("is-active", l.getAttribute("data-panel-link") === name));
+      links.forEach((l) => {
+        const active = l.getAttribute("data-panel-link") === name;
+        l.classList.toggle("is-active", active);
+        // If the active link lives inside the collapsed "Settings" group,
+        // expand it so it's visible rather than hidden with no indication.
+        if (active) {
+          const group = l.closest("details.command-rail__group");
+          if (group) group.open = true;
+        }
+      });
     }
     links.forEach((link) => {
       link.addEventListener("click", (e) => {
