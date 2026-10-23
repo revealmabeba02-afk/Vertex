@@ -1081,7 +1081,19 @@ app.get("/config.js", (req, res) => {
   );
 });
 
-app.use(express.static(path.join(__dirname, "..", "public"), { index: false }));
+// The HTML pages above are no-store so a deploy is always fetched fresh,
+// but that's useless if the CSS/JS they reference can still be served from
+// a stale cache — exactly what mobile Safari was doing here (old style.css
+// missing newly-added rules, serving alongside brand-new HTML). no-cache
+// doesn't disable caching, it forces a conditional revalidation (a quick
+// 304 if unchanged) on every request, so a real change is always picked up
+// without losing the bandwidth savings for unchanged files.
+app.use(
+  express.static(path.join(__dirname, "..", "public"), {
+    index: false,
+    setHeaders: (res) => res.set("Cache-Control", "no-cache")
+  })
+);
 
 // --- Auth gate ---------------------------------------------------------------
 // The browser sends its Supabase access token; Supabase confirms who it
