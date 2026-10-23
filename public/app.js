@@ -2955,6 +2955,55 @@
   let referralLoaded = false;
 
   // --------------------------------------------------------------
+  // Change email — Supabase's own updateUser({email}) sends a confirmation
+  // link to the NEW address; nothing changes here until that link is
+  // clicked, so this just confirms the request was sent.
+  const changeEmailToggleBtn = document.getElementById("settings-change-email-toggle");
+  const changeEmailForm = document.getElementById("settings-change-email-form");
+  if (changeEmailToggleBtn && changeEmailForm) {
+    changeEmailToggleBtn.addEventListener("click", () => {
+      changeEmailForm.hidden = !changeEmailForm.hidden;
+    });
+  }
+  if (changeEmailForm) {
+    changeEmailForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("settings-new-email");
+      const btn = document.getElementById("settings-change-email-btn");
+      const statusEl = document.getElementById("settings-change-email-status");
+      const value = input.value.trim();
+      statusEl.hidden = true;
+      statusEl.classList.remove("credits-status--error");
+      if (!value || !value.includes("@")) {
+        statusEl.textContent = "Enter a valid email address.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+        return;
+      }
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      try {
+        const { error } = await Auth.client.auth.updateUser({ email: value });
+        if (error) {
+          statusEl.textContent = Auth.friendlyError(error);
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+          return;
+        }
+        input.value = "";
+        statusEl.textContent = "Check both your old and new inbox — Supabase needs both confirmed before the change takes effect.";
+        statusEl.hidden = false;
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("is-loading");
+      }
+    });
+  }
+
   // Self-service account deletion — requires typing DELETE to confirm, then
   // calls the server, which deprovisions any MetaApi broker account and
   // runs the self_delete_account() RPC (supabase/self_delete_account.sql).

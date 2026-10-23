@@ -813,6 +813,21 @@
       <p class="settings-row__desc" style="margin-top: 12px;">Have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
 
       <div style="margin-top: 14px;">
+        <button type="button" class="btn btn--ghost" id="settings-change-email-toggle">Change email</button>
+        <form id="settings-change-email-form" style="margin-top: 10px;" hidden>
+          <div class="field">
+            <label class="field__label" for="settings-new-email">New email</label>
+            <input type="email" id="settings-new-email" class="input" autocomplete="email" placeholder="you@example.com" required />
+          </div>
+          <button type="submit" id="settings-change-email-btn" class="scan-btn" style="margin-top: 10px;">
+            <span class="scan-btn__label">Send confirmation</span>
+            <span class="scan-btn__spinner" aria-hidden="true"></span>
+          </button>
+          <p id="settings-change-email-status" class="credits-status" hidden></p>
+        </form>
+      </div>
+
+      <div style="margin-top: 14px;">
         <button type="button" class="btn btn--ghost" id="settings-change-password-toggle">Change password</button>
         <form id="settings-change-password-form" style="margin-top: 10px;" hidden>
           <div class="field">
