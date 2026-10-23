@@ -200,6 +200,51 @@
   const settingsLogoutBtn = document.getElementById("settings-logout-btn");
   if (settingsLogoutBtn) settingsLogoutBtn.addEventListener("click", () => Auth.signOut());
 
+  // Export my data: one JSON file of everything scoped to this account —
+  // scans, journal, support and feedback history. Straight from the same
+  // authenticated endpoints the app already uses, just bundled together.
+  const exportDataBtn = document.getElementById("settings-export-data-btn");
+  if (exportDataBtn) {
+    exportDataBtn.addEventListener("click", async () => {
+      const prevLabel = exportDataBtn.textContent;
+      exportDataBtn.disabled = true;
+      exportDataBtn.textContent = "Preparing…";
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const authHeader = { Authorization: `Bearer ${session.access_token}` };
+        const [historyRes, journalRes, supportRes, feedbackRes] = await Promise.all([
+          fetch("/api/history", { headers: authHeader }).then((r) => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] })),
+          fetch("/api/journal", { headers: authHeader }).then((r) => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] })),
+          fetch("/api/support/mine", { headers: authHeader }).then((r) => (r.ok ? r.json() : { messages: [] })).catch(() => ({ messages: [] })),
+          fetch("/api/feedback/mine", { headers: authHeader }).then((r) => (r.ok ? r.json() : { messages: [] })).catch(() => ({ messages: [] }))
+        ]);
+        const bundle = {
+          exported_at: new Date().toISOString(),
+          account_email: session.user.email || null,
+          scan_history: historyRes.items || [],
+          trade_journal: journalRes.items || [],
+          support_messages: supportRes.messages || [],
+          feedback_messages: feedbackRes.messages || []
+        };
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "vertex-my-data.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        // Best-effort — leave the button usable to retry.
+      } finally {
+        exportDataBtn.disabled = false;
+        exportDataBtn.textContent = prevLabel;
+      }
+    });
+  }
+
   const form = document.getElementById("scan-form");
   const symbolInput = document.getElementById("symbol-input");
   const timeframeSelect = document.getElementById("timeframe-select");
