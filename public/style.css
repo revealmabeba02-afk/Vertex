@@ -926,6 +926,28 @@ body::after {
   text-align: center;
 }
 
+.low-balance-nudge {
+  display: block;
+  margin: 14px 0 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 13.5px;
+  color: var(--text-dim);
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.low-balance-nudge span {
+  color: var(--accent);
+  font-weight: 700;
+}
+.low-balance-nudge:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
 .platforms {
   margin: 22px 0 0;
   font-family: var(--font-mono);

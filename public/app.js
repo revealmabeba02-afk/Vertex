@@ -2378,6 +2378,10 @@
       setCreditPill(currentBalance, freeRemaining);
       if (creditBalanceValue) creditBalanceValue.textContent = currentBalance === null ? "—" : String(currentBalance);
       if (freeScansValue) freeScansValue.textContent = freeRemaining === null ? "—" : `${freeRemaining} / 2`;
+      const lowBalanceNudge = document.getElementById("low-balance-nudge");
+      if (lowBalanceNudge) {
+        lowBalanceNudge.hidden = !(currentBalance === 0 && freeRemaining === 0);
+      }
     } catch {
       // Best-effort — leave whatever was last shown.
     }
