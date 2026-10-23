@@ -778,6 +778,28 @@
     });
   }
 
+  // One-tap "log this trade": pre-fills the Journal form from the scan that
+  // just ran (pair + direction from the first entry's bias) and jumps to
+  // the Journal tab, instead of making someone retype it from memory.
+  const logJournalBtn = document.getElementById("res-log-journal-btn");
+  if (logJournalBtn) {
+    logJournalBtn.addEventListener("click", () => {
+      if (!lastResultForCopy) return;
+      const { a } = lastResultForCopy;
+      const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+      const side = (firstEntry?.type || "").toLowerCase();
+      const direction = side === "short" ? "sell" : "buy";
+      const pairInput = document.getElementById("journal-pair");
+      const directionSelect = document.getElementById("journal-direction");
+      const entryInput = document.getElementById("journal-entry");
+      if (pairInput) pairInput.value = a.pair_guess || "";
+      if (directionSelect) directionSelect.value = direction;
+      if (entryInput && firstEntry && typeof firstEntry.entry_raw === "number") entryInput.value = firstEntry.entry_raw;
+      location.hash = "#journal";
+      setTimeout(() => pairInput && pairInput.focus(), 150);
+    });
+  }
+
   function buildShareCard({ a, timeframe }) {
     return new Promise((resolve, reject) => {
       try {
