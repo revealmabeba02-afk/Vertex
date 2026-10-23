@@ -483,6 +483,26 @@
             <p class="result-news__title">News today for this pair</p>
             <div id="res-news-list" class="result-news__list"></div>
           </div>
+
+          <details id="res-risk-calc-wrap" class="confidence-why" hidden>
+            <summary>Position size calculator</summary>
+            <div class="risk-calc">
+              <label class="risk-calc__field">
+                <span>Account balance ($)</span>
+                <input type="number" id="risk-calc-balance" class="input" min="0" step="1" placeholder="1000">
+              </label>
+              <label class="risk-calc__field">
+                <span>Risk this trade (%)</span>
+                <input type="number" id="risk-calc-pct" class="input" min="0" max="100" step="0.1" placeholder="1">
+              </label>
+              <label class="risk-calc__field">
+                <span>Value per pip, per lot ($)</span>
+                <input type="number" id="risk-calc-pipvalue" class="input" min="0" step="0.1" placeholder="10">
+              </label>
+            </div>
+            <div id="risk-calc-output" class="risk-calc__output"></div>
+            <p class="risk-calc__note">Approximate — pip value varies by broker and instrument. Always confirm with your broker's own calculator before sizing a real trade.</p>
+          </details>
         </section>
 
         <section class="result-section result-section--wide" id="res-notes-wrap">

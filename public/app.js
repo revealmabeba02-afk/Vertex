@@ -1144,6 +1144,82 @@
     }
   }
 
+  // Position-size calculator: account balance + risk % + the plan's own
+  // stop distance -> a suggested lot size. Inputs persist in localStorage
+  // (per-device convenience, not account data) so a user doesn't re-type
+  // their balance on every single scan.
+  const RISK_CALC_KEY = "vertex_risk_calc_inputs";
+  function loadRiskCalcInputs() {
+    try {
+      const raw = localStorage.getItem(RISK_CALC_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+  function saveRiskCalcInputs(obj) {
+    try { localStorage.setItem(RISK_CALC_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+  }
+
+  function setupRiskCalculator(entry, sl, digits) {
+    const wrap = document.getElementById("res-risk-calc-wrap");
+    const balanceInput = document.getElementById("risk-calc-balance");
+    const pctInput = document.getElementById("risk-calc-pct");
+    const pipValueInput = document.getElementById("risk-calc-pipvalue");
+    const output = document.getElementById("risk-calc-output");
+    if (!wrap) return;
+
+    const entryVal = entry && typeof entry.entry_raw === "number" ? entry.entry_raw : null;
+    const slVal = sl && typeof sl.value_raw === "number" ? sl.value_raw : null;
+    if (entryVal === null || slVal === null) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+
+    const saved = loadRiskCalcInputs();
+    if (!balanceInput.dataset.wired) {
+      balanceInput.value = saved.balance || "";
+      pctInput.value = saved.pct || "1";
+      pipValueInput.value = saved.pipValue || "10";
+      [balanceInput, pctInput, pipValueInput].forEach((el) => {
+        el.addEventListener("input", () => {
+          saveRiskCalcInputs({ balance: balanceInput.value, pct: pctInput.value, pipValue: pipValueInput.value });
+          compute();
+        });
+      });
+      balanceInput.dataset.wired = "1";
+    }
+
+    // Pip size heuristic: FXSynapse's "digits" is decimal places quoted
+    // (e.g. 5 for EURUSD's 1.08523, 3 for USDJPY's 148.523) — the pip is
+    // one order of magnitude coarser than the last quoted decimal.
+    const pipSize = typeof digits === "number" && digits >= 1 ? Math.pow(10, -(digits - 1)) : 0.0001;
+
+    function compute() {
+      const balance = parseFloat(balanceInput.value);
+      const pct = parseFloat(pctInput.value);
+      const pipValue = parseFloat(pipValueInput.value);
+      const distancePrice = Math.abs(entryVal - slVal);
+      const distancePips = distancePrice / pipSize;
+
+      if (!balance || !pct || !pipValue || distancePips <= 0) {
+        output.innerHTML = '<p class="risk-calc__hint">Enter your balance and risk % to see a suggested position size.</p>';
+        return;
+      }
+
+      const riskAmount = balance * (pct / 100);
+      const lots = riskAmount / (distancePips * pipValue);
+
+      output.innerHTML = `
+        <div class="risk-calc__row"><span>Stop distance</span><strong>${distancePips.toFixed(1)} pips</strong></div>
+        <div class="risk-calc__row"><span>You're risking</span><strong>$${riskAmount.toFixed(2)}</strong></div>
+        <div class="risk-calc__row risk-calc__row--highlight"><span>Suggested size</span><strong>${lots.toFixed(2)} lots</strong></div>
+      `;
+    }
+    compute();
+  }
+
   function friendlySymbol(sym) {
     if (!sym) return sym;
     const name = SYMBOL_NAMES[String(sym).toUpperCase()];
@@ -1331,6 +1407,7 @@
     renderRiskReward(firstEntry, sl, targets);
     buildTradeLadder(firstEntry, sl, targets, side);
     renderPairNews(a.pair_guess);
+    setupRiskCalculator(firstEntry, sl, a.digits);
 
     const notesWrap = document.getElementById("res-notes-wrap");
     if (a.notes) {
