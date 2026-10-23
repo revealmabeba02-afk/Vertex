@@ -1213,6 +1213,7 @@
     summary.hidden = false;
     if (exportBtn) exportBtn.hidden = false;
     renderJournalByPair();
+    renderJournalSessionInsight();
 
     const closed = journalItems.filter((t) => t.result !== "open");
     const wins = closed.filter((t) => t.result === "win").length;
@@ -1369,6 +1370,44 @@
       line.querySelector(".currency-bias-row__label").textContent = `${row.pct}% (${row.closed})`;
       listEl.appendChild(line);
     });
+  }
+
+  // Which session(s) the user's closed trades land in best, purely from
+  // their own journal — a trade's hour can fall in more than one open
+  // session (London/New York overlap, say), so it's counted toward each.
+  // Only shown once there's enough closed trades to mean anything.
+  const SESSION_LABELS = { sydney: "Sydney", tokyo: "Tokyo", london: "London", newyork: "New York" };
+  function renderJournalSessionInsight() {
+    const el = document.getElementById("journal-session-insight");
+    if (!el) return;
+    const closed = journalItems.filter((t) => t.result === "win" || t.result === "loss");
+    if (closed.length < 5) {
+      el.hidden = true;
+      return;
+    }
+    const tally = { sydney: { wins: 0, total: 0 }, tokyo: { wins: 0, total: 0 }, london: { wins: 0, total: 0 }, newyork: { wins: 0, total: 0 } };
+    closed.forEach((t) => {
+      let hour;
+      try { hour = new Date(t.created_at).getUTCHours(); } catch { return; }
+      Object.keys(tally).forEach((session) => {
+        if (isSessionOpen(session, hour)) {
+          tally[session].total += 1;
+          if (t.result === "win") tally[session].wins += 1;
+        }
+      });
+    });
+    const ranked = Object.keys(tally)
+      .map((session) => ({ session, ...tally[session], pct: tally[session].total > 0 ? tally[session].wins / tally[session].total : -1 }))
+      .filter((s) => s.total >= 3)
+      .sort((a, b) => b.pct - a.pct);
+    if (ranked.length === 0) {
+      el.hidden = true;
+      return;
+    }
+    const best = ranked[0];
+    const pct = Math.round(best.pct * 100);
+    el.textContent = `Your best session so far: ${SESSION_LABELS[best.session]} (${pct}% win rate across ${best.total} closed trades) — based only on your own journal.`;
+    el.hidden = false;
   }
 
   // Shared CSV download helper — client-side only, from data already loaded
