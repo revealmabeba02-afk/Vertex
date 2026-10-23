@@ -1943,6 +1943,44 @@ app.delete("/api/broker/disconnect", requireUser, async (req, res) => {
   }
 });
 
+// Self-service account deletion — deprovisions any connected MT4/MT5 broker
+// account first (so nothing is left dangling on MetaApi's side), then calls
+// self_delete_account() (supabase/self_delete_account.sql), a security
+// definer RPC that deletes every one of the caller's own rows plus their
+// auth.users row, using only their own JWT. No service-role key involved.
+app.delete("/api/account", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    if (METAAPI_READY) {
+      try {
+        const lookupRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/broker_accounts?user_id=eq.${encodeURIComponent(req.user.id)}&select=metaapi_account_id&limit=1`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+        );
+        if (lookupRes.ok) {
+          const rows = await lookupRes.json().catch(() => []);
+          const metaapiAccountId = Array.isArray(rows) && rows[0] ? rows[0].metaapi_account_id : null;
+          if (metaapiAccountId) {
+            await fetch(`${METAAPI_PROVISIONING_URL}/users/current/accounts/${encodeURIComponent(metaapiAccountId)}`, {
+              method: "DELETE",
+              headers: { "auth-token": METAAPI_TOKEN },
+              signal: AbortSignal.timeout(15000)
+            }).catch((err) => console.error("MetaApi deprovision on account delete failed:", err.message));
+          }
+        }
+      } catch (err) {
+        console.error("Broker lookup before account delete failed:", err.message);
+      }
+    }
+
+    await supabaseRpc("self_delete_account", {}, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Account delete error:", err.message);
+    res.status(502).json({ error: "Could not delete your account. Please contact support." });
+  }
+});
+
 // --- News calendar + signals (ForexNewsAPI) --------------------------------
 // Small/medium-importance events (PMI, retail sales, etc.) are free and
 // unlimited — full forecast/previous/actual always shown. Big ("High"

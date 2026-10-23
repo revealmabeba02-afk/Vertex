@@ -810,7 +810,7 @@
         </div>
         <button type="button" class="btn btn--ghost" id="settings-logout-btn">Log out</button>
       </div>
-      <p class="settings-row__desc" style="margin-top: 12px;">Need to close your account or have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
+      <p class="settings-row__desc" style="margin-top: 12px;">Have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
 
       <div style="margin-top: 14px;">
         <button type="button" class="btn btn--ghost" id="settings-change-password-toggle">Change password</button>
@@ -843,6 +843,22 @@
           <p class="settings-row__desc">Add Vertex to your home screen for one-tap access, like a real app.</p>
         </div>
         <button type="button" class="btn btn--ghost" id="settings-install-btn">Install</button>
+      </div>
+
+      <div class="settings-row" style="margin-top: 12px;">
+        <div>
+          <p class="settings-row__title" style="margin-bottom: 0; color: var(--danger, #ef4444);">Delete account</p>
+          <p class="settings-row__desc">Permanently deletes your account and all your data — scans, journal, broker connection. This can't be undone.</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="settings-delete-account-toggle">Delete account</button>
+      </div>
+      <div id="settings-delete-account-confirm" style="margin-top: 10px;" hidden>
+        <p class="settings-row__desc">Type <strong>DELETE</strong> below to confirm. This is permanent.</p>
+        <div class="journal-form__row">
+          <input type="text" id="settings-delete-account-input" class="input" placeholder="Type DELETE" />
+          <button type="button" class="btn btn--ghost" id="settings-delete-account-confirm-btn" style="border-color: var(--danger, #ef4444); color: var(--danger, #ef4444);">Permanently delete</button>
+        </div>
+        <p id="settings-delete-account-status" class="credits-status" hidden></p>
       </div>
     </div>
 

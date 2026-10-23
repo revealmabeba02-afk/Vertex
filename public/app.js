@@ -2955,6 +2955,56 @@
   let referralLoaded = false;
 
   // --------------------------------------------------------------
+  // Self-service account deletion — requires typing DELETE to confirm, then
+  // calls the server, which deprovisions any MetaApi broker account and
+  // runs the self_delete_account() RPC (supabase/self_delete_account.sql).
+  const deleteAcctToggle = document.getElementById("settings-delete-account-toggle");
+  const deleteAcctConfirm = document.getElementById("settings-delete-account-confirm");
+  if (deleteAcctToggle && deleteAcctConfirm) {
+    deleteAcctToggle.addEventListener("click", () => {
+      deleteAcctConfirm.hidden = !deleteAcctConfirm.hidden;
+    });
+  }
+  const deleteAcctBtn = document.getElementById("settings-delete-account-confirm-btn");
+  if (deleteAcctBtn) {
+    deleteAcctBtn.addEventListener("click", async () => {
+      const input = document.getElementById("settings-delete-account-input");
+      const statusEl = document.getElementById("settings-delete-account-status");
+      statusEl.hidden = true;
+      statusEl.classList.remove("credits-status--error");
+      if (input.value.trim() !== "DELETE") {
+        statusEl.textContent = 'Type DELETE exactly (all caps) to confirm.';
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+        return;
+      }
+      deleteAcctBtn.disabled = true;
+      statusEl.textContent = "Deleting your account…";
+      statusEl.hidden = false;
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/account", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          statusEl.textContent = (data && data.error) || "Could not delete your account.";
+          statusEl.classList.add("credits-status--error");
+          deleteAcctBtn.disabled = false;
+          return;
+        }
+        await Auth.clearSession();
+        window.location.href = "/";
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        statusEl.classList.add("credits-status--error");
+        deleteAcctBtn.disabled = false;
+      }
+    });
+  }
+
   // Change password (while already logged in) — separate from the
   // forgot-password email flow, for someone who just wants to update it.
   const changePwToggleBtn = document.getElementById("settings-change-password-toggle");
