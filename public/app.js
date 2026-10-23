@@ -1065,7 +1065,33 @@
   // response and a sleepy Render instance waking from idle.
   const SCAN_TIMEOUT_MS = 75000;
 
+  const LAST_SCAN_KEY = "vertex_last_scan";
+  function saveLastScan(symbol, timeframe) {
+    try { localStorage.setItem(LAST_SCAN_KEY, JSON.stringify({ symbol, timeframe })); } catch {}
+  }
+  function restoreLastScan() {
+    try {
+      const raw = localStorage.getItem(LAST_SCAN_KEY);
+      if (!raw) return;
+      const { symbol, timeframe } = JSON.parse(raw);
+      if (symbol) {
+        symbolInput.value = symbol;
+        syncQuickpickActive();
+      }
+      if (timeframe) {
+        const radio = document.querySelector(`input[name="tf"][value="${timeframe}"]`);
+        if (radio) {
+          radio.checked = true;
+          timeframeSelect.value = timeframe;
+        }
+      }
+      updateScanBtnState();
+    } catch {}
+  }
+  restoreLastScan();
+
   async function runScan(symbol, timeframe) {
+    saveLastScan(symbol, timeframe);
     scanInFlight = true;
     setLoadingUI(true);
     if (scanHudBg) scanHudBg.hidden = true;
