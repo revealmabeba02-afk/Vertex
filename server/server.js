@@ -1892,6 +1892,39 @@ app.post("/api/broker/connect", requireUser, async (req, res) => {
 app.delete("/api/broker/disconnect", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   try {
+    // Look up the MetaApi account id first so we can deprovision it there
+    // too — otherwise disconnecting here would leave an orphaned account
+    // (and its credentials) sitting on MetaApi's side forever.
+    let metaapiAccountId = null;
+    try {
+      const lookupRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/broker_accounts?user_id=eq.${encodeURIComponent(req.user.id)}&select=metaapi_account_id&limit=1`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+      );
+      if (lookupRes.ok) {
+        const rows = await lookupRes.json().catch(() => []);
+        metaapiAccountId = Array.isArray(rows) && rows[0] ? rows[0].metaapi_account_id : null;
+      }
+    } catch {
+      // Non-fatal — fall through and still remove our own row.
+    }
+
+    if (METAAPI_READY && metaapiAccountId) {
+      try {
+        const deprovisionRes = await fetch(
+          `${METAAPI_PROVISIONING_URL}/users/current/accounts/${encodeURIComponent(metaapiAccountId)}`,
+          { method: "DELETE", headers: { "auth-token": METAAPI_TOKEN }, signal: AbortSignal.timeout(15000) }
+        );
+        if (!deprovisionRes.ok && deprovisionRes.status !== 404) {
+          console.error("MetaApi deprovision failed:", deprovisionRes.status, await deprovisionRes.text().catch(() => ""));
+          // Still proceed to remove our own row — the user asked to disconnect,
+          // and we don't want a MetaApi hiccup to trap them into "connected" forever.
+        }
+      } catch (err) {
+        console.error("MetaApi deprovision error:", err.message);
+      }
+    }
+
     const r = await fetch(`${SUPABASE_URL}/rest/v1/broker_accounts?user_id=eq.${encodeURIComponent(req.user.id)}`, {
       method: "DELETE",
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
