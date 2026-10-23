@@ -1203,6 +1203,7 @@
 <div class="command-panel" data-panel="support">
   <div class="support-card" id="sec-support">
     <div class="users-card__head">Support messages</div>
+    <input type="text" id="support-filter" class="input" placeholder="Filter by email or message…" style="margin-bottom: 14px;">
     <div id="support-list"></div>
     <div class="users-empty" id="support-empty">Loading…</div>
   </div>
@@ -1211,6 +1212,7 @@
 <div class="command-panel" data-panel="feedback">
   <div class="support-card" id="sec-feedback">
     <div class="users-card__head">Feature requests &amp; feedback</div>
+    <input type="text" id="feedback-filter" class="input" placeholder="Filter by email or message…" style="margin-bottom: 14px;">
     <div id="feedback-list"></div>
     <div class="users-empty" id="feedback-empty">Loading…</div>
   </div>
@@ -1340,6 +1342,7 @@
       return;
     }
     const authHeader = { Authorization: `Bearer ${session.access_token}` };
+    window.__adminAuthHeader = authHeader;
 
     // Briefing, health and support all load independently of the stats/users
     // block below — a failure in one never blocks the others from showing.
@@ -2175,6 +2178,8 @@
       });
     }
 
+    let supportMessagesCache = [];
+
     async function loadSupport(authHeader) {
       const listEl = document.getElementById("support-list");
       const emptyEl = document.getElementById("support-empty");
@@ -2185,9 +2190,33 @@
           emptyEl.textContent = (data && data.error) || "Could not load support messages.";
           return;
         }
-        const messages = (data && Array.isArray(data.messages)) ? data.messages : [];
-        if (messages.length === 0) {
+        supportMessagesCache = (data && Array.isArray(data.messages)) ? data.messages : [];
+        renderSupportList(authHeader);
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    function renderSupportList(authHeader) {
+      const listEl = document.getElementById("support-list");
+      const emptyEl = document.getElementById("support-empty");
+      const filterInput = document.getElementById("support-filter");
+      const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+      const messages = q
+        ? supportMessagesCache.filter((m) => (m.email || "").toLowerCase().includes(q) || (m.message || "").toLowerCase().includes(q))
+        : supportMessagesCache;
+
+      try {
+        if (supportMessagesCache.length === 0) {
           emptyEl.textContent = "No support messages yet.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
+          return;
+        }
+        if (messages.length === 0) {
+          emptyEl.textContent = "No messages match that filter.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
           return;
         }
         emptyEl.hidden = true;
@@ -2262,6 +2291,16 @@
       }
     }
 
+    const supportFilterInput = document.getElementById("support-filter");
+    if (supportFilterInput) {
+      supportFilterInput.addEventListener("input", () => {
+        const authHeader = window.__adminAuthHeader;
+        if (authHeader) renderSupportList(authHeader);
+      });
+    }
+
+    let feedbackMessagesCache = [];
+
     async function loadFeedback(authHeader) {
       const listEl = document.getElementById("feedback-list");
       const emptyEl = document.getElementById("feedback-empty");
@@ -2272,9 +2311,33 @@
           emptyEl.textContent = (data && data.error) || "Could not load feedback.";
           return;
         }
-        const items = (data && Array.isArray(data.items)) ? data.items : [];
-        if (items.length === 0) {
+        feedbackMessagesCache = (data && Array.isArray(data.items)) ? data.items : [];
+        renderFeedbackList(authHeader);
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    function renderFeedbackList(authHeader) {
+      const listEl = document.getElementById("feedback-list");
+      const emptyEl = document.getElementById("feedback-empty");
+      const filterInput = document.getElementById("feedback-filter");
+      const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+      const items = q
+        ? feedbackMessagesCache.filter((m) => (m.email || "").toLowerCase().includes(q) || (m.message || "").toLowerCase().includes(q))
+        : feedbackMessagesCache;
+
+      try {
+        if (feedbackMessagesCache.length === 0) {
           emptyEl.textContent = "No suggestions yet.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
+          return;
+        }
+        if (items.length === 0) {
+          emptyEl.textContent = "No messages match that filter.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
           return;
         }
         emptyEl.hidden = true;
@@ -2323,6 +2386,14 @@
       } catch {
         emptyEl.textContent = "Could not reach the server.";
       }
+    }
+
+    const feedbackFilterInput = document.getElementById("feedback-filter");
+    if (feedbackFilterInput) {
+      feedbackFilterInput.addEventListener("input", () => {
+        const authHeader = window.__adminAuthHeader;
+        if (authHeader) renderFeedbackList(authHeader);
+      });
     }
 
     async function loadAuditLog(authHeader) {
