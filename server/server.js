@@ -405,6 +405,46 @@ const ADMIN_TONE_ADDENDUM = `
 
 ONE EXCEPTION: this message is from the site owner (King), not a regular user. Keep the reply's content and required format exactly as specified above, but write it in the voice of Sung Jin-Woo from Solo Leveling — controlled, supremely confident, economical with words, zero filler or hedging, nothing servile. Address him with that same quiet authority, like a system reporting to its one commander. Still fully honest and accurate — the voice changes, the substance doesn't.`;
 
+// Feature-suggestion acknowledgment — much lighter than support triage.
+// This never answers a question or promises a timeline (only King decides
+// what gets built and when); it just makes sure every suggestion gets a
+// real, specific, human-sounding response instead of the generic "Thanks —
+// added to the build list" the user already saw on submit.
+const FEEDBACK_AI_SYSTEM_PROMPT = `You are Q2, the AI running on Vertex Chart Scanner, a forex chart analysis tool. A user just submitted a feature suggestion through the "Suggest a feature" box.
+
+Write a short, warm, genuine acknowledgment (under 60 words, plain text, no markdown). Reference something specific from what they actually wrote, so it doesn't read as generic. Do NOT promise it will be built, give a timeline, or claim it's already planned — only the site owner decides that. Just make them feel heard, and reply with only the message text, nothing else.`;
+
+async function aiAcknowledgeFeedback(message) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: SUPPORT_AI_MODEL,
+        max_tokens: 150,
+        system: FEEDBACK_AI_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: message }]
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      console.error("Feedback AI error:", r.status, data);
+      return null;
+    }
+    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("").trim() : "";
+    return text || null;
+  } catch (err) {
+    console.error("Feedback AI ack failed:", err.message);
+    return null;
+  }
+}
+
 async function aiTriageSupportMessage(message, isAdmin) {
   if (!ANTHROPIC_API_KEY) return null;
   try {
@@ -2676,11 +2716,44 @@ app.post("/api/feedback", requireUser, async (req, res) => {
   if (!message) return res.status(400).json({ error: "Enter a message first." });
   if (message.length > 2000) return res.status(400).json({ error: "That message is too long." });
   try {
-    await supabaseRpc("create_feedback_message", { p_message: message }, req.user.token);
+    const row = await supabaseRpc("create_feedback_message", { p_message: message }, req.user.token);
     res.json({ ok: true });
+
+    // Fire-and-forget, same pattern as support's AI triage: never block the
+    // response on this, and a failure here just leaves the suggestion
+    // without a reply rather than breaking the submit.
+    if (row && row.id) {
+      aiAcknowledgeFeedback(message)
+        .then((reply) => {
+          if (!reply) return;
+          return supabaseRpc("system_set_feedback_reply", { p_id: row.id, p_reply: reply, p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY);
+        })
+        .catch((err) => console.error("Feedback AI reply save failed:", err.message));
+    }
   } catch (err) {
     console.error("Feedback submit error:", err.message);
     res.status(502).json({ error: "Could not send your suggestion. Please try again." });
+  }
+});
+
+// A user's own feedback submissions with Q2's acknowledgment, if any —
+// shown in their Help tab, same pattern as /api/support/mine.
+app.get("/api/feedback/mine", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/feedback_messages?select=id,message,status,reply,created_at&order=created_at.desc&limit=20`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) return res.json({ messages: [] });
+    const messages = await r.json();
+    res.json({ messages: Array.isArray(messages) ? messages : [] });
+  } catch (err) {
+    console.error("Feedback mine fetch error:", err.message);
+    res.json({ messages: [] });
   }
 });
 

@@ -213,7 +213,7 @@
     if (name === "history") loadHistory();
     if (name === "whats-new") loadWhatsNew();
     if (name === "credits") refreshBalance();
-    if (name === "help") loadHelpHistory();
+    if (name === "help") { loadHelpHistory(); loadFeedbackHistory(); }
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
     if (name === "settings") loadReferral();
   }
@@ -2456,6 +2456,57 @@
     }
   }
 
+  const feedbackHistoryWrap = document.getElementById("feedback-history");
+  const feedbackHistoryList = document.getElementById("feedback-history-list");
+
+  async function loadFeedbackHistory() {
+    if (!feedbackHistoryWrap) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/feedback/mine", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (messages.length === 0) {
+        feedbackHistoryWrap.hidden = true;
+        return;
+      }
+      feedbackHistoryWrap.hidden = false;
+      feedbackHistoryList.innerHTML = "";
+      messages.forEach((m) => {
+        const item = document.createElement("div");
+        item.className = "help-item";
+        let when = "";
+        try { when = new Date(m.created_at).toLocaleString(); } catch {}
+        const STATUS_LABELS = { new: "New", planned: "Planned", done: "Done", dismissed: "Closed" };
+        const tagClass = m.status === "done" ? "help-item__tag--resolved" : "help-item__tag--open";
+        item.innerHTML = `
+          <div class="help-item__meta">
+            <span class="help-item__tag ${tagClass}">${STATUS_LABELS[m.status] || "New"}</span>
+            <span>${when}</span>
+          </div>
+          <div class="help-item__text"></div>
+        `;
+        item.querySelector(".help-item__text").textContent = m.message;
+        if (m.reply) {
+          const replyEl = document.createElement("div");
+          replyEl.className = "help-item__reply";
+          replyEl.innerHTML = '<span class="help-item__reply-label">Q2</span>';
+          const replyText = document.createElement("span");
+          replyText.textContent = m.reply;
+          replyEl.appendChild(replyText);
+          item.appendChild(replyEl);
+        }
+        feedbackHistoryList.appendChild(item);
+      });
+    } catch {
+      // Best-effort — leave whatever was last shown.
+    }
+  }
+
   const feedbackForm = document.getElementById("feedback-form");
   const feedbackMessage = document.getElementById("feedback-message");
   const feedbackStatus = document.getElementById("feedback-status");
@@ -2490,6 +2541,12 @@
         feedbackStatus.textContent = "Thanks — added to the build list.";
         feedbackStatus.classList.remove("credits-status--error");
         feedbackStatus.hidden = false;
+        loadFeedbackHistory();
+        // Q2's acknowledgment is written fire-and-forget on the server, so
+        // it isn't ready the instant this response lands — same pattern as
+        // the support inbox's own delayed refresh.
+        setTimeout(loadFeedbackHistory, 2500);
+        setTimeout(loadFeedbackHistory, 8000);
       } catch {
         feedbackStatus.textContent = "Could not reach the server. Please try again.";
         feedbackStatus.classList.add("credits-status--error");
