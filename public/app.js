@@ -2955,6 +2955,64 @@
   let referralLoaded = false;
 
   // --------------------------------------------------------------
+  // Change password (while already logged in) — separate from the
+  // forgot-password email flow, for someone who just wants to update it.
+  const changePwToggleBtn = document.getElementById("settings-change-password-toggle");
+  const changePwForm = document.getElementById("settings-change-password-form");
+  if (changePwToggleBtn && changePwForm) {
+    changePwToggleBtn.addEventListener("click", () => {
+      changePwForm.hidden = !changePwForm.hidden;
+    });
+  }
+  const changePwShowBtn = document.querySelector('[data-toggle="settings-new-password"]');
+  if (changePwShowBtn) {
+    changePwShowBtn.addEventListener("click", () => {
+      const input = document.getElementById("settings-new-password");
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      changePwShowBtn.textContent = show ? "Hide" : "Show";
+    });
+  }
+  if (changePwForm) {
+    changePwForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("settings-new-password");
+      const btn = document.getElementById("settings-change-password-btn");
+      const statusEl = document.getElementById("settings-change-password-status");
+      const value = input.value;
+      statusEl.hidden = true;
+      statusEl.classList.remove("credits-status--error");
+      if (!value || value.length < 8) {
+        statusEl.textContent = "Password must be at least 8 characters.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+        return;
+      }
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      try {
+        const { error } = await Auth.client.auth.updateUser({ password: value });
+        if (error) {
+          statusEl.textContent = Auth.friendlyError(error);
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+          return;
+        }
+        input.value = "";
+        statusEl.textContent = "Password updated.";
+        statusEl.hidden = false;
+        setTimeout(() => { changePwForm.hidden = true; statusEl.hidden = true; }, 2500);
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("is-loading");
+      }
+    });
+  }
+
   // MT4/MT5 broker connection (MetaApi.cloud). The password field is
   // cleared and never kept client-side past the submit — it goes straight
   // to the server, which forwards it to MetaApi in the same request and

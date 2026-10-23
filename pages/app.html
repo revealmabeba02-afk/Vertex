@@ -811,6 +811,25 @@
         <button type="button" class="btn btn--ghost" id="settings-logout-btn">Log out</button>
       </div>
       <p class="settings-row__desc" style="margin-top: 12px;">Need to close your account or have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
+
+      <div style="margin-top: 14px;">
+        <button type="button" class="btn btn--ghost" id="settings-change-password-toggle">Change password</button>
+        <form id="settings-change-password-form" style="margin-top: 10px;" hidden>
+          <div class="field">
+            <label class="field__label" for="settings-new-password">New password</label>
+            <div class="field__wrap">
+              <input type="password" id="settings-new-password" class="input" autocomplete="new-password" placeholder="At least 8 characters" required />
+              <button type="button" class="pw-toggle" data-toggle="settings-new-password" aria-label="Show password">Show</button>
+            </div>
+          </div>
+          <button type="submit" id="settings-change-password-btn" class="scan-btn" style="margin-top: 10px;">
+            <span class="scan-btn__label">Update password</span>
+            <span class="scan-btn__spinner" aria-hidden="true"></span>
+          </button>
+          <p id="settings-change-password-status" class="credits-status" hidden></p>
+        </form>
+      </div>
+
       <div class="settings-row" style="margin-top: 12px;">
         <div>
           <p class="settings-row__title" style="margin-bottom: 0;">Your data</p>
