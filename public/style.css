@@ -488,6 +488,20 @@ body::after {
   50% { opacity: 0.35; }
 }
 
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 14px 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #E0A84F 40%, var(--border));
+  background: color-mix(in srgb, #E0A84F 12%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  color: #E0A84F;
+}
+
 .hero__title {
   font-family: var(--font-display);
   font-weight: 800;

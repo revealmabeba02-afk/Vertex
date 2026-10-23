@@ -123,6 +123,26 @@
   updateSessionClock();
   setInterval(updateSessionClock, 60000);
 
+  // Scan streak badge — best-effort, never blocks anything if it fails.
+  async function loadStreak(session) {
+    const badge = document.getElementById("streak-badge");
+    const valueEl = document.getElementById("streak-value");
+    if (!badge || !valueEl || !session) return;
+    try {
+      const res = await fetch("/api/stats/streak", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const streak = Number(data.streak) || 0;
+      if (streak < 2) return; // Not worth bragging about yet.
+      valueEl.textContent = String(streak);
+      badge.hidden = false;
+    } catch {
+      // Nice-to-have only.
+    }
+  }
+
   // Maintenance mode: a cheap, fail-open check (any error or non-OK response
   // just lets the app load as normal — this must never be what breaks the
   // site). Runs once on load, not blocking the rest of the page's own auth
@@ -149,6 +169,7 @@
           document.getElementById("account").hidden = false;
           revealPage();
           maybeStartOnboardTour();
+          loadStreak(session);
         })
         .catch(toLogin);
 

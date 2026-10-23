@@ -1593,6 +1593,43 @@ app.get("/api/history", requireUser, async (req, res) => {
   }
 });
 
+// Consecutive-day scan streak, purely a motivational badge on the Scanner
+// home — computed here from scan_history's own created_at timestamps rather
+// than a separate table. "Today" counts even with zero scans yet (the
+// streak just isn't broken until a full day is missed), so the number
+// doesn't drop to 0 the moment someone opens the app in the morning.
+app.get("/api/stats/streak", requireUser, async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/scan_history?select=created_at&order=created_at.desc&limit=400`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) return res.json({ streak: 0 });
+    const rows = await r.json();
+    const days = new Set(
+      (Array.isArray(rows) ? rows : []).map((row) => new Date(row.created_at).toISOString().slice(0, 10))
+    );
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setUTCHours(0, 0, 0, 0);
+    // Allow today to be scan-free without breaking the streak yet.
+    if (!days.has(cursor.toISOString().slice(0, 10))) {
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+    while (days.has(cursor.toISOString().slice(0, 10))) {
+      streak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+    res.json({ streak });
+  } catch (err) {
+    console.error("Streak fetch error:", err.message);
+    res.json({ streak: 0 });
+  }
+});
+
 // --- Trade journal ----------------------------------------------------------
 // A user's own private log of trades, independent of Vertex scans — RLS
 // (trade_journal_owner_policy, see supabase/trade_journal.sql) scopes every
