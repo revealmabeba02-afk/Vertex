@@ -1155,6 +1155,7 @@
 <div class="command-panel" data-panel="users">
   <div class="users-card" id="sec-users">
     <div class="users-card__head">Users</div>
+    <input type="text" id="users-filter" class="input" placeholder="Filter by name or email…" style="margin-bottom: 14px;">
     <div class="users-table-wrap">
       <table class="users-table" id="users-table" hidden>
         <thead>
@@ -1321,6 +1322,49 @@
       }
     }
 
+    function renderUsersTable() {
+      const users = window.__usersCache || [];
+      const filterInput = document.getElementById("users-filter");
+      const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+      const filtered = q
+        ? users.filter((u) => (u.email || "").toLowerCase().includes(q) || (u.full_name || "").toLowerCase().includes(q))
+        : users;
+
+      if (users.length === 0) {
+        emptyEl.textContent = "No users yet.";
+        emptyEl.hidden = false;
+        tableEl.hidden = true;
+        return;
+      }
+      if (filtered.length === 0) {
+        emptyEl.textContent = "No users match that filter.";
+        emptyEl.hidden = false;
+        tableEl.hidden = true;
+        return;
+      }
+      tbodyEl.innerHTML = "";
+      filtered.forEach((u) => {
+        const tr = document.createElement("tr");
+        const paidLabel =
+          u.paid_usd && u.paid_usd > 0
+            ? `$${Number(u.paid_usd).toFixed(2)} (${u.paid_scans} scans)`
+            : "—";
+        tr.innerHTML = `
+          <td class="users-table__name">${u.full_name ? escapeHtml(u.full_name) : "—"}</td>
+          <td>${escapeHtml(u.email || "—")}</td>
+          <td>${fmtDate(u.created_at)}</td>
+          <td>${fmtDate(u.last_sign_in_at)}</td>
+          <td class="users-table__paid">${escapeHtml(paidLabel)}</td>
+        `;
+        tbodyEl.appendChild(tr);
+      });
+      tableEl.hidden = false;
+      emptyEl.hidden = true;
+    }
+
+    const usersFilterInput = document.getElementById("users-filter");
+    if (usersFilterInput) usersFilterInput.addEventListener("input", renderUsersTable);
+
     // Declared here, before the first await, on purpose: this whole function
     // fires off a batch of independent async loaders (loadLinkClicks,
     // loadContentPosts, etc.) that are never awaited, then itself awaits
@@ -1402,28 +1446,8 @@
         return;
       }
 
-      if (users.length === 0) {
-        emptyEl.textContent = "No users yet.";
-      } else {
-        tbodyEl.innerHTML = "";
-        users.forEach((u) => {
-          const tr = document.createElement("tr");
-          const paidLabel =
-            u.paid_usd && u.paid_usd > 0
-              ? `$${Number(u.paid_usd).toFixed(2)} (${u.paid_scans} scans)`
-              : "—";
-          tr.innerHTML = `
-            <td class="users-table__name">${u.full_name ? escapeHtml(u.full_name) : "—"}</td>
-            <td>${escapeHtml(u.email || "—")}</td>
-            <td>${fmtDate(u.created_at)}</td>
-            <td>${fmtDate(u.last_sign_in_at)}</td>
-            <td class="users-table__paid">${escapeHtml(paidLabel)}</td>
-          `;
-          tbodyEl.appendChild(tr);
-        });
-        tableEl.hidden = false;
-        emptyEl.hidden = true;
-      }
+      window.__usersCache = users;
+      renderUsersTable();
 
       statusEl.textContent = "Updated just now.";
     } catch {
