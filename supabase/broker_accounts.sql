@@ -32,3 +32,33 @@ alter table public.broker_accounts enable row level security;
 drop policy if exists broker_accounts_owner_policy on public.broker_accounts;
 create policy broker_accounts_owner_policy on public.broker_accounts
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Admin view: every connected broker account with the buyer's email, so
+-- King can spot stuck/errored connections without querying Supabase
+-- directly. Gated by admin login, same pattern as admin_list_users().
+create or replace function public.admin_list_broker_accounts()
+returns table (
+  user_id uuid, email text, platform text, login text, server text,
+  status text, status_detail text, created_at timestamptz, updated_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'revealmabeba02@gmail.com' then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+    select b.user_id, u.email::text, b.platform, b.login, b.server,
+           b.status, b.status_detail, b.created_at, b.updated_at
+    from public.broker_accounts b
+    join auth.users u on u.id = b.user_id
+    order by b.created_at desc
+    limit 500;
+end;
+$$;
+
+revoke all on function public.admin_list_broker_accounts() from public, anon;
+grant execute on function public.admin_list_broker_accounts() to authenticated;

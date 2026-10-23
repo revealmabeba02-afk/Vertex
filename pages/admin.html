@@ -970,6 +970,7 @@
     <a href="#stats" data-panel-link="stats" title="Stats">Stats</a>
     <a href="#analytics" data-panel-link="analytics" title="Usage analytics">Analytics</a>
     <a href="#users" data-panel-link="users" title="Users">Users</a>
+    <a href="#broker" data-panel-link="broker" title="Broker accounts">Broker accounts</a>
     <a href="#support" data-panel-link="support" title="Support">Support</a>
     <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
     <a href="#audit" data-panel-link="audit" title="Audit log">Audit log</a>
@@ -1170,6 +1171,29 @@
         <tbody id="users-tbody"></tbody>
       </table>
       <div class="users-empty" id="users-empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="broker">
+  <div class="users-card" id="sec-broker">
+    <div class="users-card__head">MT4/MT5 broker accounts</div>
+    <input type="text" id="broker-filter" class="input" placeholder="Filter by email or login…" style="margin-bottom: 14px;">
+    <div class="users-table-wrap">
+      <table class="users-table" id="broker-table" hidden>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Platform</th>
+            <th>Login</th>
+            <th>Server</th>
+            <th>Status</th>
+            <th>Connected</th>
+          </tr>
+        </thead>
+        <tbody id="broker-tbody"></tbody>
+      </table>
+      <div class="users-empty" id="broker-empty">Loading…</div>
     </div>
   </div>
 </div>
@@ -1407,6 +1431,7 @@
     loadLinkClicks(authHeader);
     loadContentPosts(authHeader);
     wirePlannerForm(authHeader);
+    loadBrokerAccounts(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -1607,6 +1632,64 @@
         perDayEmpty.textContent = "Could not reach the server.";
         pairsEmpty.textContent = "Could not reach the server.";
         hoursEmpty.textContent = "Could not reach the server.";
+      }
+    }
+
+    async function loadBrokerAccounts(authHeader) {
+      const tableEl = document.getElementById("broker-table");
+      const tbodyEl = document.getElementById("broker-tbody");
+      const emptyEl = document.getElementById("broker-empty");
+      const filterInput = document.getElementById("broker-filter");
+      let accounts = [];
+
+      function render() {
+        const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+        const filtered = q
+          ? accounts.filter((a) => (a.email || "").toLowerCase().includes(q) || (a.login || "").toLowerCase().includes(q))
+          : accounts;
+        if (accounts.length === 0) {
+          emptyEl.textContent = "No broker accounts connected yet.";
+          emptyEl.hidden = false;
+          tableEl.hidden = true;
+          return;
+        }
+        if (filtered.length === 0) {
+          emptyEl.textContent = "No broker accounts match that filter.";
+          emptyEl.hidden = false;
+          tableEl.hidden = true;
+          return;
+        }
+        tbodyEl.innerHTML = "";
+        filtered.forEach((a) => {
+          const when = (() => { try { return new Date(a.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); } catch { return "—"; } })();
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(a.email || "—")}</td>
+            <td>${escapeHtml((a.platform || "").toUpperCase())}</td>
+            <td>${escapeHtml(a.login || "—")}</td>
+            <td>${escapeHtml(a.server || "—")}</td>
+            <td>${escapeHtml(a.status_detail || a.status || "—")}</td>
+            <td>${when}</td>
+          `;
+          tbodyEl.appendChild(tr);
+        });
+        tableEl.hidden = false;
+        emptyEl.hidden = true;
+      }
+
+      if (filterInput) filterInput.addEventListener("input", render);
+
+      try {
+        const res = await fetch("/api/admin/broker-accounts", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.textContent = (data && data.error) || "Could not load broker accounts.";
+          return;
+        }
+        accounts = Array.isArray(data.accounts) ? data.accounts : [];
+        render();
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
       }
     }
 

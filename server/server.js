@@ -2422,6 +2422,23 @@ app.get("/api/admin/users", requireUser, async (req, res) => {
   }
 });
 
+// Every connected MT4/MT5 broker account, for spotting stuck/errored
+// connections without querying Supabase directly — admin_list_broker_accounts()
+// re-checks the admin email independently, see supabase/broker_accounts.sql.
+app.get("/api/admin/broker-accounts", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const rows = await supabaseRpc("admin_list_broker_accounts", {}, req.user.token);
+    res.json({ accounts: Array.isArray(rows) ? rows : [] });
+  } catch (err) {
+    console.error("Admin broker accounts error:", err.message);
+    res.status(502).json({ error: "Could not load broker accounts. Has the latest supabase/broker_accounts.sql been run?" });
+  }
+});
+
 // Manual payment confirmation — a fallback for when the automatic Binance
 // Pay poller can't reach Binance at all (some Render server regions get a
 // 451 "restricted location" error from Binance). The admin sees the
