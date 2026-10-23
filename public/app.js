@@ -1199,17 +1199,20 @@
     const pnlEl = document.getElementById("journal-stat-pnl");
 
     const exportBtn = document.getElementById("journal-export-btn");
+    const byPairWrap = document.getElementById("journal-by-pair-wrap");
     if (journalItems.length === 0) {
       summary.hidden = true;
       emptyEl.hidden = false;
       listEl.hidden = true;
       if (exportBtn) exportBtn.hidden = true;
+      if (byPairWrap) byPairWrap.hidden = true;
       return;
     }
     emptyEl.hidden = true;
     listEl.hidden = false;
     summary.hidden = false;
     if (exportBtn) exportBtn.hidden = false;
+    renderJournalByPair();
 
     const closed = journalItems.filter((t) => t.result !== "open");
     const wins = closed.filter((t) => t.result === "win").length;
@@ -1318,6 +1321,53 @@
       row.appendChild(editWrap);
 
       listEl.appendChild(row);
+    });
+  }
+
+  function renderJournalByPair() {
+    const wrap = document.getElementById("journal-by-pair-wrap");
+    const listEl = document.getElementById("journal-by-pair-list");
+    if (!wrap || !listEl) return;
+
+    const byPair = {}; // pair -> { wins, closed }
+    journalItems.forEach((t) => {
+      if (t.result === "open") return;
+      if (!byPair[t.pair]) byPair[t.pair] = { wins: 0, closed: 0 };
+      byPair[t.pair].closed += 1;
+      if (t.result === "win") byPair[t.pair].wins += 1;
+    });
+
+    const pairs = Object.keys(byPair);
+    if (pairs.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+
+    const rows = pairs
+      .map((pair) => {
+        const s = byPair[pair];
+        const pct = Math.round((s.wins / s.closed) * 100);
+        return { pair, pct, closed: s.closed };
+      })
+      .sort((a, b) => b.pct - a.pct);
+
+    listEl.innerHTML = "";
+    rows.forEach((row) => {
+      const strong = row.pct >= 55;
+      const weak = row.pct < 40;
+      const line = document.createElement("div");
+      line.className = "currency-bias-row";
+      line.innerHTML = `
+        <span class="currency-bias-row__code"></span>
+        <span class="currency-bias-row__bar"><span class="currency-bias-row__fill" style="width:${row.pct}%"></span></span>
+        <span class="currency-bias-row__label"></span>
+      `;
+      line.querySelector(".currency-bias-row__code").textContent = row.pair;
+      const fillEl = line.querySelector(".currency-bias-row__fill");
+      fillEl.style.background = strong ? "var(--bull)" : weak ? "var(--bear)" : "var(--text-faint)";
+      line.querySelector(".currency-bias-row__label").textContent = `${row.pct}% (${row.closed})`;
+      listEl.appendChild(line);
     });
   }
 

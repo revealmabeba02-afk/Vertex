@@ -864,6 +864,11 @@
     </div>
     <button type="button" id="journal-export-btn" class="support-item__tag support-item__tag--open" style="margin-top:10px; border:1px solid var(--border); cursor:pointer;" hidden>Download CSV</button>
 
+    <details id="journal-by-pair-wrap" class="confidence-why" hidden style="margin-top: 14px;">
+      <summary>Win rate by pair</summary>
+      <div id="journal-by-pair-list" class="currency-bias-list"></div>
+    </details>
+
     <form id="journal-form" class="settings-card" style="padding: 20px 22px; margin-top: 16px;">
       <div class="journal-form__row">
         <input type="text" id="journal-pair" class="input" placeholder="Pair (e.g. XAUUSD)" maxlength="20" required>
