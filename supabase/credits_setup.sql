@@ -347,8 +347,17 @@ grant execute on function public.admin_list_pending_orders() to authenticated;
 -- Same crediting logic as admin_credit_order() above, but gated by the
 -- admin's own login (like the other admin_* functions) instead of the
 -- shared secret, since this is a button the admin clicks themselves.
+--
+-- Returns the order row plus the buyer's email (joined from auth.users) so
+-- the server can send a purchase receipt right after crediting — if you're
+-- re-running this after the original version (which just returned
+-- public.credit_orders), drop the old one first:
+--   drop function if exists public.admin_mark_order_paid(uuid);
 create or replace function public.admin_mark_order_paid(p_order_id uuid)
-returns public.credit_orders
+returns table (
+  id uuid, user_id uuid, bundle text, scans int, amount_usd numeric,
+  status text, created_at timestamptz, paid_at timestamptz, email text
+)
 language plpgsql
 security definer
 set search_path = public
@@ -376,7 +385,10 @@ begin
     set balance = public.credit_balances.balance + v_order.scans,
         updated_at = now();
 
-  return v_order;
+  return query
+    select v_order.id, v_order.user_id, v_order.bundle, v_order.scans, v_order.amount_usd,
+           v_order.status, v_order.created_at, v_order.paid_at, u.email::text
+    from auth.users u where u.id = v_order.user_id;
 end;
 $$;
 revoke all on function public.admin_mark_order_paid(uuid) from public;

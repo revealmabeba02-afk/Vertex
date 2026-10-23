@@ -716,6 +716,7 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
       SUPABASE_ANON_KEY
     );
     console.log("Whop webhook: credited", result);
+    sendReceiptEmail(email, p_bundle, p_scans, p_amount_usd).catch(() => {});
 
     // Real money just changed hands — if this buyer was referred by someone
     // and hasn't triggered a reward yet, pay the referrer now. Best-effort:
@@ -1278,6 +1279,40 @@ async function sendLinkClickEmail(platform) {
     }
   } catch (err) {
     console.error("Link click email error:", err.message);
+  }
+}
+
+// Purchase receipt, sent to the buyer once their credits are actually added
+// — not a payment confirmation from Whop/Binance themselves, just "here's
+// what you got". Reuses the same Resend wiring/shared sending address as
+// the admin link-click alerts above; best-effort, never blocks crediting.
+const BUNDLE_LABELS = { quick: "Quick", starter: "Starter", trader: "Trader", pro: "Pro", custom: "Custom" };
+async function sendReceiptEmail(toEmail, bundle, scans, amountUsd) {
+  if (!RESEND_API_KEY || !toEmail) return;
+  const label = BUNDLE_LABELS[bundle] || bundle || "Credits";
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [toEmail],
+        subject: `Your Vertex credits are ready (${scans} scans)`,
+        text:
+          `Thanks for your purchase!\n\n` +
+          `${label} bundle — ${scans} scans added to your account` +
+          (amountUsd != null ? ` ($${Number(amountUsd).toFixed(2)})` : "") +
+          `.\n\n` +
+          `Log in at https://vertex-9s4c.onrender.com/app to start scanning.\n\n` +
+          `— Vertex Chart Scanner`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not send receipt email:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Receipt email error:", err.message);
   }
 }
 
@@ -2411,7 +2446,11 @@ app.post("/api/admin/orders/:id/mark-paid", requireUser, async (req, res) => {
     return res.status(403).json({ error: "Not authorized." });
   }
   try {
-    await supabaseRpc("admin_mark_order_paid", { p_order_id: req.params.id }, req.user.token);
+    const rows = await supabaseRpc("admin_mark_order_paid", { p_order_id: req.params.id }, req.user.token);
+    const order = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (order && order.email) {
+      sendReceiptEmail(order.email, order.bundle, order.scans, order.amount_usd).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("Admin mark paid error:", err.message);
