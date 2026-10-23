@@ -152,6 +152,16 @@ const FXSYNAPSE_BASE_URL = (process.env.FXSYNAPSE_BASE_URL || "https://fxsynapse
   .replace(/\/+$/, "");
 const FXSYNAPSE_CHART_PATH = (process.env.FXSYNAPSE_CHART_PATH || "/api/v1/chart").trim();
 
+// MetaApi.cloud bridges Vertex to a user's real MT4/MT5 broker account —
+// King is signing up for this separately and will hand over the token.
+// METAAPI_READY gates the whole feature off cleanly until then, same
+// pattern as SUPABASE_READY/FXSYNAPSE below.
+const METAAPI_TOKEN = (process.env.METAAPI_TOKEN || "").trim();
+const METAAPI_READY = METAAPI_TOKEN.length > 0;
+const METAAPI_PROVISIONING_URL = (
+  process.env.METAAPI_PROVISIONING_URL || "https://mt-provisioning-api-v1.agiliumtrade.ai"
+).trim().replace(/\/+$/, "");
+
 // Confirmed set from FXSynapse's docs — they do not support MN1 (monthly).
 const VALID_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"];
 const TIMEFRAME_LABELS = {
@@ -1773,6 +1783,128 @@ app.delete("/api/journal/:id", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Journal delete error:", err.message);
     res.status(502).json({ error: "Could not delete that trade." });
+  }
+});
+
+// --- MT4/MT5 broker connection (MetaApi.cloud) -------------------------------
+// One broker account per user. The password is sent once, straight through
+// to MetaApi's provisioning API in this same request, and never written to
+// our own database — see supabase/broker_accounts.sql.
+app.get("/api/broker/mine", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/broker_accounts?select=platform,login,server,status,status_detail,created_at&limit=1`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!r.ok) return res.json({ account: null });
+    const rows = await r.json();
+    res.json({ account: Array.isArray(rows) && rows[0] ? rows[0] : null, metaapiReady: METAAPI_READY });
+  } catch (err) {
+    console.error("Broker account fetch error:", err.message);
+    res.json({ account: null, metaapiReady: METAAPI_READY });
+  }
+});
+
+app.post("/api/broker/connect", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if (!METAAPI_READY) {
+    return res.status(503).json({ error: "Broker connections aren't turned on yet — check back soon." });
+  }
+  const platform = String(req.body?.platform || "").toLowerCase();
+  const login = String(req.body?.login || "").trim();
+  const password = String(req.body?.password || "");
+  const server = String(req.body?.server || "").trim();
+  if (!["mt4", "mt5"].includes(platform) || !login || !password || !server) {
+    return res.status(400).json({ error: "Platform, login, password and server are all required." });
+  }
+
+  try {
+    // Provision the account with MetaApi. Their API is region-sharded in
+    // practice, but this base URL is the documented entry point that
+    // resolves correctly for a freshly-created account — confirm against
+    // MetaApi's own docs once the real token is in and adjust
+    // METAAPI_PROVISIONING_URL if their dashboard points somewhere else.
+    const provisionRes = await fetch(`${METAAPI_PROVISIONING_URL}/users/current/accounts`, {
+      method: "POST",
+      headers: {
+        "auth-token": METAAPI_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        login,
+        password,
+        server,
+        platform,
+        name: `vertex-${req.user.id}`,
+        magic: 0,
+        type: "cloud-g2"
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const provisionData = await provisionRes.json().catch(() => null);
+    if (!provisionRes.ok) {
+      const message = (provisionData && (provisionData.message || provisionData.error)) || "MetaApi rejected that account.";
+      console.error("MetaApi provisioning failed:", provisionRes.status, message);
+      return res.status(502).json({ error: message });
+    }
+
+    const metaapiAccountId = provisionData && provisionData.id ? provisionData.id : null;
+    const row = {
+      user_id: req.user.id,
+      platform,
+      login,
+      server,
+      metaapi_account_id: metaapiAccountId,
+      status: "pending",
+      status_detail: "Connecting to your broker…",
+      updated_at: new Date().toISOString()
+    };
+
+    // Upsert on user_id — one broker account per user (see the unique index
+    // in broker_accounts.sql).
+    const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/broker_accounts?on_conflict=user_id`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify(row),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!upsertRes.ok) {
+      console.error("Broker account save failed:", upsertRes.status, await upsertRes.text().catch(() => ""));
+      return res.status(502).json({ error: "Connected to your broker, but couldn't save it — try again." });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Broker connect error:", err.message);
+    res.status(502).json({ error: "Could not reach the broker connection service. Please try again." });
+  }
+});
+
+app.delete("/api/broker/disconnect", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/broker_accounts?user_id=eq.${encodeURIComponent(req.user.id)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Broker disconnect failed:", r.status, await r.text().catch(() => ""));
+      return res.status(502).json({ error: "Could not disconnect that account." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Broker disconnect error:", err.message);
+    res.status(502).json({ error: "Could not disconnect that account." });
   }
 });
 

@@ -358,7 +358,7 @@
     if (name === "credits") refreshBalance();
     if (name === "help") { loadHelpHistory(); loadFeedbackHistory(); }
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
-    if (name === "settings") loadReferral();
+    if (name === "settings") { loadReferral(); loadBrokerAccount(); }
   }
 
   function applyView() {
@@ -2953,6 +2953,112 @@
   const referralStats = document.getElementById("referral-stats");
   const referralCopyStatus = document.getElementById("referral-copy-status");
   let referralLoaded = false;
+
+  // --------------------------------------------------------------
+  // MT4/MT5 broker connection (MetaApi.cloud). The password field is
+  // cleared and never kept client-side past the submit — it goes straight
+  // to the server, which forwards it to MetaApi in the same request and
+  // never writes it anywhere.
+  // --------------------------------------------------------------
+  let brokerLoaded = false;
+  async function loadBrokerAccount() {
+    if (brokerLoaded) return;
+    const connectedWrap = document.getElementById("broker-connected");
+    const formWrap = document.getElementById("broker-connect-form");
+    const notReadyWrap = document.getElementById("broker-not-ready");
+    if (!connectedWrap || !formWrap) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/broker/mine", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      brokerLoaded = true;
+      if (data.metaapiReady === false) {
+        notReadyWrap.hidden = false;
+        formWrap.hidden = true;
+        connectedWrap.hidden = true;
+        return;
+      }
+      if (data.account) {
+        connectedWrap.hidden = false;
+        formWrap.hidden = true;
+        document.getElementById("broker-connected-label").textContent =
+          `${data.account.platform.toUpperCase()} · ${data.account.login} (${data.account.server})`;
+        document.getElementById("broker-connected-status").textContent =
+          data.account.status === "connected" ? "Connected" : (data.account.status_detail || "Connecting…");
+      } else {
+        connectedWrap.hidden = true;
+        formWrap.hidden = false;
+      }
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  const brokerConnectForm = document.getElementById("broker-connect-form");
+  if (brokerConnectForm) {
+    brokerConnectForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const platform = document.getElementById("broker-platform").value;
+      const login = document.getElementById("broker-login").value.trim();
+      const server = document.getElementById("broker-server").value.trim();
+      const passwordInput = document.getElementById("broker-password");
+      const password = passwordInput.value;
+      const btn = document.getElementById("broker-connect-btn");
+      const statusEl = document.getElementById("broker-status");
+      if (!login || !server || !password) return;
+
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      statusEl.hidden = true;
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/broker/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ platform, login, password, server })
+        });
+        const data = await res.json().catch(() => null);
+        passwordInput.value = "";
+        if (!res.ok) {
+          statusEl.textContent = (data && data.error) || "Could not connect that account.";
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+          return;
+        }
+        brokerLoaded = false;
+        loadBrokerAccount();
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("is-loading");
+      }
+    });
+  }
+
+  const brokerDisconnectBtn = document.getElementById("broker-disconnect-btn");
+  if (brokerDisconnectBtn) {
+    brokerDisconnectBtn.addEventListener("click", async () => {
+      brokerDisconnectBtn.disabled = true;
+      try {
+        const session = await Auth.getSession();
+        if (!session) return;
+        await fetch("/api/broker/disconnect", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        brokerLoaded = false;
+        loadBrokerAccount();
+      } catch {
+        brokerDisconnectBtn.disabled = false;
+      }
+    });
+  }
 
   async function loadReferral(force) {
     if (!referralLinkInput) return;

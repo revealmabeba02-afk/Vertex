@@ -816,6 +816,38 @@
       </div>
     </div>
 
+    <div class="settings-card" id="broker-card">
+      <p class="settings-row__title" style="margin-bottom: 4px;">MT4 / MT5 broker account</p>
+      <p class="settings-row__desc" id="broker-intro">Connect your real broker account to pull your actual trades in automatically. Your password is sent once to connect and is never stored here.</p>
+
+      <div id="broker-connected" class="settings-row" hidden style="margin-top: 14px;">
+        <div>
+          <p class="settings-row__title" style="margin-bottom: 0;" id="broker-connected-label">—</p>
+          <p class="settings-row__desc" id="broker-connected-status">—</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="broker-disconnect-btn">Disconnect</button>
+      </div>
+
+      <form id="broker-connect-form" style="margin-top: 14px;" hidden>
+        <div class="journal-form__row">
+          <select id="broker-platform" class="input" required>
+            <option value="mt5">MT5</option>
+            <option value="mt4">MT4</option>
+          </select>
+          <input type="text" id="broker-login" class="input" placeholder="Account number" required>
+          <input type="text" id="broker-server" class="input" placeholder="Broker server (e.g. ICMarkets-Live01)" required>
+        </div>
+        <input type="password" id="broker-password" class="input" placeholder="Broker password" required style="margin-top: 10px;">
+        <button type="submit" id="broker-connect-btn" class="scan-btn" style="margin-top: 12px;">
+          <span class="scan-btn__label">Connect account</span>
+          <span class="scan-btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p id="broker-status" class="credits-status" hidden></p>
+      </form>
+
+      <p id="broker-not-ready" class="settings-row__desc" hidden style="margin-top: 14px;">Broker connections aren't turned on yet — check back soon.</p>
+    </div>
+
     <div class="settings-card">
       <div class="settings-row">
         <div>
