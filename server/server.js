@@ -2439,6 +2439,30 @@ app.get("/api/admin/broker-accounts", requireUser, async (req, res) => {
   }
 });
 
+// Manual credit adjustment for support cases — admin_adjust_credits() does
+// the actual lookup/update/audit-log, re-checking the admin email itself
+// (see supabase/credits_setup.sql).
+app.post("/api/admin/credits/adjust", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const email = String(req.body?.email || "").trim();
+  const delta = Number(req.body?.delta);
+  const reason = String(req.body?.reason || "").trim().slice(0, 300);
+  if (!email || !Number.isInteger(delta) || delta === 0) {
+    return res.status(400).json({ error: "Email and a non-zero whole-number delta are required." });
+  }
+  try {
+    const rows = await supabaseRpc("admin_adjust_credits", { p_email: email, p_delta: delta, p_reason: reason || null }, req.user.token);
+    const result = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    res.json({ ok: true, newBalance: result ? result.new_balance : null });
+  } catch (err) {
+    console.error("Admin adjust credits error:", err.message);
+    res.status(502).json({ error: err.message || "Could not adjust that account's credits." });
+  }
+});
+
 // Manual payment confirmation — a fallback for when the automatic Binance
 // Pay poller can't reach Binance at all (some Render server regions get a
 // 451 "restricted location" error from Binance). The admin sees the

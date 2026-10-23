@@ -393,3 +393,54 @@ end;
 $$;
 revoke all on function public.admin_mark_order_paid(uuid) from public;
 grant execute on function public.admin_mark_order_paid(uuid) to authenticated;
+
+-- Manual credit adjustment for support cases (refunds, goodwill credits,
+-- fixing a missed webhook) — admin-gated like the other admin_* functions.
+-- Looks the user up by email, floors the resulting balance at 0 (never lets
+-- an adjustment push someone negative), and logs itself to
+-- admin_audit_log via admin_log_action's own table insert (requires
+-- supabase/admin_audit_log.sql to already be run).
+create or replace function public.admin_adjust_credits(p_email text, p_delta int, p_reason text default null)
+returns table (user_id uuid, email text, new_balance int)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_user_id uuid;
+  v_balance int;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'revealmabeba02@gmail.com' then
+    raise exception 'Not authorized';
+  end if;
+
+  if p_delta = 0 then
+    raise exception 'Delta must not be zero';
+  end if;
+
+  select id into v_user_id from auth.users where lower(auth.users.email) = lower(p_email) limit 1;
+  if v_user_id is null then
+    raise exception 'No user with that email';
+  end if;
+
+  insert into public.credit_balances (user_id, balance, updated_at)
+  values (v_user_id, greatest(p_delta, 0), now())
+  on conflict (user_id) do update
+    set balance = greatest(public.credit_balances.balance + p_delta, 0),
+        updated_at = now()
+  returning balance into v_balance;
+
+  insert into public.admin_audit_log (actor_email, action, detail)
+  values (
+    (auth.jwt() ->> 'email'),
+    'adjust_credits',
+    format('%s%s credits for %s (new balance: %s)%s',
+      case when p_delta > 0 then '+' else '' end, p_delta, p_email, v_balance,
+      case when p_reason is not null and p_reason <> '' then ' — ' || p_reason else '' end)
+  );
+
+  return query select v_user_id, p_email, v_balance;
+end;
+$$;
+revoke all on function public.admin_adjust_credits(text, int, text) from public, anon;
+grant execute on function public.admin_adjust_credits(text, int, text) to authenticated;

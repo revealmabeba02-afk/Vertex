@@ -1173,6 +1173,30 @@
       <div class="users-empty" id="users-empty">Loading…</div>
     </div>
   </div>
+
+  <div class="users-card" id="sec-adjust-credits" style="margin-top: 16px;">
+    <div class="users-card__head">Adjust credits (support)</div>
+    <p class="users-card__sub" style="margin: -8px 0 14px; color: var(--text-faint); font-size: 13px;">Grant or remove credits for one user — refunds, goodwill, fixing a missed webhook. Logged to the audit log.</p>
+    <form id="adjust-credits-form" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+      <div style="flex: 1 1 220px;">
+        <label class="field__label" for="adjust-credits-email" style="font-size:12px;">User email</label>
+        <input type="email" id="adjust-credits-email" class="input" placeholder="user@example.com" required>
+      </div>
+      <div style="flex: 0 1 140px;">
+        <label class="field__label" for="adjust-credits-delta" style="font-size:12px;">Delta (+/-)</label>
+        <input type="number" id="adjust-credits-delta" class="input" placeholder="e.g. 10 or -5" required>
+      </div>
+      <div style="flex: 1 1 220px;">
+        <label class="field__label" for="adjust-credits-reason" style="font-size:12px;">Reason (optional)</label>
+        <input type="text" id="adjust-credits-reason" class="input" placeholder="e.g. refund for failed scan" maxlength="300">
+      </div>
+      <button type="submit" id="adjust-credits-btn" class="scan-btn" style="flex: 0 0 auto; padding: 12px 20px;">
+        <span class="scan-btn__label">Apply</span>
+        <span class="scan-btn__spinner" aria-hidden="true"></span>
+      </button>
+    </form>
+    <p id="adjust-credits-status" class="credits-status" hidden style="margin-top: 10px;"></p>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="broker">
@@ -1432,6 +1456,7 @@
     loadContentPosts(authHeader);
     wirePlannerForm(authHeader);
     loadBrokerAccounts(authHeader);
+    wireAdjustCreditsForm(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -1898,6 +1923,57 @@
         emptyEl.textContent = "Could not reach the server.";
         emptyEl.hidden = false;
       }
+    }
+
+    function wireAdjustCreditsForm(authHeader) {
+      const form = document.getElementById("adjust-credits-form");
+      if (!form) return;
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const emailInput = document.getElementById("adjust-credits-email");
+        const deltaInput = document.getElementById("adjust-credits-delta");
+        const reasonInput = document.getElementById("adjust-credits-reason");
+        const btn = document.getElementById("adjust-credits-btn");
+        const statusEl = document.getElementById("adjust-credits-status");
+        const email = emailInput.value.trim();
+        const delta = parseInt(deltaInput.value, 10);
+        statusEl.hidden = true;
+        statusEl.classList.remove("credits-status--error");
+        if (!email || !Number.isInteger(delta) || delta === 0) {
+          statusEl.textContent = "Enter an email and a non-zero whole number.";
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+          return;
+        }
+        btn.disabled = true;
+        btn.classList.add("is-loading");
+        try {
+          const res = await fetch("/api/admin/credits/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeader },
+            body: JSON.stringify({ email, delta, reason: reasonInput.value.trim() })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not adjust credits.";
+            statusEl.classList.add("credits-status--error");
+            statusEl.hidden = false;
+            return;
+          }
+          statusEl.textContent = `Done — ${email}'s new balance is ${data.newBalance}.`;
+          statusEl.hidden = false;
+          deltaInput.value = "";
+          reasonInput.value = "";
+          loadAuditLog(authHeader);
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove("is-loading");
+        }
+      });
     }
 
     function wirePlannerForm(authHeader) {
