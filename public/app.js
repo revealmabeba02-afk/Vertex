@@ -1177,15 +1177,18 @@
     const winrateEl = document.getElementById("journal-stat-winrate");
     const pnlEl = document.getElementById("journal-stat-pnl");
 
+    const exportBtn = document.getElementById("journal-export-btn");
     if (journalItems.length === 0) {
       summary.hidden = true;
       emptyEl.hidden = false;
       listEl.hidden = true;
+      if (exportBtn) exportBtn.hidden = true;
       return;
     }
     emptyEl.hidden = true;
     listEl.hidden = false;
     summary.hidden = false;
+    if (exportBtn) exportBtn.hidden = false;
 
     const closed = journalItems.filter((t) => t.result !== "open");
     const wins = closed.filter((t) => t.result === "win").length;
@@ -1259,6 +1262,31 @@
       actions.appendChild(delBtn);
 
       listEl.appendChild(row);
+    });
+  }
+
+  const journalExportBtn = document.getElementById("journal-export-btn");
+  if (journalExportBtn) {
+    journalExportBtn.addEventListener("click", () => {
+      if (journalItems.length === 0) return;
+      const headers = ["pair", "direction", "entry", "exit", "result", "pnl", "notes", "created_at"];
+      const csvEscape = (v) => {
+        const s = v === null || v === undefined ? "" : String(v);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const lines = [headers.join(",")];
+      journalItems.forEach((t) => {
+        lines.push(headers.map((h) => csvEscape(t[h])).join(","));
+      });
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vertex-trade-journal.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     });
   }
 
