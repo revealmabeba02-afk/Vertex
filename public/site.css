@@ -487,6 +487,16 @@
 
 .field__wrap { position: relative; }
 
+.auth-forgot-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.auth-forgot-link:hover { color: var(--accent); text-decoration: underline; }
+
 .input {
   width: 100%;
   min-height: 48px;
