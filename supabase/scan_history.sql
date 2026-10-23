@@ -24,3 +24,10 @@ create policy "Users can view their own scan history"
 create policy "Users can insert their own scan history"
   on public.scan_history for insert
   with check (auth.uid() = user_id);
+
+-- Added later so users can clear individual scans from their own history
+-- (the History tab's delete button). Safe to run again.
+drop policy if exists scan_history_delete_own on public.scan_history;
+create policy scan_history_delete_own
+  on public.scan_history for delete
+  using (auth.uid() = user_id);

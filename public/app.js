@@ -2514,6 +2514,30 @@
       bias.textContent = item.bias || "Neutral";
       right.appendChild(bias);
 
+      if (item.id) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "history-pin-btn";
+        delBtn.setAttribute("aria-label", "Delete this scan");
+        delBtn.textContent = "✕";
+        delBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          try {
+            const session = await Auth.getSession();
+            if (!session) return;
+            await fetch(`/api/history/${item.id}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${session.access_token}` }
+            });
+            historyItems = historyItems.filter((h) => h.id !== item.id);
+            renderPinChips();
+            renderHistory(historyItems);
+            renderCurrencyBias(historyItems);
+          } catch { /* ignore */ }
+        });
+        right.appendChild(delBtn);
+      }
+
       row.appendChild(main);
       row.appendChild(right);
       historyList.appendChild(row);

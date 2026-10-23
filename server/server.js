@@ -1574,7 +1574,7 @@ if (CREDITS_READY && SUPABASE_READY) {
 app.get("/api/history", requireUser, async (req, res) => {
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/scan_history?select=pair,timeframe,bias,signal,created_at&order=created_at.desc&limit=50`,
+      `${SUPABASE_URL}/rest/v1/scan_history?select=id,pair,timeframe,bias,signal,created_at&order=created_at.desc&limit=50`,
       {
         headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
         signal: AbortSignal.timeout(8000)
@@ -1590,6 +1590,27 @@ app.get("/api/history", requireUser, async (req, res) => {
   } catch (err) {
     console.error("History fetch error:", err.message);
     res.json({ items: [] });
+  }
+});
+
+// Delete one of the user's own scan history rows — RLS (scan_history_delete_own,
+// see supabase/scan_history.sql) scopes this to the caller's own rows.
+app.delete("/api/history/:id", requireUser, async (req, res) => {
+  const id = String(req.params.id || "");
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/scan_history?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("History delete failed:", r.status, await r.text().catch(() => ""));
+      return res.status(502).json({ error: "Could not delete that scan." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("History delete error:", err.message);
+    res.status(502).json({ error: "Could not delete that scan." });
   }
 });
 
