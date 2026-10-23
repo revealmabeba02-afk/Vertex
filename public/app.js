@@ -2442,15 +2442,17 @@
     }
   }
 
-  if (historySearchInput) {
-    historySearchInput.addEventListener("input", () => {
-      const q = historySearchInput.value.trim().toLowerCase();
-      const filtered = q
-        ? historyItems.filter((item) => (item.pair || "").toLowerCase().includes(q))
-        : historyItems;
-      renderHistory(filtered, { isFilter: true });
-    });
+  const historyBiasFilter = document.getElementById("history-bias-filter");
+  function applyHistoryFilters() {
+    const q = historySearchInput ? historySearchInput.value.trim().toLowerCase() : "";
+    const bias = historyBiasFilter ? historyBiasFilter.value : "";
+    let filtered = historyItems;
+    if (q) filtered = filtered.filter((item) => (item.pair || "").toLowerCase().includes(q));
+    if (bias) filtered = filtered.filter((item) => (item.bias || "").toLowerCase().includes(bias));
+    renderHistory(filtered, { isFilter: true });
   }
+  if (historySearchInput) historySearchInput.addEventListener("input", applyHistoryFilters);
+  if (historyBiasFilter) historyBiasFilter.addEventListener("change", applyHistoryFilters);
 
   const historyExportBtn = document.getElementById("history-export-btn");
   if (historyExportBtn) {
