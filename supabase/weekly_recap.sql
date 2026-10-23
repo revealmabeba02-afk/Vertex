@@ -1,11 +1,16 @@
 -- Run this once in Supabase: Dashboard -> SQL Editor -> New query -> paste -> Run.
 -- (Safe to run again — create or replace / revoke+grant make it idempotent.)
 --
--- Powers the weekly trading recap email (server/server.js, the
--- /api/cron/weekly-recap route, triggered by a Render cron job). Gated by
--- the same shared secret as the Whop/Binance crediting functions in
--- credits_setup.sql (CREDIT_FULFILL_SECRET) — this is a cron job calling
--- with no user JWT, same trust boundary as those.
+-- Powers the weekly trading recap email (server/server.js). Sent by an
+-- in-process check inside the already-running server (a timer that checks
+-- roughly once an hour whether a week has passed), not a separate paid
+-- Render cron job — avoids new infrastructure for something this small.
+-- Gated by the same shared secret as the Whop/Binance crediting functions
+-- in credits_setup.sql (CREDIT_FULFILL_SECRET), since this is also a
+-- no-user-JWT system call.
+--
+-- Run this first:
+--   alter table public.app_config add column if not exists weekly_recap_last_sent timestamptz;
 --
 -- IMPORTANT: before running this, replace REPLACE_WITH_CREDIT_FULFILL_SECRET
 -- below with the actual value of CREDIT_FULFILL_SECRET (same one already
@@ -70,3 +75,38 @@ $$;
 
 revoke all on function public.weekly_recap_data(text) from public, anon, authenticated;
 grant execute on function public.weekly_recap_data(text) to anon, authenticated;
+
+-- Lets the server claim "it's time to send the weekly recap" exactly once
+-- per ~7 days, with the timestamp persisted here (not in server memory) so
+-- it survives restarts/redeploys. app_config.weekly_recap_last_sent is
+-- added by this file; run once:
+--   alter table public.app_config add column if not exists weekly_recap_last_sent timestamptz;
+-- Atomic: returns true and stamps "now" in the same statement only when due
+-- (6.5+ days since the last send), so two near-simultaneous checks can't
+-- both fire and double-send.
+create or replace function public.weekly_recap_claim_if_due(p_secret text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_last timestamptz;
+  v_due boolean;
+begin
+  if p_secret is distinct from 'REPLACE_WITH_CREDIT_FULFILL_SECRET' then
+    raise exception 'Not authorized';
+  end if;
+
+  select weekly_recap_last_sent into v_last from public.app_config where id = 1;
+  v_due := v_last is null or v_last < now() - interval '6 days 12 hours';
+
+  if v_due then
+    update public.app_config set weekly_recap_last_sent = now() where id = 1;
+  end if;
+
+  return v_due;
+end;
+$$;
+revoke all on function public.weekly_recap_claim_if_due(text) from public, authenticated;
+grant execute on function public.weekly_recap_claim_if_due(text) to anon;

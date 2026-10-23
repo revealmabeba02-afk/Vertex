@@ -231,11 +231,6 @@ const BINANCE_API_KEY = (process.env.BINANCE_API_KEY || "").trim();
 const BINANCE_API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
 const BINANCE_PAY_ID = (process.env.BINANCE_PAY_ID || "1283803211").trim();
 const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
-// Separate secret for the weekly-recap cron job to call /api/cron/weekly-recap
-// with — different trust boundary from CREDIT_FULFILL_SECRET (that one's for
-// money-moving RPCs; this one just triggers sending some emails), so a leak
-// of one doesn't also expose the other.
-const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
 const CREDIT_BUNDLES = {
@@ -1352,6 +1347,30 @@ async function sendWeeklyRecapEmail(row) {
     }
   } catch (err) {
     console.error("Weekly recap email error:", err.message);
+  }
+}
+
+// force=true (the admin "send now" button) skips the once-a-week gate and
+// sends immediately, without resetting the weekly timer — so testing it
+// doesn't push back or double-fire the real scheduled send.
+async function runWeeklyRecap(force) {
+  if (!SUPABASE_READY) return 0;
+  try {
+    let due = force;
+    if (!due) {
+      due = await supabaseRpc("weekly_recap_claim_if_due", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY);
+    }
+    if (!due) return 0;
+    const rows = await supabaseRpc("weekly_recap_data", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY);
+    const list = Array.isArray(rows) ? rows : [];
+    for (const row of list) {
+      await sendWeeklyRecapEmail(row);
+    }
+    console.log(`Weekly recap: sent to ${list.length} user(s).`);
+    return list.length;
+  } catch (err) {
+    console.error("Weekly recap run error:", err.message);
+    return 0;
   }
 }
 
@@ -2502,26 +2521,22 @@ app.post("/api/admin/credits/adjust", requireUser, async (req, res) => {
   }
 });
 
-// Weekly trading recap — called by a Render cron job (not a user, not the
-// admin), so it's gated by CRON_SECRET in a header rather than requireUser.
-// Fetches everyone who logged a journal trade in the last 7 days and emails
-// each one their own recap. Fire-and-forget per user — one bad email never
-// stops the rest from sending.
-app.post("/api/cron/weekly-recap", async (req, res) => {
-  if (!CRON_SECRET || req.headers["x-cron-secret"] !== CRON_SECRET) {
-    return res.status(401).json({ error: "Not authorized." });
+// Weekly trading recap — normally sent by an in-process hourly timer (see
+// runWeeklyRecap/setInterval near app.listen below), which checks roughly
+// once an hour whether ~7 days have passed since the last send and, if so,
+// emails everyone who logged a journal trade that week. This route is a
+// manual trigger so King can fire one on demand to test it.
+app.post("/api/admin/weekly-recap/send-now", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
   }
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   try {
-    const rows = await supabaseRpc("weekly_recap_data", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY);
-    const list = Array.isArray(rows) ? rows : [];
-    for (const row of list) {
-      await sendWeeklyRecapEmail(row);
-    }
-    res.json({ ok: true, sent: list.length });
+    const sent = await runWeeklyRecap(true);
+    res.json({ ok: true, sent });
   } catch (err) {
-    console.error("Weekly recap cron error:", err.message);
-    res.status(502).json({ error: "Could not generate the weekly recap." });
+    console.error("Manual weekly recap error:", err.message);
+    res.status(502).json({ error: "Could not send the weekly recap." });
   }
 });
 
@@ -3532,3 +3547,12 @@ app.listen(PORT, () => {
   console.log(`Vertex Chart Scanner running at http://localhost:${PORT}`);
   console.log(`Using provider: FXSynapse AI (${FXSYNAPSE_BASE_URL})`);
 });
+
+// Weekly recap: checked once an hour (not scheduled to a specific day/time)
+// so it doesn't matter when the server happens to be up — runWeeklyRecap's
+// own ~6.5-day gate (weekly_recap_claim_if_due) is what actually decides
+// whether it's due, persisted in app_config so it survives restarts.
+setInterval(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 60 * 1000);
+// Also check shortly after startup, in case the server was down across the
+// moment it would have fired.
+setTimeout(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 1000);

@@ -1197,6 +1197,13 @@
     </form>
     <p id="adjust-credits-status" class="credits-status" hidden style="margin-top: 10px;"></p>
   </div>
+
+  <div class="users-card" id="sec-weekly-recap" style="margin-top: 16px;">
+    <div class="users-card__head">Weekly trading recap</div>
+    <p class="users-card__sub" style="margin: -8px 0 14px; color: var(--text-faint); font-size: 13px;">Sends automatically once a week to everyone who logged a journal trade. Use this to send one right now for testing.</p>
+    <button type="button" id="weekly-recap-send-btn" class="btn btn--ghost">Send now</button>
+    <p id="weekly-recap-status" class="credits-status" hidden style="margin-top: 10px;"></p>
+  </div>
 </div>
 
 <div class="command-panel" data-panel="broker">
@@ -1457,6 +1464,7 @@
     wirePlannerForm(authHeader);
     loadBrokerAccounts(authHeader);
     wireAdjustCreditsForm(authHeader);
+    wireWeeklyRecapButton(authHeader);
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -1972,6 +1980,35 @@
         } finally {
           btn.disabled = false;
           btn.classList.remove("is-loading");
+        }
+      });
+    }
+
+    function wireWeeklyRecapButton(authHeader) {
+      const btn = document.getElementById("weekly-recap-send-btn");
+      const statusEl = document.getElementById("weekly-recap-status");
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        statusEl.hidden = true;
+        statusEl.classList.remove("credits-status--error");
+        try {
+          const res = await fetch("/api/admin/weekly-recap/send-now", { method: "POST", headers: authHeader });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Could not send the recap.";
+            statusEl.classList.add("credits-status--error");
+            statusEl.hidden = false;
+            return;
+          }
+          statusEl.textContent = `Sent to ${data.sent} user(s).`;
+          statusEl.hidden = false;
+        } catch {
+          statusEl.textContent = "Could not reach the server.";
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+        } finally {
+          btn.disabled = false;
         }
       });
     }
