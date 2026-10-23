@@ -972,6 +972,7 @@
     <a href="#users" data-panel-link="users" title="Users">Users</a>
     <a href="#support" data-panel-link="support" title="Support">Support</a>
     <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
+    <a href="#audit" data-panel-link="audit" title="Audit log">Audit log</a>
   </details>
 </nav>
 <main class="admin-wrap command-main">
@@ -1214,6 +1215,15 @@
     <div class="users-empty" id="feedback-empty">Loading…</div>
   </div>
 </div>
+
+<div class="command-panel" data-panel="audit">
+  <div class="support-card" id="sec-audit">
+    <div class="users-card__head">Admin audit log</div>
+    <p class="users-empty" style="padding: 4px 0 12px;">Every maintenance toggle, support reply and feedback status change, most recent first.</p>
+    <div id="audit-list"></div>
+    <div class="users-empty" id="audit-empty">Loading…</div>
+  </div>
+</div>
 </main>
 </div>
 
@@ -1338,6 +1348,7 @@
     wireMaintenanceToggle(authHeader);
     loadSupport(authHeader);
     loadFeedback(authHeader);
+    loadAuditLog(authHeader);
     wireQ2Toggle(authHeader);
     wireQ3Toggle(authHeader);
     wireQ2Insight(authHeader);
@@ -2309,6 +2320,43 @@
             }
           });
         });
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    async function loadAuditLog(authHeader) {
+      const listEl = document.getElementById("audit-list");
+      const emptyEl = document.getElementById("audit-empty");
+      try {
+        const res = await fetch("/api/admin/audit-log", { headers: authHeader });
+        if (!res.ok) {
+          emptyEl.textContent = "Could not load the audit log.";
+          return;
+        }
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) {
+          emptyEl.textContent = "No admin actions logged yet.";
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = items
+          .map((item) => {
+            const when = new Date(item.created_at).toLocaleString();
+            return `
+              <div class="support-item">
+                <div class="support-item__body">
+                  <div class="support-item__meta">
+                    <span class="support-item__tag support-item__tag--open">${escapeHtml(item.action)}</span>
+                    <span>${escapeHtml(when)}</span>
+                  </div>
+                  <div class="support-item__text">${escapeHtml(item.detail || "—")} <span style="opacity:.6">— ${escapeHtml(item.actor_email || "")}</span></div>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
       } catch {
         emptyEl.textContent = "Could not reach the server.";
       }

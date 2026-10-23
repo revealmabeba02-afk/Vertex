@@ -1286,6 +1286,15 @@ async function supabaseRpc(fnName, args, token) {
   return data;
 }
 
+// Best-effort audit trail for admin actions (maintenance toggles, feedback
+// status changes, support replies, ...). Fire-and-forget — a logging
+// failure should never block the admin action it's describing.
+function logAdminAction(token, action, detail) {
+  supabaseRpc("admin_log_action", { p_action: action, p_detail: detail || null }, token).catch((err) => {
+    console.error("Audit log write failed:", err.message);
+  });
+}
+
 // Best-effort refund: a failed scan should never cost a credit, but if the
 // refund call itself fails, we log it rather than blocking the error
 // response the user is already waiting on.
@@ -2259,10 +2268,25 @@ app.post("/api/admin/maintenance", requireUser, async (req, res) => {
   const message = typeof req.body?.message === "string" ? req.body.message.slice(0, 500) : null;
   try {
     const row = await supabaseRpc("admin_set_maintenance", { p_enabled: enabled, p_message: message }, req.user.token);
+    logAdminAction(req.user.token, enabled ? "maintenance_on" : "maintenance_off", message || null);
     res.json({ ok: true, enabled: row?.maintenance_mode ?? enabled, message: row?.maintenance_message ?? message });
   } catch (err) {
     console.error("Set maintenance error:", err.message);
     res.status(502).json({ error: "Could not update maintenance mode." });
+  }
+});
+
+app.get("/api/admin/audit-log", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const items = await supabaseRpc("admin_get_audit_log", { p_limit: 100 }, req.user.token);
+    res.json({ items: Array.isArray(items) ? items : [] });
+  } catch (err) {
+    console.error("Admin audit log fetch error:", err.message);
+    res.status(502).json({ error: "Could not load the audit log. Has supabase/admin_audit_log.sql been run?" });
   }
 });
 
@@ -2820,6 +2844,7 @@ app.post("/api/admin/support/:id/reply", requireUser, async (req, res) => {
   if (!reply) return res.status(400).json({ error: "Reply cannot be empty." });
   try {
     await supabaseRpc("admin_reply_support_message", { p_id: req.params.id, p_reply: reply }, req.user.token);
+    logAdminAction(req.user.token, "support_reply", `#${req.params.id}: ${reply.slice(0, 200)}`);
     res.json({ ok: true });
   } catch (err) {
     console.error("Admin reply support error:", err.message);
@@ -2903,6 +2928,7 @@ app.post("/api/admin/feedback/:id/status", requireUser, async (req, res) => {
   }
   try {
     await supabaseRpc("admin_set_feedback_status", { p_id: req.params.id, p_status: status }, req.user.token);
+    logAdminAction(req.user.token, "feedback_status", `#${req.params.id} -> ${status}`);
     res.json({ ok: true });
   } catch (err) {
     console.error("Admin feedback status error:", err.message);
