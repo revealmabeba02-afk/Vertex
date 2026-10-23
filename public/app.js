@@ -1239,7 +1239,41 @@
       `;
       row.querySelector(".journal-row__pair").textContent = t.pair;
 
+      const editWrap = document.createElement("div");
+      editWrap.className = "journal-row__edit";
+      editWrap.hidden = true;
+      editWrap.innerHTML = `
+        <input type="number" step="any" class="input journal-row__edit-entry" placeholder="Entry price">
+        <textarea class="input journal-row__edit-notes" rows="2" maxlength="1000" placeholder="Notes" style="resize: vertical; font-family: inherit;"></textarea>
+        <button type="button" class="scan-btn journal-row__edit-save" style="padding: 8px 16px; font-size: 13px;">Save</button>
+      `;
+      editWrap.querySelector(".journal-row__edit-entry").value = t.entry ?? "";
+      editWrap.querySelector(".journal-row__edit-notes").value = t.notes || "";
+      editWrap.querySelector(".journal-row__edit-save").addEventListener("click", async () => {
+        const entry = editWrap.querySelector(".journal-row__edit-entry").value;
+        const notes = editWrap.querySelector(".journal-row__edit-notes").value;
+        try {
+          const session = await Auth.getSession();
+          if (!session) return;
+          await fetch(`/api/journal/${t.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ entry: entry === "" ? null : entry, notes })
+          });
+          loadJournal();
+        } catch { /* ignore */ }
+      });
+
       const actions = row.querySelector(".journal-row__actions");
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "history-pin-btn";
+      editBtn.setAttribute("aria-label", "Edit entry");
+      editBtn.textContent = "✎";
+      editBtn.addEventListener("click", () => {
+        editWrap.hidden = !editWrap.hidden;
+      });
+      actions.appendChild(editBtn);
       if (t.result === "open") {
         const select = document.createElement("select");
         select.className = "input journal-row__select";
@@ -1281,6 +1315,7 @@
         } catch { /* ignore */ }
       });
       actions.appendChild(delBtn);
+      row.appendChild(editWrap);
 
       listEl.appendChild(row);
     });

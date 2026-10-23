@@ -1696,6 +1696,10 @@ app.patch("/api/journal/:id", requireUser, async (req, res) => {
     const exit = Number(req.body.exit);
     patch.exit = Number.isFinite(exit) ? exit : null;
   }
+  if (req.body?.entry !== undefined) {
+    const entry = Number(req.body.entry);
+    patch.entry = Number.isFinite(entry) ? entry : null;
+  }
   if (req.body?.result && ["open", "win", "loss", "breakeven"].includes(req.body.result)) {
     patch.result = req.body.result;
     if (req.body.result !== "open") patch.closed_at = new Date().toISOString();

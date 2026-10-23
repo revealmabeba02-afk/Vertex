@@ -2229,6 +2229,17 @@ body.scanning .scan-hud {
 .journal-row__result--loss { color: var(--bear); background: color-mix(in srgb, var(--bear) 15%, transparent); }
 .journal-row__result--breakeven { color: var(--text-dim); background: color-mix(in srgb, var(--text-dim) 15%, transparent); }
 
+.journal-row__edit {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.journal-row__edit-save { align-self: flex-end; }
+
 .history-empty {
   margin-top: 28px;
   padding: 40px 20px;
