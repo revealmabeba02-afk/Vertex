@@ -3390,4 +3390,48 @@
       }
     });
   }
+
+  // Register the install-only service worker (see public/sw.js) so mobile
+  // browsers offer "Add to Home Screen" / the PWA install prompt.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+
+  // Android/desktop Chrome: capture the browser's own install prompt and
+  // surface it as a button in Settings instead of waiting for the browser's
+  // own (easy-to-miss) address-bar icon. iOS Safari has no such event — it
+  // only supports the manual "Share -> Add to Home Screen" flow, so the
+  // button there just stays hidden.
+  let deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const row = document.getElementById("settings-install-row");
+    if (row) row.hidden = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    const row = document.getElementById("settings-install-row");
+    if (row) row.hidden = true;
+  });
+  const installBtn = document.getElementById("settings-install-btn");
+  if (installBtn) {
+    installBtn.addEventListener("click", async () => {
+      if (!deferredInstallPrompt) return;
+      installBtn.disabled = true;
+      try {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+      } catch {
+        // Ignore — user dismissed it.
+      } finally {
+        deferredInstallPrompt = null;
+        installBtn.disabled = false;
+        const row = document.getElementById("settings-install-row");
+        if (row) row.hidden = true;
+      }
+    });
+  }
 })();

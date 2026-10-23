@@ -30,6 +30,10 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Vertex" />
 <link rel="stylesheet" href="/site.css" />
 <!-- Hidden until app.js has checked the session (see the top of app.js). The
      timer and the noscript rule make sure the page can never stay blank. -->
@@ -813,6 +817,13 @@
           <p class="settings-row__desc">Download a copy of your scans, journal and support history.</p>
         </div>
         <button type="button" class="btn btn--ghost" id="settings-export-data-btn">Export data</button>
+      </div>
+      <div class="settings-row" id="settings-install-row" hidden style="margin-top: 12px;">
+        <div>
+          <p class="settings-row__title" style="margin-bottom: 0;">Install app</p>
+          <p class="settings-row__desc">Add Vertex to your home screen for one-tap access, like a real app.</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="settings-install-btn">Install</button>
       </div>
     </div>
 
