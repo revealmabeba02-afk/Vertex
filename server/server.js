@@ -231,6 +231,11 @@ const BINANCE_API_KEY = (process.env.BINANCE_API_KEY || "").trim();
 const BINANCE_API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
 const BINANCE_PAY_ID = (process.env.BINANCE_PAY_ID || "1283803211").trim();
 const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
+// Separate secret for the weekly-recap cron job to call /api/cron/weekly-recap
+// with — different trust boundary from CREDIT_FULFILL_SECRET (that one's for
+// money-moving RPCs; this one just triggers sending some emails), so a leak
+// of one doesn't also expose the other.
+const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
 const CREDIT_BUNDLES = {
@@ -1313,6 +1318,40 @@ async function sendReceiptEmail(toEmail, bundle, scans, amountUsd) {
     }
   } catch (err) {
     console.error("Receipt email error:", err.message);
+  }
+}
+
+// Weekly trading recap — one per user who actually logged a journal trade
+// in the last 7 days (see weekly_recap_data() in supabase/weekly_recap.sql).
+// Triggered by /api/cron/weekly-recap, a Render cron job hits that weekly.
+async function sendWeeklyRecapEmail(row) {
+  if (!RESEND_API_KEY || !row.email) return;
+  const { trades_count, wins, losses, win_rate, top_pair, scans_count } = row;
+  const winRateLine = win_rate === null ? "No closed trades yet" : `${win_rate}% win rate (${wins}W / ${losses}L)`;
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [row.email],
+        subject: `Your week on Vertex: ${trades_count} trade${trades_count === 1 ? "" : "s"} logged`,
+        text:
+          `Here's your week on Vertex:\n\n` +
+          `• ${trades_count} trade${trades_count === 1 ? "" : "s"} logged in your journal\n` +
+          `• ${winRateLine}\n` +
+          (top_pair ? `• Most traded pair: ${top_pair}\n` : "") +
+          `• ${scans_count} chart${scans_count === 1 ? "" : "s"} scanned\n\n` +
+          `Keep it up — log in at https://vertex-9s4c.onrender.com/app to scan more.\n\n` +
+          `— Vertex Chart Scanner`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not send weekly recap email:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Weekly recap email error:", err.message);
   }
 }
 
@@ -2460,6 +2499,29 @@ app.post("/api/admin/credits/adjust", requireUser, async (req, res) => {
   } catch (err) {
     console.error("Admin adjust credits error:", err.message);
     res.status(502).json({ error: err.message || "Could not adjust that account's credits." });
+  }
+});
+
+// Weekly trading recap — called by a Render cron job (not a user, not the
+// admin), so it's gated by CRON_SECRET in a header rather than requireUser.
+// Fetches everyone who logged a journal trade in the last 7 days and emails
+// each one their own recap. Fire-and-forget per user — one bad email never
+// stops the rest from sending.
+app.post("/api/cron/weekly-recap", async (req, res) => {
+  if (!CRON_SECRET || req.headers["x-cron-secret"] !== CRON_SECRET) {
+    return res.status(401).json({ error: "Not authorized." });
+  }
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const rows = await supabaseRpc("weekly_recap_data", { p_secret: CREDIT_FULFILL_SECRET }, SUPABASE_ANON_KEY);
+    const list = Array.isArray(rows) ? rows : [];
+    for (const row of list) {
+      await sendWeeklyRecapEmail(row);
+    }
+    res.json({ ok: true, sent: list.length });
+  } catch (err) {
+    console.error("Weekly recap cron error:", err.message);
+    res.status(502).json({ error: "Could not generate the weekly recap." });
   }
 });
 
