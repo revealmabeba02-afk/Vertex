@@ -2530,6 +2530,28 @@
           togglePinnedPair(item.pair);
         });
         main.appendChild(pinBtn);
+
+        const rescanBtn = document.createElement("button");
+        rescanBtn.type = "button";
+        rescanBtn.className = "history-pin-btn";
+        rescanBtn.setAttribute("aria-label", "Scan " + item.pair + " again");
+        rescanBtn.textContent = "↻";
+        rescanBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          symbolInput.value = item.pair;
+          syncQuickpickActive();
+          if (item.timeframe) {
+            const radio = document.querySelector(`input[name="tf"][value="${item.timeframe}"]`);
+            if (radio) {
+              radio.checked = true;
+              timeframeSelect.value = item.timeframe;
+            }
+          }
+          updateScanBtnState();
+          location.hash = "";
+          setTimeout(() => symbolInput.focus(), 150);
+        });
+        main.appendChild(rescanBtn);
       }
 
       const right = document.createElement("div");
