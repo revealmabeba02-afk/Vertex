@@ -136,6 +136,32 @@
 <!-- Dims the page behind the slide-out drawer on mobile; click closes it. -->
 <div class="mobile-nav-backdrop" id="mobile-nav-backdrop" hidden></div>
 
+<!-- Bottom tab bar: mobile-only, the 5 sections people actually live in.
+     Reuses .navpill[data-view] so showView()'s existing active-state and
+     routing logic drives these for free — no extra JS needed. -->
+<nav class="bottom-tabbar" id="bottom-tabbar" role="tablist" aria-label="Main sections">
+  <a class="navpill bottom-tabbar__item" href="#scan" data-view="scan" role="tab" aria-selected="true" aria-controls="view-scan">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V4a1 1 0 011-1h3M17 3h3a1 1 0 011 1v3M21 17v3a1 1 0 01-1 1h-3M7 21H4a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="3"/></svg>
+    <span>Scan</span>
+  </a>
+  <a class="navpill bottom-tabbar__item" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+    <span>History</span>
+  </a>
+  <a class="navpill bottom-tabbar__item" href="#journal" data-view="journal" role="tab" aria-selected="false" aria-controls="view-journal">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    <span>Journal</span>
+  </a>
+  <a class="navpill bottom-tabbar__item" href="#news" data-view="news" role="tab" aria-selected="false" aria-controls="view-news">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+    <span>News</span>
+  </a>
+  <a class="navpill bottom-tabbar__item" href="#settings" data-view="settings" role="tab" aria-selected="false" aria-controls="view-settings">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    <span>Settings</span>
+  </a>
+</nav>
+
 <aside class="sidebar" id="sidebar">
   <div class="sidebar__top">
     <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
