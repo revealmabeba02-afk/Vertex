@@ -1002,6 +1002,18 @@
     </div>
     <button type="button" id="journal-export-btn" class="support-item__tag support-item__tag--open" style="margin-top:10px; border:1px solid var(--border); cursor:pointer;" hidden>Download CSV</button>
 
+    <div id="journal-search-wrap" class="history-search-wrap" hidden>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="journal-search" class="input" placeholder="Filter by pair…" aria-label="Filter journal by pair" style="flex:1;">
+        <select id="journal-result-filter" class="input" style="flex:0 0 auto; width:auto;" aria-label="Filter journal by result">
+          <option value="">All results</option>
+          <option value="open">Open</option>
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+        </select>
+      </div>
+    </div>
+
     <details id="journal-by-pair-wrap" class="confidence-why" hidden style="margin-top: 14px;">
       <summary>Win rate by pair</summary>
       <div id="journal-by-pair-list" class="currency-bias-list"></div>

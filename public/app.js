@@ -1300,18 +1300,21 @@
 
     const exportBtn = document.getElementById("journal-export-btn");
     const byPairWrap = document.getElementById("journal-by-pair-wrap");
+    const searchWrap = document.getElementById("journal-search-wrap");
     if (journalItems.length === 0) {
       summary.hidden = true;
       emptyEl.hidden = false;
       listEl.hidden = true;
       if (exportBtn) exportBtn.hidden = true;
       if (byPairWrap) byPairWrap.hidden = true;
+      if (searchWrap) searchWrap.hidden = true;
       return;
     }
     emptyEl.hidden = true;
     listEl.hidden = false;
     summary.hidden = false;
     if (exportBtn) exportBtn.hidden = false;
+    if (searchWrap) searchWrap.hidden = false;
     renderJournalByPair();
     renderJournalSessionInsight();
 
@@ -1325,8 +1328,25 @@
     pnlEl.textContent = (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2);
     pnlEl.style.color = totalPnl > 0 ? "var(--bull)" : totalPnl < 0 ? "var(--bear)" : "";
 
+    const searchInput = document.getElementById("journal-search");
+    const resultFilter = document.getElementById("journal-result-filter");
+    const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    const resultQ = resultFilter ? resultFilter.value : "";
+    const filteredItems = journalItems.filter((t) => {
+      if (q && !(t.pair || "").toLowerCase().includes(q)) return false;
+      if (resultQ && t.result !== resultQ) return false;
+      return true;
+    });
+
     listEl.innerHTML = "";
-    journalItems.forEach((t) => {
+    if (filteredItems.length === 0) {
+      const none = document.createElement("div");
+      none.className = "history-empty";
+      none.textContent = "No trades match that filter.";
+      listEl.appendChild(none);
+      return;
+    }
+    filteredItems.forEach((t) => {
       const row = document.createElement("div");
       row.className = "journal-row";
       let when = "";
@@ -1532,6 +1552,11 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
+
+  const journalSearchInput = document.getElementById("journal-search");
+  const journalResultFilter = document.getElementById("journal-result-filter");
+  if (journalSearchInput) journalSearchInput.addEventListener("input", renderJournal);
+  if (journalResultFilter) journalResultFilter.addEventListener("change", renderJournal);
 
   const journalExportBtn = document.getElementById("journal-export-btn");
   if (journalExportBtn) {
