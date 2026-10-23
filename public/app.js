@@ -1265,28 +1265,37 @@
     });
   }
 
+  // Shared CSV download helper — client-side only, from data already loaded
+  // for whichever tab is exporting (Journal, History, ...).
+  function downloadCsv(items, headers, filename) {
+    if (!items || items.length === 0) return;
+    const csvEscape = (v) => {
+      const s = v === null || v === undefined ? "" : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.join(",")];
+    items.forEach((row) => {
+      lines.push(headers.map((h) => csvEscape(row[h])).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const journalExportBtn = document.getElementById("journal-export-btn");
   if (journalExportBtn) {
     journalExportBtn.addEventListener("click", () => {
-      if (journalItems.length === 0) return;
-      const headers = ["pair", "direction", "entry", "exit", "result", "pnl", "notes", "created_at"];
-      const csvEscape = (v) => {
-        const s = v === null || v === undefined ? "" : String(v);
-        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-      };
-      const lines = [headers.join(",")];
-      journalItems.forEach((t) => {
-        lines.push(headers.map((h) => csvEscape(t[h])).join(","));
-      });
-      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "vertex-trade-journal.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadCsv(
+        journalItems,
+        ["pair", "direction", "entry", "exit", "result", "pnl", "notes", "created_at"],
+        "vertex-trade-journal.csv"
+      );
     });
   }
 
@@ -2198,6 +2207,17 @@
     });
   }
 
+  const historyExportBtn = document.getElementById("history-export-btn");
+  if (historyExportBtn) {
+    historyExportBtn.addEventListener("click", () => {
+      downloadCsv(
+        historyItems,
+        ["pair", "timeframe", "bias", "signal", "created_at"],
+        "vertex-scan-history.csv"
+      );
+    });
+  }
+
   function renderHistory(items, opts) {
     const isFilter = !!(opts && opts.isFilter);
     historyList.innerHTML = "";
@@ -2205,6 +2225,8 @@
     // The search box only makes sense once there's something to search —
     // hide it on a genuinely empty history rather than show it for nothing.
     historySearchWrap.hidden = historyItems.length === 0;
+    const exportBtn = document.getElementById("history-export-btn");
+    if (exportBtn) exportBtn.hidden = historyItems.length === 0;
 
     if (historyItems.length === 0) {
       historyEmpty.hidden = false;
