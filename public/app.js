@@ -21,6 +21,80 @@
   const toLogin = () => location.replace("/login?next=" + encodeURIComponent("/app" + location.hash));
 
   // --------------------------------------------------------------
+  // First-time onboarding tour: a short spotlight sequence shown once per
+  // device, pointing out the symbol field, timeframe, scan button and the
+  // sidebar. Shown only once ever (localStorage flag) and only after the
+  // page's own auth check has revealed it, so it never flashes over the
+  // "checking session" state.
+  // --------------------------------------------------------------
+  const ONBOARD_KEY = "vertex_onboarded";
+  const ONBOARD_STEPS = [
+    { selector: "#symbol-input", title: "Pick a pair", body: "Type any pair or symbol — EURUSD, XAUUSD, US30, NAS100 — whatever you trade." },
+    { selector: ".scanform", title: "Choose your timeframe", body: "Set the timeframe you scan on, then hit scan. Vertex reads live price bars, no chart screenshot needed." },
+    { selector: "#scan-btn", title: "Get your plan", body: "In about 30 seconds you'll get bias, structure, entries, stop loss and take profit — a real trade plan, not just a signal." },
+    { selector: ".sidebar, .mobile-topbar", title: "Everything else lives here", body: "History, News, Settings and Help are all in the menu. Your free scans reset every day." }
+  ];
+
+  function startOnboardTour() {
+    const tour = document.getElementById("onboard-tour");
+    if (!tour) return;
+    let step = 0;
+
+    const stepEl = document.getElementById("onboard-tour-step");
+    const titleEl = document.getElementById("onboard-tour-title");
+    const bodyEl = document.getElementById("onboard-tour-body");
+    const nextBtn = document.getElementById("onboard-tour-next");
+    const skipBtn = document.getElementById("onboard-tour-skip");
+    const card = tour.querySelector(".onboard-tour__card");
+
+    function finish() {
+      tour.hidden = true;
+      document.querySelectorAll(".onboard-tour__highlight").forEach((el) => el.classList.remove("onboard-tour__highlight"));
+      try { localStorage.setItem(ONBOARD_KEY, "1"); } catch { /* ignore */ }
+    }
+
+    function render() {
+      document.querySelectorAll(".onboard-tour__highlight").forEach((el) => el.classList.remove("onboard-tour__highlight"));
+      const def = ONBOARD_STEPS[step];
+      const target = def && document.querySelector(def.selector);
+
+      stepEl.textContent = `Step ${step + 1} of ${ONBOARD_STEPS.length}`;
+      titleEl.textContent = def.title;
+      bodyEl.textContent = def.body;
+      nextBtn.textContent = step === ONBOARD_STEPS.length - 1 ? "Let's go" : "Next";
+
+      if (target) {
+        target.classList.add("onboard-tour__highlight");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      // Card just sits centered — keeping this simple rather than
+      // positioning it relative to the (possibly off-screen-until-scrolled)
+      // target avoids a layout fight on very small screens.
+      card.classList.remove("onboard-tour__card--in");
+      requestAnimationFrame(() => card.classList.add("onboard-tour__card--in"));
+    }
+
+    nextBtn.addEventListener("click", () => {
+      step += 1;
+      if (step >= ONBOARD_STEPS.length) { finish(); return; }
+      render();
+    });
+    skipBtn.addEventListener("click", finish);
+
+    tour.hidden = false;
+    render();
+  }
+
+  function maybeStartOnboardTour() {
+    try {
+      if (localStorage.getItem(ONBOARD_KEY)) return;
+    } catch {
+      return; // storage blocked — don't force the tour on every load
+    }
+    setTimeout(startOnboardTour, 600);
+  }
+
+  // --------------------------------------------------------------
   // Session clock: which forex sessions are open right now, by UTC hour.
   // Approximate standard hours (doesn't shift for each region's own DST,
   // which is a reasonable trade-off for an at-a-glance widget) —
@@ -74,6 +148,7 @@
           if (settingsEmailEl) settingsEmailEl.textContent = session.user.email || "—";
           document.getElementById("account").hidden = false;
           revealPage();
+          maybeStartOnboardTour();
         })
         .catch(toLogin);
 
