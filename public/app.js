@@ -1198,6 +1198,13 @@
   // telling a user about, in their own words.
   // --------------------------------------------------------------
   const CHANGELOG = [
+    { date: "2026-10-23", title: "Trade journal", body: "Log your own trades — pair, direction, entry, notes — close them out as win/loss/breakeven, and see your real win rate and total P&L. Fully private, just like your scan history." },
+    { date: "2026-10-23", title: "\"Log this trade\" from a scan", body: "One tap on any scan result pre-fills the journal with the pair, direction and entry price — no retyping." },
+    { date: "2026-10-23", title: "Win rate by pair + best session", body: "The journal now shows which pairs you actually trade best, and which forex session (Sydney, Tokyo, London, New York) your win rate is highest in — from your own history." },
+    { date: "2026-10-23", title: "Currency bias heatmap", body: "History now shows a quick heatmap of which currencies have leaned strong or weak across your own past scans." },
+    { date: "2026-10-23", title: "Daily scan streak", body: "A small streak badge now shows up once you've scanned two days running — keep it going." },
+    { date: "2026-10-23", title: "Export everything", body: "Download your scan history, journal, and your full account data as CSV or JSON straight from History, Journal, and Settings." },
+    { date: "2026-10-23", title: "Delete scan history", body: "You can now remove any past scan from your History with one tap." },
     { date: "2026-10-23", title: "Full-screen scan HUD", body: "The loading screen while Vertex builds your plan now takes over the whole screen, holds rock-steady on mobile, and shows an AI scan-ring animation instead of the old bouncing candles." },
     { date: "2026-10-23", title: "Risk:reward on every plan", body: "Each trade plan now shows its risk:reward ratio (e.g. 1:2.4) right next to stop loss and take profit." },
     { date: "2026-10-23", title: "Confidence, explained", body: "Tap \"Why this confidence score?\" on any result to see exactly what pushed the score up or down." },
