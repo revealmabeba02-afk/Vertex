@@ -2075,6 +2075,71 @@
     });
   }
 
+  // Currency bias heatmap: derived purely from the user's own scan_history,
+  // never live market data. For a 6-letter pair (EURUSD, XAUUSD, etc.) a
+  // "Bullish" scan tallies toward the base currency and against the quote
+  // currency, and vice-versa for "Bearish". Anything that doesn't look like
+  // a plain base/quote pair (indices, crypto tickers of other lengths) is
+  // skipped rather than guessed at.
+  function renderCurrencyBias(items) {
+    const wrap = document.getElementById("currency-bias-wrap");
+    const listEl = document.getElementById("currency-bias-list");
+    if (!wrap || !listEl) return;
+
+    const tally = {}; // currency -> { bull, bear }
+    items.forEach((item) => {
+      const pair = (item.pair || "").toUpperCase().replace(/[^A-Z]/g, "");
+      const bias = (item.bias || "").toLowerCase();
+      if (pair.length !== 6 || (bias !== "bullish" && bias !== "bearish")) return;
+      const base = pair.slice(0, 3);
+      const quote = pair.slice(3, 6);
+      if (!tally[base]) tally[base] = { bull: 0, bear: 0 };
+      if (!tally[quote]) tally[quote] = { bull: 0, bear: 0 };
+      if (bias === "bullish") {
+        tally[base].bull += 1;
+        tally[quote].bear += 1;
+      } else {
+        tally[base].bear += 1;
+        tally[quote].bull += 1;
+      }
+    });
+
+    const currencies = Object.keys(tally);
+    if (currencies.length < 2) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+
+    const rows = currencies
+      .map((code) => {
+        const t = tally[code];
+        const total = t.bull + t.bear;
+        const net = total > 0 ? (t.bull - t.bear) / total : 0;
+        return { code, net, total };
+      })
+      .sort((a, b) => b.net - a.net);
+
+    listEl.innerHTML = "";
+    rows.forEach((row) => {
+      const pct = Math.round(((row.net + 1) / 2) * 100); // -1..1 -> 0..100
+      const strong = row.net > 0.15;
+      const weak = row.net < -0.15;
+      const line = document.createElement("div");
+      line.className = "currency-bias-row";
+      line.innerHTML = `
+        <span class="currency-bias-row__code"></span>
+        <span class="currency-bias-row__bar"><span class="currency-bias-row__fill" style="width:${pct}%"></span></span>
+        <span class="currency-bias-row__label"></span>
+      `;
+      line.querySelector(".currency-bias-row__code").textContent = row.code;
+      const fillEl = line.querySelector(".currency-bias-row__fill");
+      fillEl.style.background = strong ? "var(--bull)" : weak ? "var(--bear)" : "var(--text-faint)";
+      line.querySelector(".currency-bias-row__label").textContent = strong ? "Strong" : weak ? "Weak" : "Mixed";
+      listEl.appendChild(line);
+    });
+  }
+
   async function loadHistory() {
     if (historyLoaded) return;
     try {
@@ -2088,6 +2153,7 @@
       historyItems = Array.isArray(data.items) ? data.items : [];
       renderPinChips();
       renderHistory(historyItems);
+      renderCurrencyBias(historyItems);
       historyLoaded = true;
     } catch {
       // History is a nice-to-have; a failed fetch just leaves the empty state.

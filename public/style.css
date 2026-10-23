@@ -2066,6 +2066,43 @@ body.scanning .scan-hud {
 .history-pin-btn:hover { color: var(--accent); transform: scale(1.15); }
 .history-pin-btn.is-pinned { color: var(--accent); text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 50%, transparent); }
 
+/* ============ Currency bias heatmap ============ */
+.currency-bias-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.currency-bias-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 56px;
+  align-items: center;
+  gap: 10px;
+}
+.currency-bias-row__code {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 13px;
+}
+.currency-bias-row__bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  overflow: hidden;
+}
+.currency-bias-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.currency-bias-row__label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
 /* ============ Trade journal ============ */
 .journal-summary {
   display: flex;
