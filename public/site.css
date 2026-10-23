@@ -497,6 +497,32 @@
 }
 .auth-forgot-link:hover { color: var(--accent); text-decoration: underline; }
 
+.auth-remember-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.auth-remember-row .auth-forgot-link { margin-top: 0; }
+.auth-remember-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.auth-remember-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .input {
   width: 100%;
   min-height: 48px;

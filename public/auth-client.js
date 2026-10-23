@@ -13,6 +13,48 @@
   //   "keys"       the server has no valid Supabase keys yet
   //   "library"    the supabase-js script did not load (offline, blocked)
   //   "client"     supabase-js refused the settings
+  // Backed by sessionStorage by default — closing the tab/browser clears it
+  // and the next visit asks for your details again. If "Remember me" was
+  // checked at login (REMEMBER_KEY set in localStorage, which persists
+  // across browser restarts on its own), reads/writes go to localStorage
+  // instead so the session survives a full restart. The flag has to live in
+  // localStorage (not sessionStorage) for this to actually work — it's the
+  // one thing that has to outlive the session storage it's switching to.
+  const REMEMBER_KEY = "vertex_remember_me";
+  function remembering() {
+    try {
+      return localStorage.getItem(REMEMBER_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  const dualStorage = {
+    getItem(key) {
+      try {
+        return remembering() ? localStorage.getItem(key) : sessionStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    setItem(key, value) {
+      try {
+        if (remembering()) {
+          localStorage.setItem(key, value);
+          sessionStorage.removeItem(key);
+        } else {
+          sessionStorage.setItem(key, value);
+          localStorage.removeItem(key);
+        }
+      } catch { /* storage unavailable (private mode etc.) */ }
+    },
+    removeItem(key) {
+      try {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      } catch { /* ignore */ }
+    }
+  };
+
   let client = null;
   let reason = null;
   if (!window.APP_CONFIG) reason = "config";
@@ -20,13 +62,8 @@
   else if (!window.supabase) reason = "library";
   else {
     try {
-      // persistSession stays true (login must survive the redirect to the
-      // app page, which is a full page load) but it's backed by
-      // sessionStorage instead of localStorage — so you're still signed in
-      // as you click around, but closing the tab/browser clears it and the
-      // next visit asks for your details again.
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage }
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: dualStorage }
       });
     } catch {
       reason = "client";
@@ -85,6 +122,7 @@
     try {
       await client.auth.signOut({ scope: "local" });
     } catch { /* nothing more to do */ }
+    try { localStorage.removeItem(REMEMBER_KEY); } catch { /* ignore */ }
   }
 
   async function signOut() {
@@ -99,7 +137,19 @@
         await clearSession();
       }
     }
+    try { localStorage.removeItem(REMEMBER_KEY); } catch { /* ignore */ }
     window.location.href = "/";
+  }
+
+  // Call before signInWithPassword so the session Supabase writes during
+  // sign-in lands in the right storage from the start — set(true) only
+  // changes where things are written, it never moves a session that's
+  // already in the other store.
+  function setRememberMe(remember) {
+    try {
+      if (remember) localStorage.setItem(REMEMBER_KEY, "1");
+      else localStorage.removeItem(REMEMBER_KEY);
+    } catch { /* ignore */ }
   }
 
   window.Auth = {
@@ -112,6 +162,7 @@
     friendlyError,
     signOut,
     clearSession,
+    setRememberMe,
     isSigningOut: () => signingOut
   };
 })();

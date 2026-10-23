@@ -100,7 +100,13 @@
           <input class="input input--pw" id="password" name="password" type="password" autocomplete="current-password" required placeholder="Your password" />
           <button type="button" class="pw-toggle" data-toggle="password" aria-label="Show password">Show</button>
         </div>
-        <a href="/forgot-password" class="auth-forgot-link">Forgot password?</a>
+        <div class="auth-remember-row">
+          <label class="auth-remember-check">
+            <input type="checkbox" id="remember-me" />
+            <span>Remember me</span>
+          </label>
+          <a href="/forgot-password" class="auth-forgot-link">Forgot password?</a>
+        </div>
       </div>
 
       <button type="submit" class="scan-btn" id="submit-btn">
@@ -139,13 +145,18 @@
       }
 
       AuthPage.setBusy(true);
+      const rememberCheckbox = document.getElementById("remember-me");
+      Auth.setRememberMe(Boolean(rememberCheckbox && rememberCheckbox.checked));
       const { error } = await Auth.client.auth.signInWithPassword({
         email: email.value.trim(),
         password: password.value
       });
       AuthPage.setBusy(false);
 
-      if (error) return AuthPage.showError(Auth.friendlyError(error), password);
+      if (error) {
+        Auth.setRememberMe(false);
+        return AuthPage.showError(Auth.friendlyError(error), password);
+      }
       location.replace(next);
     });
   })();
