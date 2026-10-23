@@ -171,6 +171,7 @@
     <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
     <a class="navpill" href="#how" data-view="how" role="tab" aria-selected="false" aria-controls="view-how" id="tab-how">How it works</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
+    <a class="navpill" href="#journal" data-view="journal" role="tab" aria-selected="false" aria-controls="view-journal" id="tab-journal">Journal</a>
     <a class="navpill" href="#whats-new" data-view="whats-new" role="tab" aria-selected="false" aria-controls="view-whats-new" id="tab-whats-new">What's new</a>
     <a class="navpill" href="#help" data-view="help" role="tab" aria-selected="false" aria-controls="view-help" id="tab-help">Help</a>
     <a class="navpill" href="#settings" data-view="settings" role="tab" aria-selected="false" aria-controls="view-settings" id="tab-settings">Settings</a>
@@ -836,6 +837,42 @@
     <div id="history-empty" class="history-empty">No scans yet — your results will show up here.</div>
     <div id="history-no-match" class="history-empty" hidden>No scans match that pair.</div>
     <div id="history-list" class="history-list" hidden></div>
+  </section>
+
+  <!-- ============ JOURNAL (own tab) ============ -->
+  <section class="view journal" id="view-journal" role="tabpanel" aria-labelledby="tab-journal" hidden>
+    <p class="eyebrow">
+      <span class="eyebrow__dot" aria-hidden="true"></span>
+      Your own record
+    </p>
+    <h1 class="hero__title">Trade journal</h1>
+    <p class="hero__lede">Log your own trades and track your real win rate over time. Private to you.</p>
+
+    <div class="journal-summary" id="journal-summary" hidden>
+      <div class="journal-summary__stat"><span id="journal-stat-count">0</span><label>Trades</label></div>
+      <div class="journal-summary__stat"><span id="journal-stat-winrate">—</span><label>Win rate</label></div>
+      <div class="journal-summary__stat"><span id="journal-stat-pnl">—</span><label>Total P&amp;L</label></div>
+    </div>
+
+    <form id="journal-form" class="settings-card" style="padding: 20px 22px; margin-top: 16px;">
+      <div class="journal-form__row">
+        <input type="text" id="journal-pair" class="input" placeholder="Pair (e.g. XAUUSD)" maxlength="20" required>
+        <select id="journal-direction" class="input" required>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+        </select>
+        <input type="number" id="journal-entry" class="input" placeholder="Entry price" step="any">
+      </div>
+      <textarea id="journal-notes" class="input" rows="2" maxlength="1000" placeholder="Notes (optional)" style="margin-top: 10px; resize: vertical; font-family: inherit;"></textarea>
+      <button type="submit" id="journal-submit-btn" class="scan-btn" style="margin-top: 12px;">
+        <span class="scan-btn__label">Log trade</span>
+        <span class="scan-btn__spinner" aria-hidden="true"></span>
+      </button>
+      <p id="journal-status" class="credits-status" hidden></p>
+    </form>
+
+    <div id="journal-empty" class="history-empty">No trades logged yet — add your first one above.</div>
+    <div id="journal-list" class="journal-list" hidden></div>
   </section>
 
   <!-- ============ WHAT'S NEW (own tab) ============ -->

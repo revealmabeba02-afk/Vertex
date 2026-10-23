@@ -247,12 +247,13 @@
     news: document.getElementById("view-news"),
     how: document.getElementById("view-how"),
     history: document.getElementById("view-history"),
+    journal: document.getElementById("view-journal"),
     "whats-new": document.getElementById("view-whats-new"),
     help: document.getElementById("view-help"),
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#journal": "journal", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
 
   // Each section should feel like turning to its own page, not a tab
   // crossfading on top of the last one. So the old page fully leaves
@@ -287,6 +288,7 @@
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
     if (name === "whats-new") loadWhatsNew();
+    if (name === "journal") loadJournal();
     if (name === "credits") refreshBalance();
     if (name === "help") { loadHelpHistory(); loadFeedbackHistory(); }
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
@@ -1142,6 +1144,166 @@
       wrap.appendChild(item);
     });
     wrap.dataset.rendered = "1";
+  }
+
+  // --------------------------------------------------------------
+  // Trade journal: the user's own private trade log, independent of Vertex
+  // scans. Simple CRUD against /api/journal.
+  // --------------------------------------------------------------
+  let journalItems = [];
+
+  async function loadJournal() {
+    const summary = document.getElementById("journal-summary");
+    const emptyEl = document.getElementById("journal-empty");
+    const listEl = document.getElementById("journal-list");
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/journal", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      journalItems = Array.isArray(data.items) ? data.items : [];
+      renderJournal();
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  function renderJournal() {
+    const summary = document.getElementById("journal-summary");
+    const emptyEl = document.getElementById("journal-empty");
+    const listEl = document.getElementById("journal-list");
+    const countEl = document.getElementById("journal-stat-count");
+    const winrateEl = document.getElementById("journal-stat-winrate");
+    const pnlEl = document.getElementById("journal-stat-pnl");
+
+    if (journalItems.length === 0) {
+      summary.hidden = true;
+      emptyEl.hidden = false;
+      listEl.hidden = true;
+      return;
+    }
+    emptyEl.hidden = true;
+    listEl.hidden = false;
+    summary.hidden = false;
+
+    const closed = journalItems.filter((t) => t.result !== "open");
+    const wins = closed.filter((t) => t.result === "win").length;
+    const winRate = closed.length > 0 ? Math.round((wins / closed.length) * 100) : null;
+    const totalPnl = journalItems.reduce((sum, t) => sum + (typeof t.pnl === "number" ? t.pnl : 0), 0);
+
+    countEl.textContent = String(journalItems.length);
+    winrateEl.textContent = winRate === null ? "—" : winRate + "%";
+    pnlEl.textContent = (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2);
+    pnlEl.style.color = totalPnl > 0 ? "var(--bull)" : totalPnl < 0 ? "var(--bear)" : "";
+
+    listEl.innerHTML = "";
+    journalItems.forEach((t) => {
+      const row = document.createElement("div");
+      row.className = "journal-row";
+      let when = "";
+      try { when = new Date(t.created_at).toLocaleDateString(); } catch {}
+
+      const RESULT_LABELS = { open: "Open", win: "Win", loss: "Loss", breakeven: "B/E" };
+      row.innerHTML = `
+        <div class="journal-row__main">
+          <span class="signal-tag ${t.direction === "buy" ? "signal-tag--buy" : "signal-tag--sell"}">${t.direction === "buy" ? "Buy" : "Sell"}</span>
+          <span class="journal-row__pair"></span>
+          <span class="journal-row__date">${when}</span>
+        </div>
+        <div class="journal-row__actions"></div>
+      `;
+      row.querySelector(".journal-row__pair").textContent = t.pair;
+
+      const actions = row.querySelector(".journal-row__actions");
+      if (t.result === "open") {
+        const select = document.createElement("select");
+        select.className = "input journal-row__select";
+        select.innerHTML = '<option value="">Close as…</option><option value="win">Win</option><option value="loss">Loss</option><option value="breakeven">Breakeven</option>';
+        select.addEventListener("change", async () => {
+          if (!select.value) return;
+          try {
+            const session = await Auth.getSession();
+            if (!session) return;
+            await fetch(`/api/journal/${t.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ result: select.value })
+            });
+            loadJournal();
+          } catch {
+            select.value = "";
+          }
+        });
+        actions.appendChild(select);
+      } else {
+        const tag = document.createElement("span");
+        tag.className = "journal-row__result journal-row__result--" + t.result;
+        tag.textContent = RESULT_LABELS[t.result] || t.result;
+        actions.appendChild(tag);
+      }
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "history-pin-btn";
+      delBtn.setAttribute("aria-label", "Delete entry");
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", async () => {
+        try {
+          const session = await Auth.getSession();
+          if (!session) return;
+          await fetch(`/api/journal/${t.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${session.access_token}` } });
+          loadJournal();
+        } catch { /* ignore */ }
+      });
+      actions.appendChild(delBtn);
+
+      listEl.appendChild(row);
+    });
+  }
+
+  const journalForm = document.getElementById("journal-form");
+  if (journalForm) {
+    journalForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pair = document.getElementById("journal-pair").value.trim();
+      const direction = document.getElementById("journal-direction").value;
+      const entry = document.getElementById("journal-entry").value;
+      const notes = document.getElementById("journal-notes").value.trim();
+      const submitBtn = document.getElementById("journal-submit-btn");
+      const statusEl = document.getElementById("journal-status");
+      if (!pair) return;
+
+      submitBtn.disabled = true;
+      submitBtn.classList.add("is-loading");
+      statusEl.hidden = true;
+      try {
+        const session = await Auth.getSession();
+        if (!session) return toLogin();
+        const res = await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ pair, direction, entry: entry || null, notes: notes || null })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          statusEl.textContent = (data && data.error) || "Could not save that trade.";
+          statusEl.classList.add("credits-status--error");
+          statusEl.hidden = false;
+          return;
+        }
+        journalForm.reset();
+        document.getElementById("journal-direction").value = "buy";
+        loadJournal();
+      } catch {
+        statusEl.textContent = "Could not reach the server.";
+        statusEl.classList.add("credits-status--error");
+        statusEl.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("is-loading");
+      }
+    });
   }
 
   const TF_LABELS = {

@@ -2066,6 +2066,96 @@ body.scanning .scan-hud {
 .history-pin-btn:hover { color: var(--accent); transform: scale(1.15); }
 .history-pin-btn.is-pinned { color: var(--accent); text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 50%, transparent); }
 
+/* ============ Trade journal ============ */
+.journal-summary {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+.journal-summary__stat {
+  flex: 1 1 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 10px;
+  text-align: center;
+}
+.journal-summary__stat span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+.journal-summary__stat label {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.journal-form__row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.journal-form__row .input { flex: 1 1 140px; }
+
+.journal-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.journal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+.journal-row__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.journal-row__pair {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+}
+.journal-row__date {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.journal-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.journal-row__select {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  width: auto;
+}
+.journal-row__result {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.journal-row__result--win { color: var(--bull); background: color-mix(in srgb, var(--bull) 15%, transparent); }
+.journal-row__result--loss { color: var(--bear); background: color-mix(in srgb, var(--bear) 15%, transparent); }
+.journal-row__result--breakeven { color: var(--text-dim); background: color-mix(in srgb, var(--text-dim) 15%, transparent); }
+
 .history-empty {
   margin-top: 28px;
   padding: 40px 20px;

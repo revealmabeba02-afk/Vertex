@@ -1572,6 +1572,127 @@ app.get("/api/history", requireUser, async (req, res) => {
   }
 });
 
+// --- Trade journal ----------------------------------------------------------
+// A user's own private log of trades, independent of Vertex scans — RLS
+// (trade_journal_owner_policy, see supabase/trade_journal.sql) scopes every
+// row to its own user_id, so these just pass the caller's own token through,
+// same pattern as scan_history.
+app.get("/api/journal", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/trade_journal?select=*&order=created_at.desc&limit=200`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) {
+      console.error("Journal fetch failed:", r.status, await r.text().catch(() => ""));
+      return res.json({ items: [] });
+    }
+    const items = await r.json();
+    res.json({ items: Array.isArray(items) ? items : [] });
+  } catch (err) {
+    console.error("Journal fetch error:", err.message);
+    res.json({ items: [] });
+  }
+});
+
+app.post("/api/journal", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const pair = String(req.body?.pair || "").trim().toUpperCase().slice(0, 20);
+  const direction = req.body?.direction === "sell" ? "sell" : req.body?.direction === "buy" ? "buy" : null;
+  if (!pair) return res.status(400).json({ error: "Pair is required." });
+  if (!direction) return res.status(400).json({ error: "Direction must be buy or sell." });
+
+  const entry = Number.isFinite(Number(req.body?.entry)) ? Number(req.body.entry) : null;
+  const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 1000) : null;
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/trade_journal`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify({ user_id: req.user.id, pair, direction, entry, notes }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Journal create failed:", r.status, await r.text().catch(() => ""));
+      return res.status(502).json({ error: "Could not save that trade. Has supabase/trade_journal.sql been run?" });
+    }
+    const rows = await r.json().catch(() => []);
+    res.json({ ok: true, item: Array.isArray(rows) ? rows[0] : null });
+  } catch (err) {
+    console.error("Journal create error:", err.message);
+    res.status(502).json({ error: "Could not save that trade." });
+  }
+});
+
+app.patch("/api/journal/:id", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const id = String(req.params.id || "");
+  const patch = {};
+  if (req.body?.exit !== undefined) {
+    const exit = Number(req.body.exit);
+    patch.exit = Number.isFinite(exit) ? exit : null;
+  }
+  if (req.body?.result && ["open", "win", "loss", "breakeven"].includes(req.body.result)) {
+    patch.result = req.body.result;
+    if (req.body.result !== "open") patch.closed_at = new Date().toISOString();
+  }
+  if (req.body?.pnl !== undefined) {
+    const pnl = Number(req.body.pnl);
+    patch.pnl = Number.isFinite(pnl) ? pnl : null;
+  }
+  if (typeof req.body?.notes === "string") patch.notes = req.body.notes.slice(0, 1000);
+  if (Object.keys(patch).length === 0) return res.status(400).json({ error: "Nothing to update." });
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/trade_journal?id=eq.${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify(patch),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Journal update failed:", r.status, await r.text().catch(() => ""));
+      return res.status(502).json({ error: "Could not update that trade." });
+    }
+    const rows = await r.json().catch(() => []);
+    res.json({ ok: true, item: Array.isArray(rows) ? rows[0] : null });
+  } catch (err) {
+    console.error("Journal update error:", err.message);
+    res.status(502).json({ error: "Could not update that trade." });
+  }
+});
+
+app.delete("/api/journal/:id", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const id = String(req.params.id || "");
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/trade_journal?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Journal delete failed:", r.status, await r.text().catch(() => ""));
+      return res.status(502).json({ error: "Could not delete that trade." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Journal delete error:", err.message);
+    res.status(502).json({ error: "Could not delete that trade." });
+  }
+});
+
 // --- News calendar + signals (ForexNewsAPI) --------------------------------
 // Small/medium-importance events (PMI, retail sales, etc.) are free and
 // unlimited — full forecast/previous/actual always shown. Big ("High"
