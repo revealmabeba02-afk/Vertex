@@ -2430,6 +2430,22 @@ app.get("/api/admin/purchase-patterns", requireUser, async (req, res) => {
   }
 });
 
+// This-month-vs-last-month revenue/orders/signups, for a quick growth-trend
+// glance on the admin Stats panel (see supabase/admin_month_comparison.sql).
+app.get("/api/admin/month-comparison", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const result = await supabaseRpc("admin_month_comparison", {}, req.user.token);
+    res.json(result || {});
+  } catch (err) {
+    console.error("Admin month comparison error:", err.message);
+    res.status(502).json({ error: "Could not load month comparison. Has supabase/admin_month_comparison.sql been run?" });
+  }
+});
+
 // Per-platform click totals for the TikTok/Instagram/YouTube/Facebook
 // tracked links (see /go/:platform above). Same admin-email gate pattern
 // as the other admin routes — admin_link_click_summary() in Postgres

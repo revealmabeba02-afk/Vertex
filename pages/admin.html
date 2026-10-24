@@ -1123,6 +1123,27 @@
   </div>
 
   <div class="pattern-card">
+    <div class="users-card__head">This month vs last month</div>
+    <div id="month-compare-body">
+      <p class="users-empty" id="month-compare-empty">Loading…</p>
+      <div class="admin-stats" id="month-compare-stats" hidden style="margin-top: 0;">
+        <div class="stat-card">
+          <div class="stat-card__label">Revenue</div>
+          <div class="stat-card__value" id="month-compare-revenue">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Paid orders</div>
+          <div class="stat-card__value" id="month-compare-orders">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">New signups</div>
+          <div class="stat-card__value" id="month-compare-signups">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-card">
     <div class="users-card__head">Best day to buy — weekly pattern</div>
     <div id="pattern-body">
       <div class="users-empty" id="pattern-empty">Loading…</div>
@@ -1505,6 +1526,7 @@
     wireQ2Chat(authHeader);
     loadOrders(authHeader);
     loadPurchasePatterns(authHeader);
+    loadMonthComparison(authHeader);
     loadAnalytics(authHeader);
     loadLinkClicks(authHeader);
     loadContentPosts(authHeader);
@@ -1563,6 +1585,36 @@
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function loadMonthComparison(authHeader) {
+      const emptyEl = document.getElementById("month-compare-empty");
+      const statsEl = document.getElementById("month-compare-stats");
+      try {
+        const res = await fetch("/api/admin/month-comparison", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.this_month) {
+          emptyEl.textContent = (data && data.error) || "Could not load month comparison.";
+          return;
+        }
+        const fmtDelta = (curr, prev) => {
+          if (!prev) return curr > 0 ? " (new)" : "";
+          const pct = Math.round(((curr - prev) / prev) * 100);
+          if (pct === 0) return " (flat)";
+          return pct > 0 ? ` (+${pct}%)` : ` (${pct}%)`;
+        };
+        const tm = data.this_month, lm = data.last_month || {};
+        document.getElementById("month-compare-revenue").textContent =
+          `$${Number(tm.revenue_usd || 0).toFixed(2)}${fmtDelta(Number(tm.revenue_usd || 0), Number(lm.revenue_usd || 0))}`;
+        document.getElementById("month-compare-orders").textContent =
+          `${tm.orders || 0}${fmtDelta(Number(tm.orders || 0), Number(lm.orders || 0))}`;
+        document.getElementById("month-compare-signups").textContent =
+          `${tm.signups || 0}${fmtDelta(Number(tm.signups || 0), Number(lm.signups || 0))}`;
+        emptyEl.hidden = true;
+        statsEl.hidden = false;
+      } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
     }
 
     async function loadPurchasePatterns(authHeader) {
