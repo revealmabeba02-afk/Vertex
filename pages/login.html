@@ -87,6 +87,10 @@
 
     <p class="auth-alert auth-alert--info" id="setup-alert" hidden>Accounts are not connected yet. Add the Supabase keys to <code>server/.env</code> and restart, see SUPABASE_SETUP.md.</p>
     <p class="auth-alert auth-alert--error" id="form-alert" role="alert" hidden></p>
+    <div id="resend-confirm-wrap" hidden style="margin: -8px 0 16px;">
+      <button type="button" id="resend-confirm-btn" class="btn btn--ghost" style="width: 100%;">Resend confirmation email</button>
+      <p id="resend-confirm-status" class="credits-status" hidden style="margin-top: 8px;"></p>
+    </div>
 
     <form id="login-form" novalidate>
       <div class="field">
@@ -135,10 +139,45 @@
     const form = document.getElementById("login-form");
     const email = document.getElementById("email");
     const password = document.getElementById("password");
+    const resendWrap = document.getElementById("resend-confirm-wrap");
+    const resendBtn = document.getElementById("resend-confirm-btn");
+    const resendStatus = document.getElementById("resend-confirm-status");
+
+    if (resendBtn) {
+      resendBtn.addEventListener("click", async () => {
+        const targetEmail = email.value.trim();
+        if (!targetEmail) {
+          resendStatus.textContent = "Enter your email above first.";
+          resendStatus.classList.add("credits-status--error");
+          resendStatus.hidden = false;
+          return;
+        }
+        resendBtn.disabled = true;
+        resendStatus.hidden = true;
+        resendStatus.classList.remove("credits-status--error");
+        try {
+          const { error } = await Auth.client.auth.resend({ type: "signup", email: targetEmail });
+          if (error) {
+            resendStatus.textContent = Auth.friendlyError(error);
+            resendStatus.classList.add("credits-status--error");
+          } else {
+            resendStatus.textContent = "Confirmation email sent — check your inbox (and spam folder).";
+          }
+          resendStatus.hidden = false;
+        } catch {
+          resendStatus.textContent = "Could not reach the server.";
+          resendStatus.classList.add("credits-status--error");
+          resendStatus.hidden = false;
+        } finally {
+          resendBtn.disabled = false;
+        }
+      });
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       AuthPage.clearError();
+      if (resendWrap) resendWrap.hidden = true;
 
       if (!email.value.trim() || !password.value) {
         return AuthPage.showError("Enter your email and password.", !email.value.trim() ? email : password);
@@ -155,6 +194,9 @@
 
       if (error) {
         Auth.setRememberMe(false);
+        if (/email not confirmed/i.test(error.message || "") && resendWrap) {
+          resendWrap.hidden = false;
+        }
         return AuthPage.showError(Auth.friendlyError(error), password);
       }
       location.replace(next);
