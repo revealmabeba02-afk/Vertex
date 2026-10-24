@@ -2606,9 +2606,10 @@
               <div style="margin-top: 10px;">
                 ${draftNote}
                 <textarea class="input" data-reply-box="${m.id}" rows="3" style="resize: vertical; font-family: inherit;" placeholder="Write a reply…">${escapeHtml(m.ai_suggestion || "")}</textarea>
-                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
                   <button type="button" class="btn btn--ghost" data-send-reply="${m.id}">Send reply</button>
                   <a class="btn btn--ghost" href="mailto:${encodeURIComponent(m.email || "")}">Email instead</a>
+                  <button type="button" class="btn btn--ghost" data-adjust-credits-for="${escapeHtml(m.email || "")}">Adjust credits</button>
                 </div>
               </div>
             `;
@@ -2624,6 +2625,20 @@
             ${bottomHtml}
           `;
           listEl.appendChild(item);
+        });
+
+        listEl.querySelectorAll("[data-adjust-credits-for]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const email = btn.dataset.adjustCreditsFor;
+            const usersLink = document.querySelector('[data-panel-link="users"]');
+            if (usersLink) usersLink.click();
+            const emailInput = document.getElementById("adjust-credits-email");
+            if (emailInput) {
+              emailInput.value = email || "";
+              document.getElementById("sec-adjust-credits")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setTimeout(() => document.getElementById("adjust-credits-delta")?.focus(), 300);
+            }
+          });
         });
 
         listEl.querySelectorAll("[data-send-reply]").forEach((btn) => {
