@@ -1498,7 +1498,7 @@
       const row = document.createElement("div");
       row.className = "journal-row";
       let when = "";
-      try { when = new Date(t.created_at).toLocaleDateString(); } catch {}
+      try { when = relativeTime(t.created_at); } catch {}
 
       const RESULT_LABELS = { open: "Open", win: "Win", loss: "Loss", breakeven: "B/E" };
       row.innerHTML = `
@@ -1929,6 +1929,22 @@
       `;
     }
     compute();
+  }
+
+  // "3h ago" style relative time for scanning a list fast; falls back to a
+  // short date once something is old enough that "X days ago" stops helping.
+  function relativeTime(iso) {
+    const date = new Date(iso);
+    const diffMs = Date.now() - date.getTime();
+    if (isNaN(diffMs)) return "";
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
   function friendlySymbol(sym) {
@@ -2709,7 +2725,8 @@
       const date = document.createElement("span");
       date.className = "history-item__date";
       try {
-        date.textContent = new Date(item.created_at).toLocaleString();
+        date.textContent = relativeTime(item.created_at);
+        date.title = new Date(item.created_at).toLocaleString();
       } catch {
         date.textContent = "";
       }
