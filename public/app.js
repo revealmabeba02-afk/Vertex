@@ -3146,8 +3146,9 @@
   let preferencesLoaded = false;
   async function loadPreferences() {
     if (preferencesLoaded) return;
-    const toggle = document.getElementById("settings-weekly-recap-toggle");
-    if (!toggle) return;
+    const weeklyToggle = document.getElementById("settings-weekly-recap-toggle");
+    const lowCreditToggle = document.getElementById("settings-low-credit-alert-toggle");
+    if (!weeklyToggle && !lowCreditToggle) return;
     try {
       const session = await Auth.getSession();
       if (!session) return;
@@ -3155,28 +3156,32 @@
       if (!res.ok) return;
       const data = await res.json();
       preferencesLoaded = true;
-      toggle.checked = !data.weekly_recap_opt_out;
+      if (weeklyToggle) weeklyToggle.checked = !data.weekly_recap_opt_out;
+      if (lowCreditToggle) lowCreditToggle.checked = !data.low_credit_alert_opt_out;
     } catch {
       // Best-effort.
     }
   }
 
-  const weeklyRecapToggle = document.getElementById("settings-weekly-recap-toggle");
-  if (weeklyRecapToggle) {
-    weeklyRecapToggle.addEventListener("change", async () => {
+  function wirePreferenceToggle(toggleId, prefKey) {
+    const toggle = document.getElementById(toggleId);
+    if (!toggle) return;
+    toggle.addEventListener("change", async () => {
       try {
         const session = await Auth.getSession();
         if (!session) return;
         await fetch("/api/preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ weekly_recap_opt_out: !weeklyRecapToggle.checked })
+          body: JSON.stringify({ [prefKey]: !toggle.checked })
         });
       } catch {
         // Best-effort.
       }
     });
   }
+  wirePreferenceToggle("settings-weekly-recap-toggle", "weekly_recap_opt_out");
+  wirePreferenceToggle("settings-low-credit-alert-toggle", "low_credit_alert_opt_out");
 
   async function loadBrokerAccount() {
     if (brokerLoaded) return;

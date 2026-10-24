@@ -34,7 +34,11 @@ as $$
 declare
   v_free_count integer;
   v_balance integer;
+  v_low_sent boolean;
+  v_new_balance integer;
+  v_low_alert boolean := false;
   v_free_limit constant integer := 2;
+  v_low_threshold constant integer := 2;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -62,17 +66,22 @@ begin
   values (auth.uid(), 0)
   on conflict (user_id) do nothing;
 
-  select balance into v_balance from public.credit_balances where user_id = auth.uid() for update;
+  select balance, low_alert_sent into v_balance, v_low_sent from public.credit_balances where user_id = auth.uid() for update;
 
   if v_balance is null or v_balance <= 0 then
     raise exception 'No credits left';
   end if;
 
+  v_new_balance := v_balance - 1;
+  v_low_alert := v_new_balance <= v_low_threshold and not coalesce(v_low_sent, false);
+
   update public.credit_balances
-    set balance = balance - 1, updated_at = now()
+    set balance = v_new_balance,
+        low_alert_sent = low_alert_sent or v_low_alert,
+        updated_at = now()
     where user_id = auth.uid();
 
-  return jsonb_build_object('source', 'paid', 'balance', v_balance - 1);
+  return jsonb_build_object('source', 'paid', 'balance', v_new_balance, 'low_credit_alert', v_low_alert);
 end;
 $$;
 revoke all on function public.use_scan() from public;

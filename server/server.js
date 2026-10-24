@@ -1318,6 +1318,34 @@ async function sendReceiptEmail(toEmail, bundle, scans, amountUsd) {
   }
 }
 
+// Proactive "you're running low" email — fired once per crossing by
+// use_scan() in supabase/free_scans.sql (low_credit_alert.sql adds the flag
+// it uses to avoid re-sending on every low-balance scan).
+async function sendLowCreditAlertEmail(toEmail, balance) {
+  if (!RESEND_API_KEY || !toEmail) return;
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [toEmail],
+        subject: `Low on scans — ${balance} credit${balance === 1 ? "" : "s"} left`,
+        text:
+          `Heads up — you're down to ${balance} paid scan credit${balance === 1 ? "" : "s"}.\n\n` +
+          `Top up anytime at https://vertex-9s4c.onrender.com/app (Credits tab) so you don't run out mid-session.\n\n` +
+          `— Vertex Chart Scanner`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error("Could not send low-credit alert email:", r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Low-credit alert email error:", err.message);
+  }
+}
+
 // Weekly trading recap — one per user who actually logged a journal trade
 // in the last 7 days (see weekly_recap_data() in supabase/weekly_recap.sql).
 // Triggered by /api/cron/weekly-recap, a Render cron job hits that weekly.
@@ -3470,6 +3498,18 @@ async function runAnalyze(req, res, symbol, timeframe) {
     try {
       const result = await supabaseRpc("use_scan", {}, req.user.token);
       scanSource = result?.source || "paid";
+      if (result?.low_credit_alert) {
+        fetch(
+          `${SUPABASE_URL}/rest/v1/user_prefs?select=low_credit_alert_opt_out&limit=1`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+        )
+          .then((r) => (r.ok ? r.json() : []))
+          .then((rows) => {
+            const optedOut = Array.isArray(rows) && rows[0] && rows[0].low_credit_alert_opt_out;
+            if (!optedOut) return sendLowCreditAlertEmail(req.user.email, result.balance);
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       return res.status(402).json({
         error: "You're out of free scans for today and have no credits left. Buy more to keep scanning.",
