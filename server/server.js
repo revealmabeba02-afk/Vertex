@@ -1515,7 +1515,9 @@ app.get("/api/referral/mine", requireUser, async (req, res) => {
       link: `${origin}/signup?ref=${code}`,
       referredCount: stats?.referred_count ?? 0,
       paidCount: stats?.paid_count ?? 0,
-      creditsEarned: stats?.credits_earned ?? 0
+      creditsEarned: stats?.credits_earned ?? 0,
+      percentile: stats?.percentile ?? null,
+      totalReferrers: stats?.total_referrers ?? null
     });
   } catch (err) {
     console.error("Referral code error:", err.message);

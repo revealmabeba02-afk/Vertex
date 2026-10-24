@@ -103,7 +103,10 @@ revoke all on function public.claim_referral_code(text) from public;
 grant execute on function public.claim_referral_code(text) to authenticated;
 
 -- How many people the signed-in user has referred, and how many of those
--- have actually paid (and so earned a reward), for the referral card.
+-- have actually paid (and so earned a reward), for the referral card. Also
+-- returns where that referred_count ranks among everyone who's referred at
+-- least one person — an aggregate ("Top 20% of referrers") only, never
+-- another user's email or count, so it's safe to return to a normal user.
 create or replace function public.my_referral_stats()
 returns jsonb
 language plpgsql
@@ -113,6 +116,9 @@ as $$
 declare
   v_count integer;
   v_rewarded integer;
+  v_total_referrers integer;
+  v_rank integer;
+  v_percentile integer;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -120,7 +126,25 @@ begin
 
   select count(*), count(*) filter (where rewarded) into v_count, v_rewarded
     from public.referrals where referrer_user_id = auth.uid();
-  return jsonb_build_object('referred_count', v_count, 'paid_count', v_rewarded, 'credits_earned', v_rewarded * 2);
+
+  if v_count > 0 then
+    with counts as (
+      select referrer_user_id, count(*) as c from public.referrals group by referrer_user_id
+    )
+    select (select count(*) from counts where c > v_count) + 1, (select count(*) from counts)
+      into v_rank, v_total_referrers;
+    -- "Top X%" from the top, e.g. rank 1 of 10 referrers -> top 10%.
+    v_percentile := ceil((v_rank::numeric / greatest(v_total_referrers, 1)) * 100);
+  end if;
+
+  return jsonb_build_object(
+    'referred_count', v_count,
+    'paid_count', v_rewarded,
+    'credits_earned', v_rewarded * 2,
+    'rank', v_rank,
+    'total_referrers', v_total_referrers,
+    'percentile', v_percentile
+  );
 end;
 $$;
 revoke all on function public.my_referral_stats() from public;

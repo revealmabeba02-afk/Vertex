@@ -3376,7 +3376,11 @@
       referralLoaded = true;
       referralLinkInput.value = data.link;
       if (referralStats) {
-        referralStats.textContent = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.paidCount || 0} bought credits · ${data.creditsEarned || 0} credits earned`;
+        let text = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.paidCount || 0} bought credits · ${data.creditsEarned || 0} credits earned`;
+        if (typeof data.percentile === "number" && data.totalReferrers > 1) {
+          text += ` · Top ${data.percentile}% of referrers`;
+        }
+        referralStats.textContent = text;
       }
     } catch (err) {
       referralLinkInput.value = "Could not load your link.";
