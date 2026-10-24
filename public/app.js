@@ -787,6 +787,72 @@
     });
   }
 
+  // "Copy as text": the full scan result (structure, levels, plan, risk
+  // note) as one plain-text block — more than the plan-only copy above,
+  // for pasting into notes, a journal entry, or a longer message.
+  const copyTextBtn = document.getElementById("res-copy-text-btn");
+  if (copyTextBtn) {
+    copyTextBtn.addEventListener("click", async () => {
+      if (!lastResultForCopy) return;
+      const { a, timeframe } = lastResultForCopy;
+      const pair = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
+      const tf = timeframe ? (TF_LABELS[timeframe] || timeframe) : "—";
+      const bias = a.market_bias || "Neutral / Ranging";
+      const structure = a.market_structure || {};
+      const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+      const side = (firstEntry?.type || "").toLowerCase();
+      const signal = side === "long" ? "BUY" : side === "short" ? "SELL" : "NO TRADE";
+      const entryLine = firstEntry?.entry || firstEntry?.zone || "—";
+      const sl = a.stop_loss?.suggestion || "—";
+      const targets = Array.isArray(a.take_profit) ? a.take_profit : [];
+      const tpLine = targets.length > 0 ? targets.map((t) => t.target).join("  ·  ") : "—";
+      const keyLevels = Array.isArray(structure.key_levels) ? structure.key_levels : [];
+
+      const lines = [
+        `Vertex AI — ${pair} (${tf})`,
+        `${signal} — ${bias}`,
+        "",
+        "Market structure:",
+        structure.trend || "Not enough data to describe trend.",
+      ];
+      if (structure.chart_pattern) lines.push(`Pattern: ${structure.chart_pattern}`);
+      if (keyLevels.length > 0) {
+        lines.push("Key levels:");
+        keyLevels.forEach((lvl) => lines.push(`- ${lvl}`));
+      }
+      lines.push("", "Trade plan:");
+      lines.push(`Entry: ${entryLine}`);
+      lines.push(`Stop loss: ${sl}`);
+      lines.push(`Take profit: ${tpLine}`);
+      if (a.invalidation) lines.push(`Invalidation: ${a.invalidation}`);
+      if (a.notes) lines.push("", `Notes: ${a.notes}`);
+      if (typeof a.confidence === "number") lines.push("", `Confidence: ${a.confidence}%`);
+
+      const text = lines.join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch {}
+        document.body.removeChild(ta);
+      }
+
+      const label = copyTextBtn.querySelector("span");
+      const prevLabel = label.textContent;
+      copyTextBtn.classList.add("is-copied");
+      label.textContent = "Copied!";
+      setTimeout(() => {
+        copyTextBtn.classList.remove("is-copied");
+        label.textContent = prevLabel;
+      }, 1800);
+    });
+  }
+
   // One-tap "share as image": renders the current plan as a branded card
   // (canvas, drawn client-side — no server round trip) with a QR code back
   // to Vertex, ready to post or share. Uses the Web Share API on mobile
