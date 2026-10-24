@@ -1399,6 +1399,7 @@
     if (searchWrap) searchWrap.hidden = false;
     renderJournalByPair();
     renderJournalSessionInsight();
+    renderJournalStaleReminder();
 
     const closed = journalItems.filter((t) => t.result !== "open");
     const wins = closed.filter((t) => t.result === "win").length;
@@ -1525,6 +1526,25 @@
 
       listEl.appendChild(row);
     });
+  }
+
+  // Gentle nudge for trades left marked "open" a while — so win-rate stats
+  // stay accurate instead of quietly drifting as old trades pile up unlogged.
+  function renderJournalStaleReminder() {
+    const el = document.getElementById("journal-stale-reminder");
+    if (!el) return;
+    const staleCutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    const staleCount = journalItems.filter((t) => {
+      if (t.result !== "open") return false;
+      const created = new Date(t.created_at).getTime();
+      return !isNaN(created) && created < staleCutoff;
+    }).length;
+    if (staleCount === 0) {
+      el.hidden = true;
+      return;
+    }
+    el.textContent = `You have ${staleCount} trade${staleCount === 1 ? "" : "s"} still marked "open" from 3+ days ago — update the result so your win rate stays accurate.`;
+    el.hidden = false;
   }
 
   function renderJournalByPair() {
