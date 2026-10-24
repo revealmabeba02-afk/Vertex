@@ -3020,12 +3020,15 @@
     const stat = document.getElementById("res-confidence-stat");
     const value2 = document.getElementById("res-confidence-value2");
     const fill = document.getElementById("res-confidence-fill");
+    const lowNote = document.getElementById("res-low-confidence-note");
     if (typeof pct !== "number") {
       if (badge) badge.hidden = true;
       if (stat) stat.hidden = true;
+      if (lowNote) lowNote.hidden = true;
       return;
     }
     const clamped = Math.max(0, Math.min(100, pct));
+    if (lowNote) lowNote.hidden = clamped >= 50;
     const circumference = 97.4; // 2 * pi * r(15.5), matches the SVG ring
     if (badge && ring && pctLabel) {
       badge.hidden = false;
