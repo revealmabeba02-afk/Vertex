@@ -814,6 +814,38 @@
     });
   }
 
+  // When a scan fails for lack of credits, look at how often this user has
+  // actually been scanning (from their own history) and suggest whichever
+  // bundle roughly matches that pace, instead of just pointing at the
+  // generic Credits tab.
+  async function suggestBundleFromUsage() {
+    const el = document.getElementById("bundle-suggestion");
+    if (!el) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/history", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      const recentCount = items.filter((i) => new Date(i.created_at).getTime() >= cutoff).length;
+      const perDay = recentCount / 14;
+
+      let bundle, label;
+      if (perDay >= 5) { bundle = "pro"; label = "Pro (150 scans)"; }
+      else if (perDay >= 2) { bundle = "trader"; label = "Trader (60 scans)"; }
+      else if (perDay >= 0.5) { bundle = "starter"; label = "Starter (20 scans)"; }
+      else { bundle = "quick"; label = "Quick (10 scans)"; }
+
+      el.textContent = `Based on how often you've been scanning, ${label} should last you a while.`;
+      el.hidden = false;
+      el.dataset.bundle = bundle;
+    } catch {
+      // Best-effort — the generic "Buy more credits" link still works.
+    }
+  }
+
   // "Copy as text": the full scan result (structure, levels, plan, risk
   // note) as one plain-text block — more than the plan-only copy above,
   // for pasting into notes, a journal entry, or a longer message.
@@ -1261,6 +1293,8 @@
       if (typeof window.__vertexRefreshCredits === "function") window.__vertexRefreshCredits();
     } catch (err) {
       finishScanHud(false);
+      const bundleSuggestionEl = document.getElementById("bundle-suggestion");
+      if (bundleSuggestionEl) bundleSuggestionEl.hidden = true;
       if (err.name === "AbortError") {
         errorText.textContent = "This scan is taking longer than expected. Please check your connection and try again.";
       } else if (err.code === "no_credits") {
@@ -1271,6 +1305,7 @@
         link.className = "error-link";
         link.textContent = "Buy more credits →";
         errorText.appendChild(link);
+        suggestBundleFromUsage();
       } else if (err.name === "TypeError" && /fetch|network/i.test(err.message || "")) {
         // The browser's raw fetch failure (offline, DNS, no connection) —
         // never surface "Failed to fetch" verbatim.
