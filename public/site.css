@@ -523,6 +523,48 @@
   cursor: pointer;
 }
 
+.password-strength { margin-top: 10px; }
+.password-strength__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.password-strength__bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--bear);
+  border-radius: 2px;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.password-strength__checks {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.password-strength__checks li {
+  font-size: 12px;
+  color: var(--text-faint);
+  position: relative;
+  padding-left: 16px;
+}
+.password-strength__checks li::before {
+  content: "○";
+  position: absolute;
+  left: 0;
+  font-size: 11px;
+}
+.password-strength__checks li[data-met="true"] {
+  color: var(--bull);
+}
+.password-strength__checks li[data-met="true"]::before {
+  content: "●";
+}
+
 .input {
   width: 100%;
   min-height: 48px;

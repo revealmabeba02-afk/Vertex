@@ -117,6 +117,14 @@
             <input class="input input--pw" id="password" name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters" />
             <button type="button" class="pw-toggle" data-toggle="password" aria-label="Show password">Show</button>
           </div>
+          <div id="password-strength" class="password-strength" hidden>
+            <div class="password-strength__bar"><span id="password-strength-fill"></span></div>
+            <ul class="password-strength__checks">
+              <li id="pw-check-length" data-met="false">8+ characters</li>
+              <li id="pw-check-case" data-met="false">Upper &amp; lowercase</li>
+              <li id="pw-check-number" data-met="false">A number</li>
+            </ul>
+          </div>
         </div>
 
         <button type="submit" class="scan-btn" id="submit-btn">
@@ -160,6 +168,32 @@
     const email = document.getElementById("email");
     const password = document.getElementById("password");
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const strengthWrap = document.getElementById("password-strength");
+    const strengthFill = document.getElementById("password-strength-fill");
+    const checkLength = document.getElementById("pw-check-length");
+    const checkCase = document.getElementById("pw-check-case");
+    const checkNumber = document.getElementById("pw-check-number");
+
+    function updatePasswordStrength() {
+      const value = password.value;
+      if (!value) {
+        strengthWrap.hidden = true;
+        return;
+      }
+      strengthWrap.hidden = false;
+      const hasLength = value.length >= 8;
+      const hasCase = /[a-z]/.test(value) && /[A-Z]/.test(value);
+      const hasNumber = /[0-9]/.test(value);
+      checkLength.dataset.met = String(hasLength);
+      checkCase.dataset.met = String(hasCase);
+      checkNumber.dataset.met = String(hasNumber);
+      const met = [hasLength, hasCase, hasNumber].filter(Boolean).length;
+      const pct = (met / 3) * 100;
+      strengthFill.style.width = pct + "%";
+      strengthFill.style.background = met <= 1 ? "var(--bear)" : met === 2 ? "#E2B13C" : "var(--bull)";
+    }
+    password.addEventListener("input", updatePasswordStrength);
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
