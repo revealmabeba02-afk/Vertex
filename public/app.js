@@ -713,6 +713,13 @@
       return;
     }
 
+    if (isLikelyDuplicateScan(symbol, timeframeSelect.value)) {
+      const proceed = window.confirm(
+        `You scanned ${symbol} on this timeframe less than 2 minutes ago. The chart probably hasn't changed much — scan again anyway and use another credit?`
+      );
+      if (!proceed) return;
+    }
+
     await runScan(symbol, timeframeSelect.value);
   });
 
@@ -1149,7 +1156,22 @@
 
   const LAST_SCAN_KEY = "vertex_last_scan";
   function saveLastScan(symbol, timeframe) {
-    try { localStorage.setItem(LAST_SCAN_KEY, JSON.stringify({ symbol, timeframe })); } catch {}
+    try { localStorage.setItem(LAST_SCAN_KEY, JSON.stringify({ symbol, timeframe, at: Date.now() })); } catch {}
+  }
+  // Same symbol+timeframe scanned in the last 2 minutes almost certainly
+  // means the chart hasn't moved enough to be worth a second credit — warn
+  // once rather than silently letting it through (the user can still say yes).
+  const DUPLICATE_SCAN_WINDOW_MS = 2 * 60 * 1000;
+  function isLikelyDuplicateScan(symbol, timeframe) {
+    try {
+      const raw = localStorage.getItem(LAST_SCAN_KEY);
+      if (!raw) return false;
+      const last = JSON.parse(raw);
+      if (!last.at || last.symbol !== symbol || last.timeframe !== timeframe) return false;
+      return Date.now() - last.at < DUPLICATE_SCAN_WINDOW_MS;
+    } catch {
+      return false;
+    }
   }
   function restoreLastScan() {
     try {
