@@ -1165,6 +1165,7 @@
         <option value="90">Inactive 90+ days</option>
         <option value="never">Never signed in</option>
       </select>
+      <button type="button" id="users-export-btn" class="btn btn--ghost" style="flex: 0 0 auto;">Export CSV</button>
     </div>
     <div class="users-table-wrap">
       <table class="users-table" id="users-table" hidden>
@@ -1403,6 +1404,7 @@
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
         filtered = filtered.filter((u) => !u.last_sign_in_at || new Date(u.last_sign_in_at).getTime() < cutoff);
       }
+      window.__usersFilteredForExport = filtered;
 
       if (users.length === 0) {
         emptyEl.textContent = "No users yet.";
@@ -1440,6 +1442,30 @@
     if (usersFilterInput) usersFilterInput.addEventListener("input", renderUsersTable);
     const usersActivityFilter = document.getElementById("users-activity-filter");
     if (usersActivityFilter) usersActivityFilter.addEventListener("change", renderUsersTable);
+
+    const usersExportBtn = document.getElementById("users-export-btn");
+    if (usersExportBtn) {
+      usersExportBtn.addEventListener("click", () => {
+        const rows = window.__usersFilteredForExport || window.__usersCache || [];
+        if (rows.length === 0) return;
+        const headers = ["full_name", "email", "created_at", "last_sign_in_at", "paid_usd", "paid_scans"];
+        const csvEscape = (v) => {
+          const s = v === null || v === undefined ? "" : String(v);
+          return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        };
+        const lines = [headers.join(",")];
+        rows.forEach((row) => lines.push(headers.map((h) => csvEscape(row[h])).join(",")));
+        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "vertex-users.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
 
     // Declared here, before the first await, on purpose: this whole function
     // fires off a batch of independent async loaders (loadLinkClicks,
