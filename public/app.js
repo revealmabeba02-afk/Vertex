@@ -732,6 +732,22 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
+  // "Rescan this chart": re-runs the same symbol/timeframe that was just
+  // scanned (prices move fast, so a trader often wants a fresh read on the
+  // exact same chart rather than starting over).
+  const rescanSameBtn = document.getElementById("rescan-same-btn");
+  if (rescanSameBtn) {
+    rescanSameBtn.addEventListener("click", () => {
+      if (scanInFlight) return;
+      try {
+        const raw = localStorage.getItem(LAST_SCAN_KEY);
+        if (!raw) return;
+        const { symbol, timeframe } = JSON.parse(raw);
+        if (symbol && timeframe) runScan(symbol, timeframe);
+      } catch {}
+    });
+  }
+
   // One-tap "copy trade plan": formats the current scan's bias, entry, stop
   // and targets as plain text ready to paste into MT4/MT5, a broker app, or
   // a chat with whoever's following your calls.
