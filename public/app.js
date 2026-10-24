@@ -925,7 +925,8 @@
       label.textContent = "Building…";
       shareImageBtn.disabled = true;
       try {
-        const blob = await buildShareCard(lastResultForCopy);
+        const refCode = await getMyReferralCode();
+        const blob = await buildShareCard(lastResultForCopy, refCode);
         const file = new File([blob], "vertex-plan.png", { type: "image/png" });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: "Vertex trade plan" });
@@ -970,7 +971,7 @@
     });
   }
 
-  function buildShareCard({ a, timeframe }) {
+  function buildShareCard({ a, timeframe }, referralCode) {
     return new Promise((resolve, reject) => {
       try {
         const W = 1080, H = 1350;
@@ -1066,7 +1067,10 @@
 
         try {
           const qr = qrcode(4, "M");
-          qr.addData("https://vertex-9s4c.onrender.com/signup?ref=share");
+          const qrUrl = referralCode
+            ? `https://vertex-9s4c.onrender.com/signup?ref=${encodeURIComponent(referralCode)}`
+            : "https://vertex-9s4c.onrender.com/signup?ref=share";
+          qr.addData(qrUrl);
           qr.make();
           const qrSize = 140;
           const modules = qr.getModuleCount();
@@ -3141,6 +3145,21 @@
   const referralStats = document.getElementById("referral-stats");
   const referralCopyStatus = document.getElementById("referral-copy-status");
   let referralLoaded = false;
+  let myReferralCode = null;
+  async function getMyReferralCode() {
+    if (myReferralCode) return myReferralCode;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return null;
+      const res = await fetch("/api/referral/mine", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      myReferralCode = data.code || null;
+      return myReferralCode;
+    } catch {
+      return null;
+    }
+  }
 
   // --------------------------------------------------------------
   // Change email — Supabase's own updateUser({email}) sends a confirmation
@@ -3455,6 +3474,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not load your referral link.");
       referralLoaded = true;
+      myReferralCode = data.code || myReferralCode;
       referralLinkInput.value = data.link;
       if (referralStats) {
         let text = `${data.referredCount || 0} friend${data.referredCount === 1 ? "" : "s"} joined · ${data.paidCount || 0} bought credits · ${data.creditsEarned || 0} credits earned`;
