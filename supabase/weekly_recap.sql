@@ -19,6 +19,8 @@
 --
 -- Only returns a row for a user who actually logged at least one journal
 -- trade in the last 7 days, so nobody gets a blank "you did nothing" email.
+-- Also excludes anyone who's opted out via user_prefs.weekly_recap_opt_out
+-- (user_prefs.sql) — run that file first too.
 
 create or replace function public.weekly_recap_data(p_secret text)
 returns table (
@@ -69,7 +71,9 @@ begin
       coalesce(ws.scans_count, 0)::int
     from per_user pu
     join auth.users u on u.id = pu.user_id
-    left join week_scans ws on ws.user_id = pu.user_id;
+    left join week_scans ws on ws.user_id = pu.user_id
+    left join public.user_prefs up on up.user_id = pu.user_id
+    where coalesce(up.weekly_recap_opt_out, false) = false;
 end;
 $$;
 

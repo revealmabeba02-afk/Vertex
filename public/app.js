@@ -358,7 +358,7 @@
     if (name === "credits") refreshBalance();
     if (name === "help") { loadHelpHistory(); loadFeedbackHistory(); }
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
-    if (name === "settings") { loadReferral(); loadBrokerAccount(); }
+    if (name === "settings") { loadReferral(); loadBrokerAccount(); loadPreferences(); }
   }
 
   function applyView() {
@@ -3143,6 +3143,41 @@
   // never writes it anywhere.
   // --------------------------------------------------------------
   let brokerLoaded = false;
+  let preferencesLoaded = false;
+  async function loadPreferences() {
+    if (preferencesLoaded) return;
+    const toggle = document.getElementById("settings-weekly-recap-toggle");
+    if (!toggle) return;
+    try {
+      const session = await Auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/preferences", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      preferencesLoaded = true;
+      toggle.checked = !data.weekly_recap_opt_out;
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  const weeklyRecapToggle = document.getElementById("settings-weekly-recap-toggle");
+  if (weeklyRecapToggle) {
+    weeklyRecapToggle.addEventListener("change", async () => {
+      try {
+        const session = await Auth.getSession();
+        if (!session) return;
+        await fetch("/api/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ weekly_recap_opt_out: !weeklyRecapToggle.checked })
+        });
+      } catch {
+        // Best-effort.
+      }
+    });
+  }
+
   async function loadBrokerAccount() {
     if (brokerLoaded) return;
     const connectedWrap = document.getElementById("broker-connected");

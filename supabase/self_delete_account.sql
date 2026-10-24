@@ -33,6 +33,7 @@ begin
   delete from public.scan_history where user_id = uid;
   delete from public.support_messages where user_id = uid;
   delete from public.trade_journal where user_id = uid;
+  delete from public.user_prefs where user_id = uid;
 
   delete from auth.users where id = uid;
 end;

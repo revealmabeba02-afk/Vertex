@@ -2076,6 +2076,60 @@ app.delete("/api/account", requireUser, async (req, res) => {
   }
 });
 
+// --- Email preferences (user_prefs) ----------------------------------------
+// Plain owner-scoped table with RLS already restricting rows to their
+// creator, so these just read/write through the caller's own JWT — no
+// service-role key or security-definer RPC needed.
+app.get("/api/preferences", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_prefs?select=weekly_recap_opt_out,low_credit_alert_opt_out&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return res.json({ weekly_recap_opt_out: false, low_credit_alert_opt_out: false });
+    const rows = await r.json().catch(() => []);
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    res.json({
+      weekly_recap_opt_out: !!(row && row.weekly_recap_opt_out),
+      low_credit_alert_opt_out: !!(row && row.low_credit_alert_opt_out)
+    });
+  } catch (err) {
+    console.error("Preferences fetch error:", err.message);
+    res.json({ weekly_recap_opt_out: false, low_credit_alert_opt_out: false });
+  }
+});
+
+app.post("/api/preferences", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  const body = req.body || {};
+  const payload = { user_id: req.user.id, updated_at: new Date().toISOString() };
+  if (typeof body.weekly_recap_opt_out === "boolean") payload.weekly_recap_opt_out = body.weekly_recap_opt_out;
+  if (typeof body.low_credit_alert_opt_out === "boolean") payload.low_credit_alert_opt_out = body.low_credit_alert_opt_out;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/user_prefs?on_conflict=user_id`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.user.token}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      console.error("Preferences save failed:", r.status, text);
+      return res.status(502).json({ error: "Could not save your preferences." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Preferences save error:", err.message);
+    res.status(502).json({ error: "Could not save your preferences." });
+  }
+});
+
 // --- News calendar + signals (ForexNewsAPI) --------------------------------
 // Small/medium-importance events (PMI, retail sales, etc.) are free and
 // unlimited — full forecast/previous/actual always shown. Big ("High"
