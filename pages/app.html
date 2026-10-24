@@ -1015,6 +1015,19 @@
       <p class="settings-row__title" style="margin-bottom: 4px;">Broker connect</p>
       <p class="settings-row__desc" id="broker-intro">Connect your real MT4/MT5 broker account and your trades log here automatically — no typing them in by hand. Your password is sent once to connect and is never stored.</p>
 
+      <div id="broker-paywall" hidden style="margin-top: 14px;">
+        <ul class="settings-row__desc" style="margin: 0 0 14px; padding-left: 18px;">
+          <li>Trades sync in automatically — no manual logging</li>
+          <li>Live connection status right here in Journal</li>
+          <li>One-time unlock, yours for good — no subscription</li>
+        </ul>
+        <button type="button" id="broker-unlock-btn" class="scan-btn">
+          <span class="scan-btn__label" id="broker-unlock-label">Unlock broker connect — R450</span>
+          <span class="scan-btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p id="broker-unlock-status" class="credits-status" hidden></p>
+      </div>
+
       <div id="broker-connected" class="settings-row" hidden style="margin-top: 14px;">
         <div>
           <p class="settings-row__title" style="margin-bottom: 0;" id="broker-connected-label">—</p>

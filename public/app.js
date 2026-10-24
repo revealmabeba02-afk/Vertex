@@ -3507,6 +3507,7 @@
     const connectedWrap = document.getElementById("broker-connected");
     const formWrap = document.getElementById("broker-connect-form");
     const notReadyWrap = document.getElementById("broker-not-ready");
+    const paywallWrap = document.getElementById("broker-paywall");
     if (!connectedWrap || !formWrap) return;
     try {
       const session = await Auth.getSession();
@@ -3519,8 +3520,16 @@
         notReadyWrap.hidden = false;
         formWrap.hidden = true;
         connectedWrap.hidden = true;
+        if (paywallWrap) paywallWrap.hidden = true;
         return;
       }
+      if (!data.hasAccess && !data.account) {
+        if (paywallWrap) paywallWrap.hidden = false;
+        formWrap.hidden = true;
+        connectedWrap.hidden = true;
+        return;
+      }
+      if (paywallWrap) paywallWrap.hidden = true;
       if (data.account) {
         connectedWrap.hidden = false;
         formWrap.hidden = true;
@@ -3535,6 +3544,47 @@
     } catch {
       // Best-effort.
     }
+  }
+
+  const brokerUnlockBtn = document.getElementById("broker-unlock-btn");
+  if (brokerUnlockBtn) {
+    brokerUnlockBtn.addEventListener("click", async () => {
+      const statusEl = document.getElementById("broker-unlock-status");
+      brokerUnlockBtn.disabled = true;
+      brokerUnlockBtn.classList.add("is-loading");
+      try {
+        const session = await Auth.getSession();
+        if (!session) { brokerUnlockBtn.disabled = false; brokerUnlockBtn.classList.remove("is-loading"); return; }
+        const res = await fetch("/api/broker/checkout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.checkoutUrl) {
+          if (statusEl) {
+            statusEl.hidden = false;
+            statusEl.textContent = data.error || "Could not start checkout. Please try again.";
+          }
+          brokerUnlockBtn.disabled = false;
+          brokerUnlockBtn.classList.remove("is-loading");
+          return;
+        }
+        window.open(data.checkoutUrl, "_blank", "noopener");
+        if (statusEl) {
+          statusEl.hidden = false;
+          statusEl.textContent = "Checkout opened in a new tab — once you pay, come back and refresh this page.";
+        }
+        brokerUnlockBtn.disabled = false;
+        brokerUnlockBtn.classList.remove("is-loading");
+      } catch {
+        if (statusEl) {
+          statusEl.hidden = false;
+          statusEl.textContent = "Could not reach checkout. Please try again.";
+        }
+        brokerUnlockBtn.disabled = false;
+        brokerUnlockBtn.classList.remove("is-loading");
+      }
+    });
   }
 
   const brokerServerHelpToggle = document.getElementById("broker-server-help-toggle");

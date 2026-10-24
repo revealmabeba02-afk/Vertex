@@ -307,6 +307,17 @@ const CUSTOM_PRICE_PER_SCAN = 0.5; // same per-scan rate as the Quick bundle ($4
 const CUSTOM_MIN_AMOUNT = 5;
 const CUSTOM_MAX_AMOUNT = 500;
 
+// --- Broker connect unlock --------------------------------------------------
+// One-time paid unlock for real MT4/MT5 broker connect (R450). Charged as
+// its USD equivalent through the same Whop one-off-plan mechanism as the
+// custom credit top-up above (reuses WHOP_CUSTOM_PRODUCT_ID), but the Whop
+// webhook tells a broker-access payment apart from a credit top-up by its
+// exact amount — see BROKER_ACCESS_PRICE_USD below and the webhook handler.
+// This is a reasonably distinctive, non-round price specifically so it's
+// unlikely to collide with someone's hand-typed custom top-up amount; if a
+// real collision ever shows up in the logs, change this value.
+const BROKER_ACCESS_PRICE_USD = 24.63;
+
 function scansForCustomAmount(amountUsd) {
   return Math.max(1, Math.round(amountUsd / CUSTOM_PRICE_PER_SCAN));
 }
@@ -687,6 +698,21 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
       console.error("Whop webhook: could not extract email/amount/id from payload.", { email: Boolean(email), amount, id });
       return;
     }
+
+    if (Math.abs(amount - BROKER_ACCESS_PRICE_USD) < 0.02) {
+      try {
+        const grantResult = await supabaseRpc(
+          "grant_broker_access_by_email",
+          { p_email: email, p_amount_usd: amount, p_external_id: String(id), p_secret: CREDIT_FULFILL_SECRET },
+          SUPABASE_ANON_KEY
+        );
+        console.log("Whop webhook: broker access granted", grantResult);
+      } catch (err) {
+        console.error("Whop webhook: broker access grant failed:", err.message);
+      }
+      return;
+    }
+
     const bundle = bundleByAmount(amount);
     let p_bundle, p_scans, p_amount_usd;
     if (bundle) {
@@ -1977,19 +2003,64 @@ app.delete("/api/journal/:id", requireUser, async (req, res) => {
 app.get("/api/broker/mine", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/broker_accounts?select=platform,login,server,status,status_detail,created_at&limit=1`,
-      {
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
-        signal: AbortSignal.timeout(8000)
-      }
-    );
-    if (!r.ok) return res.json({ account: null });
-    const rows = await r.json();
-    res.json({ account: Array.isArray(rows) && rows[0] ? rows[0] : null, metaapiReady: METAAPI_READY });
+    const [accountRes, hasAccess] = await Promise.all([
+      fetch(
+        `${SUPABASE_URL}/rest/v1/broker_accounts?select=platform,login,server,status,status_detail,created_at&limit=1`,
+        {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` },
+          signal: AbortSignal.timeout(8000)
+        }
+      ),
+      supabaseRpc("has_broker_access", {}, req.user.token).catch(() => false)
+    ]);
+    const rows = accountRes.ok ? await accountRes.json() : [];
+    res.json({
+      account: Array.isArray(rows) && rows[0] ? rows[0] : null,
+      metaapiReady: METAAPI_READY,
+      hasAccess: Boolean(hasAccess),
+      priceUsd: BROKER_ACCESS_PRICE_USD
+    });
   } catch (err) {
     console.error("Broker account fetch error:", err.message);
-    res.json({ account: null, metaapiReady: METAAPI_READY });
+    res.json({ account: null, metaapiReady: METAAPI_READY, hasAccess: false, priceUsd: BROKER_ACCESS_PRICE_USD });
+  }
+});
+
+// Starts the one-time R450 (≈ $24.63) broker-connect unlock purchase via the
+// same Whop one-off-plan mechanism as the custom credit top-up.
+app.post("/api/broker/checkout", requireUser, async (req, res) => {
+  if (!WHOP_CUSTOM_READY) {
+    return res.status(503).json({ error: "Checkout isn't set up on this server yet — check back soon." });
+  }
+  try {
+    const r = await fetch("https://api.whop.com/api/v2/plans", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${WHOP_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        product_id: WHOP_CUSTOM_PRODUCT_ID,
+        plan_type: "one_time",
+        base_currency: "usd",
+        initial_price: BROKER_ACCESS_PRICE_USD
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      console.error("Whop broker-access plan failed:", r.status, JSON.stringify(data).slice(0, 1000));
+      return res.status(502).json({ error: "Could not start checkout. Please try again shortly." });
+    }
+    const checkoutUrl = data?.purchase_url || data?.direct_link || data?.checkout_url || data?.data?.purchase_url || null;
+    if (!checkoutUrl) {
+      console.error("Whop broker-access plan: no checkout URL in response:", JSON.stringify(data).slice(0, 1000));
+      return res.status(502).json({ error: "Could not start checkout. Please try again shortly." });
+    }
+    res.json({ checkoutUrl });
+  } catch (err) {
+    console.error("Whop broker-access checkout error:", err.message);
+    res.status(502).json({ error: "Could not reach checkout right now. Please try again in a moment." });
   }
 });
 
@@ -1997,6 +2068,15 @@ app.post("/api/broker/connect", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if (!METAAPI_READY) {
     return res.status(503).json({ error: "Broker connections aren't turned on yet — check back soon." });
+  }
+  try {
+    const hasAccess = await supabaseRpc("has_broker_access", {}, req.user.token);
+    if (!hasAccess) {
+      return res.status(402).json({ error: "Unlock broker connect first." });
+    }
+  } catch (err) {
+    console.error("Broker access check failed:", err.message);
+    return res.status(502).json({ error: "Could not confirm broker-connect access. Please try again." });
   }
   const platform = String(req.body?.platform || "").toLowerCase();
   const login = String(req.body?.login || "").trim();

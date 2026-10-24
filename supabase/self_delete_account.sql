@@ -22,6 +22,7 @@ begin
   end if;
 
   delete from public.broker_accounts where user_id = uid;
+  delete from public.broker_access where user_id = uid;
   delete from public.credit_balances where user_id = uid;
   delete from public.credit_orders where user_id = uid;
   delete from public.feedback_messages where user_id = uid;
