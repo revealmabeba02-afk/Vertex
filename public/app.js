@@ -3537,6 +3537,24 @@
     }
   }
 
+  const brokerServerHelpToggle = document.getElementById("broker-server-help-toggle");
+  const brokerServerHelp = document.getElementById("broker-server-help");
+  if (brokerServerHelpToggle && brokerServerHelp) {
+    brokerServerHelpToggle.addEventListener("click", () => {
+      brokerServerHelp.hidden = !brokerServerHelp.hidden;
+    });
+  }
+
+  const brokerPasswordToggle = document.getElementById("broker-password-toggle");
+  const brokerPasswordInput = document.getElementById("broker-password");
+  if (brokerPasswordToggle && brokerPasswordInput) {
+    brokerPasswordToggle.addEventListener("click", () => {
+      const showing = brokerPasswordInput.type === "text";
+      brokerPasswordInput.type = showing ? "password" : "text";
+      brokerPasswordToggle.textContent = showing ? "Show" : "Hide";
+    });
+  }
+
   const brokerConnectForm = document.getElementById("broker-connect-form");
   if (brokerConnectForm) {
     brokerConnectForm.addEventListener("submit", async (e) => {
