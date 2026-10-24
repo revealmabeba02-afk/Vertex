@@ -2914,6 +2914,16 @@
     }
   }
 
+  let globalToastTimer = null;
+  function showGlobalToast(msg) {
+    const el = document.getElementById("global-toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    if (globalToastTimer) clearTimeout(globalToastTimer);
+    globalToastTimer = setTimeout(() => { el.hidden = true; }, 5000);
+  }
+
   function showCreditsStatus(msg, isError) {
     if (!creditsStatus) return;
     creditsStatus.textContent = msg;
@@ -3550,6 +3560,7 @@
       await refreshBalance();
       if (startingBalance !== null && currentBalance !== null && currentBalance > startingBalance) {
         showCreditsStatus(`Credits added! You now have ${currentBalance}.`, false);
+        showGlobalToast(`✓ Credits added — you now have ${currentBalance}.`);
         clearInterval(balanceWatchTimer);
         balanceWatchTimer = null;
       } else if (ticks >= 24) {

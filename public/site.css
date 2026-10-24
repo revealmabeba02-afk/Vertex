@@ -726,3 +726,28 @@
 @media (max-width: 380px) {
   .brand__name--hide-xs { display: none; }
 }
+
+/* Global toast — survives tab switches (lives outside the per-view sections)
+   so a background event like "credits added" is seen wherever the user is,
+   not just on the Credits tab. */
+.global-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--bull, #39D98A);
+  color: #06241a;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  animation: vertexToastIn 0.25s ease-out;
+}
+@keyframes vertexToastIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
