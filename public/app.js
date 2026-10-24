@@ -846,6 +846,79 @@
     }
   }
 
+  // "Report issue": flags a specific scan as a bad/wrong read, auto-attaching
+  // the scan's own details (pair, timeframe, bias, confidence) to the
+  // existing feedback inbox — same /api/feedback route and admin email alert
+  // as the Help tab's general feedback form, just pre-filled with context
+  // the user shouldn't have to retype.
+  const reportIssueBtn = document.getElementById("res-report-issue-btn");
+  const reportIssueWrap = document.getElementById("res-report-issue-wrap");
+  const reportIssueText = document.getElementById("res-report-issue-text");
+  const reportIssueSubmit = document.getElementById("res-report-issue-submit");
+  const reportIssueCancel = document.getElementById("res-report-issue-cancel");
+  const reportIssueStatus = document.getElementById("res-report-issue-status");
+  if (reportIssueBtn && reportIssueWrap) {
+    reportIssueBtn.addEventListener("click", () => {
+      reportIssueWrap.hidden = !reportIssueWrap.hidden;
+      if (!reportIssueWrap.hidden) reportIssueText.focus();
+    });
+  }
+  if (reportIssueCancel) {
+    reportIssueCancel.addEventListener("click", () => {
+      reportIssueWrap.hidden = true;
+      reportIssueText.value = "";
+      if (reportIssueStatus) reportIssueStatus.hidden = true;
+    });
+  }
+  if (reportIssueSubmit) {
+    reportIssueSubmit.addEventListener("click", async () => {
+      if (!lastResultForCopy) return;
+      const { a, timeframe } = lastResultForCopy;
+      const pair = a.pair_guess ? friendlySymbol(a.pair_guess) : "unknown pair";
+      const tf = timeframe ? (TF_LABELS[timeframe] || timeframe) : "—";
+      const bias = a.market_bias || "—";
+      const confidence = typeof a.confidence === "number" ? `${a.confidence}%` : "—";
+      const userNote = reportIssueText.value.trim();
+      const message =
+        `[Bad signal report] ${pair} (${tf}) — bias: ${bias}, confidence: ${confidence}` +
+        (userNote ? `\n\nUser's note: ${userNote}` : "\n\n(No additional comment from user.)");
+
+      reportIssueSubmit.disabled = true;
+      reportIssueSubmit.classList.add("is-loading");
+      try {
+        const session = await Auth.getSession();
+        if (!session) return;
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ message })
+        });
+        if (res.ok) {
+          if (reportIssueStatus) {
+            reportIssueStatus.textContent = "Thanks — reported. We'll take a look.";
+            reportIssueStatus.hidden = false;
+            reportIssueStatus.classList.remove("credits-status--error");
+          }
+          reportIssueText.value = "";
+          setTimeout(() => { reportIssueWrap.hidden = true; }, 2000);
+        } else if (reportIssueStatus) {
+          reportIssueStatus.textContent = "Could not send that report. Please try again.";
+          reportIssueStatus.hidden = false;
+          reportIssueStatus.classList.add("credits-status--error");
+        }
+      } catch {
+        if (reportIssueStatus) {
+          reportIssueStatus.textContent = "Could not send that report. Please try again.";
+          reportIssueStatus.hidden = false;
+          reportIssueStatus.classList.add("credits-status--error");
+        }
+      } finally {
+        reportIssueSubmit.disabled = false;
+        reportIssueSubmit.classList.remove("is-loading");
+      }
+    });
+  }
+
   // "Copy as text": the full scan result (structure, levels, plan, risk
   // note) as one plain-text block — more than the plan-only copy above,
   // for pasting into notes, a journal entry, or a longer message.

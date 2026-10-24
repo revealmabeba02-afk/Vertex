@@ -490,6 +490,21 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
               <span>Log this trade</span>
             </button>
+            <button type="button" id="res-report-issue-btn" class="copy-plan-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Report issue</span>
+            </button>
+          </div>
+          <div id="res-report-issue-wrap" style="margin-top:10px;" hidden>
+            <textarea id="res-report-issue-text" class="input" rows="2" maxlength="500" placeholder="What looked wrong about this signal? (optional)" style="resize: vertical; font-family: inherit;"></textarea>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button type="button" id="res-report-issue-submit" class="scan-btn" style="padding: 10px 16px; flex: 0 0 auto;">
+                <span class="scan-btn__label">Send report</span>
+                <span class="scan-btn__spinner" aria-hidden="true"></span>
+              </button>
+              <button type="button" id="res-report-issue-cancel" class="btn btn--ghost">Cancel</button>
+            </div>
+            <p id="res-report-issue-status" class="credits-status" hidden style="margin-top: 8px;"></p>
           </div>
           <div id="res-entries" class="entry-list"></div>
 
