@@ -1156,7 +1156,16 @@
 <div class="command-panel" data-panel="users">
   <div class="users-card" id="sec-users">
     <div class="users-card__head">Users</div>
-    <input type="text" id="users-filter" class="input" placeholder="Filter by name or email…" style="margin-bottom: 14px;">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 14px;">
+      <input type="text" id="users-filter" class="input" placeholder="Filter by name or email…" style="flex: 1 1 220px; margin-bottom: 0;">
+      <select id="users-activity-filter" class="input" style="flex: 0 1 200px; margin-bottom: 0;">
+        <option value="">All users</option>
+        <option value="7">Inactive 7+ days</option>
+        <option value="30">Inactive 30+ days</option>
+        <option value="90">Inactive 90+ days</option>
+        <option value="never">Never signed in</option>
+      </select>
+    </div>
     <div class="users-table-wrap">
       <table class="users-table" id="users-table" hidden>
         <thead>
@@ -1382,9 +1391,18 @@
       const users = window.__usersCache || [];
       const filterInput = document.getElementById("users-filter");
       const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
-      const filtered = q
+      const activityFilter = document.getElementById("users-activity-filter");
+      const activityQ = activityFilter ? activityFilter.value : "";
+      let filtered = q
         ? users.filter((u) => (u.email || "").toLowerCase().includes(q) || (u.full_name || "").toLowerCase().includes(q))
         : users;
+      if (activityQ === "never") {
+        filtered = filtered.filter((u) => !u.last_sign_in_at);
+      } else if (activityQ) {
+        const days = Number(activityQ);
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        filtered = filtered.filter((u) => !u.last_sign_in_at || new Date(u.last_sign_in_at).getTime() < cutoff);
+      }
 
       if (users.length === 0) {
         emptyEl.textContent = "No users yet.";
@@ -1420,6 +1438,8 @@
 
     const usersFilterInput = document.getElementById("users-filter");
     if (usersFilterInput) usersFilterInput.addEventListener("input", renderUsersTable);
+    const usersActivityFilter = document.getElementById("users-activity-filter");
+    if (usersActivityFilter) usersActivityFilter.addEventListener("change", renderUsersTable);
 
     // Declared here, before the first await, on purpose: this whole function
     // fires off a batch of independent async loaders (loadLinkClicks,
