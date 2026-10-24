@@ -166,6 +166,10 @@
           document.getElementById("account-email").textContent = session.user.email || "";
           const settingsEmailEl = document.getElementById("settings-account-email");
           if (settingsEmailEl) settingsEmailEl.textContent = session.user.email || "—";
+          const adminRow = document.getElementById("settings-admin-row");
+          if (adminRow && (session.user.email || "").toLowerCase() === "revealmabeba02@gmail.com") {
+            adminRow.hidden = false;
+          }
           document.getElementById("account").hidden = false;
           revealPage();
           maybeStartOnboardTour();
