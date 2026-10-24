@@ -1284,6 +1284,34 @@ async function sendLinkClickEmail(platform) {
   }
 }
 
+// Lets the admin know the moment a user sends a support or feedback
+// message, so King doesn't have to keep checking the admin panel. Same
+// Resend wiring/address as the link-click alerts above; best-effort, never
+// blocks the user's message from saving.
+async function sendAdminInboxAlert(kind, fromEmail, message) {
+  if (!RESEND_API_KEY || !LINK_ALERT_EMAIL) return;
+  const label = kind === "feedback" ? "feedback" : "support message";
+  const preview = message.length > 300 ? `${message.slice(0, 300)}…` : message;
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [LINK_ALERT_EMAIL],
+        subject: `New ${label} from ${fromEmail || "a user"}`,
+        text: `${fromEmail || "A user"} sent a new ${label} on Vertex Scanner:\n\n${preview}\n\nReply from the admin panel.`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) {
+      console.error(`Could not send admin ${label} alert:`, r.status, await r.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error(`Admin ${label} alert error:`, err.message);
+  }
+}
+
 // Purchase receipt, sent to the buyer once their credits are actually added
 // — not a payment confirmation from Whop/Binance themselves, just "here's
 // what you got". Reuses the same Resend wiring/shared sending address as
@@ -2982,6 +3010,7 @@ app.post("/api/support", requireUser, async (req, res) => {
   try {
     const row = await supabaseRpc("create_support_message", { p_message: message }, req.user.token);
     res.json({ ok: true });
+    sendAdminInboxAlert("support", req.user.email, message).catch(() => {});
 
     // Fire-and-forget: never make the user wait on the AI call, and never
     // let an AI/network hiccup turn a successfully-saved message into an
@@ -3384,6 +3413,7 @@ app.post("/api/feedback", requireUser, async (req, res) => {
   try {
     const row = await supabaseRpc("create_feedback_message", { p_message: message }, req.user.token);
     res.json({ ok: true });
+    sendAdminInboxAlert("feedback", req.user.email, message).catch(() => {});
 
     // Fire-and-forget, same pattern as support's AI triage: never block the
     // response on this, and a failure here just leaves the suggestion
