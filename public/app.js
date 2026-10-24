@@ -2635,23 +2635,27 @@
   }
 
   const historyBiasFilter = document.getElementById("history-bias-filter");
+  const historyStarredFilter = document.getElementById("history-starred-filter");
   function applyHistoryFilters() {
     const q = historySearchInput ? historySearchInput.value.trim().toLowerCase() : "";
     const bias = historyBiasFilter ? historyBiasFilter.value : "";
+    const starredOnly = historyStarredFilter ? historyStarredFilter.checked : false;
     let filtered = historyItems;
     if (q) filtered = filtered.filter((item) => (item.pair || "").toLowerCase().includes(q));
     if (bias) filtered = filtered.filter((item) => (item.bias || "").toLowerCase().includes(bias));
+    if (starredOnly) filtered = filtered.filter((item) => item.starred);
     renderHistory(filtered, { isFilter: true });
   }
   if (historySearchInput) historySearchInput.addEventListener("input", applyHistoryFilters);
   if (historyBiasFilter) historyBiasFilter.addEventListener("change", applyHistoryFilters);
+  if (historyStarredFilter) historyStarredFilter.addEventListener("change", applyHistoryFilters);
 
   const historyExportBtn = document.getElementById("history-export-btn");
   if (historyExportBtn) {
     historyExportBtn.addEventListener("click", () => {
       downloadCsv(
         historyItems,
-        ["pair", "timeframe", "bias", "signal", "created_at"],
+        ["pair", "timeframe", "bias", "signal", "starred", "created_at"],
         "vertex-scan-history.csv"
       );
     });
@@ -2746,6 +2750,36 @@
           setTimeout(() => symbolInput.focus(), 150);
         });
         main.appendChild(rescanBtn);
+      }
+
+      if (item.id) {
+        const starBtn = document.createElement("button");
+        starBtn.type = "button";
+        starBtn.className = "history-pin-btn";
+        starBtn.classList.toggle("is-pinned", !!item.starred);
+        starBtn.setAttribute("aria-label", item.starred ? "Unstar this scan" : "Star this scan");
+        starBtn.textContent = item.starred ? "★" : "☆";
+        starBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const next = !item.starred;
+          starBtn.disabled = true;
+          try {
+            const session = await Auth.getSession();
+            if (!session) return;
+            await fetch(`/api/history/${item.id}/star`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ starred: next })
+            });
+            item.starred = next;
+            starBtn.classList.toggle("is-pinned", next);
+            starBtn.textContent = next ? "★" : "☆";
+            starBtn.setAttribute("aria-label", next ? "Unstar this scan" : "Star this scan");
+          } catch { /* ignore */ } finally {
+            starBtn.disabled = false;
+          }
+        });
+        main.appendChild(starBtn);
       }
 
       const right = document.createElement("div");
