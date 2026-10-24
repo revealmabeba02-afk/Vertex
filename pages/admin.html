@@ -1278,6 +1278,7 @@
   <div class="support-card" id="sec-audit">
     <div class="users-card__head">Admin audit log</div>
     <p class="users-empty" style="padding: 4px 0 12px;">Every maintenance toggle, support reply and feedback status change, most recent first.</p>
+    <input type="text" id="audit-filter" class="input" placeholder="Filter by action or detail…" style="margin-bottom: 14px;">
     <div id="audit-list"></div>
     <div class="users-empty" id="audit-empty">Loading…</div>
   </div>
@@ -2619,16 +2620,28 @@
     async function loadAuditLog(authHeader) {
       const listEl = document.getElementById("audit-list");
       const emptyEl = document.getElementById("audit-empty");
-      try {
-        const res = await fetch("/api/admin/audit-log", { headers: authHeader });
-        if (!res.ok) {
-          emptyEl.textContent = "Could not load the audit log.";
+      const filterInput = document.getElementById("audit-filter");
+      let auditItems = [];
+
+      function renderAuditLog() {
+        if (auditItems.length === 0) {
+          emptyEl.textContent = "No admin actions logged yet.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
           return;
         }
-        const data = await res.json();
-        const items = Array.isArray(data.items) ? data.items : [];
+        const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+        const items = q
+          ? auditItems.filter((item) =>
+              (item.action || "").toLowerCase().includes(q) ||
+              (item.detail || "").toLowerCase().includes(q) ||
+              (item.actor_email || "").toLowerCase().includes(q)
+            )
+          : auditItems;
         if (items.length === 0) {
-          emptyEl.textContent = "No admin actions logged yet.";
+          emptyEl.textContent = "No entries match that filter.";
+          emptyEl.hidden = false;
+          listEl.innerHTML = "";
           return;
         }
         emptyEl.hidden = true;
@@ -2648,6 +2661,19 @@
             `;
           })
           .join("");
+      }
+
+      if (filterInput) filterInput.addEventListener("input", renderAuditLog);
+
+      try {
+        const res = await fetch("/api/admin/audit-log", { headers: authHeader });
+        if (!res.ok) {
+          emptyEl.textContent = "Could not load the audit log.";
+          return;
+        }
+        const data = await res.json();
+        auditItems = Array.isArray(data.items) ? data.items : [];
+        renderAuditLog();
       } catch {
         emptyEl.textContent = "Could not reach the server.";
       }
