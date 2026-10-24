@@ -358,11 +358,11 @@
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
     if (name === "whats-new") loadWhatsNew();
-    if (name === "journal") loadJournal();
+    if (name === "journal") { loadJournal(); loadBrokerAccount(); }
     if (name === "credits") refreshBalance();
     if (name === "help") { loadHelpHistory(); loadFeedbackHistory(); }
     if (name === "news") { loadNewsCalendar(); startNewsClock(); }
-    if (name === "settings") { loadReferral(); loadBrokerAccount(); loadPreferences(); }
+    if (name === "settings") { loadReferral(); loadPreferences(); }
   }
 
   function applyView() {

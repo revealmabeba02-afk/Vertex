@@ -928,62 +928,6 @@
       <p class="settings-row__desc" style="margin-top: 14px;"><a href="/terms" target="_blank" class="error-link">Terms of Service</a> · <a href="/privacy" target="_blank" class="error-link">Privacy Policy</a></p>
     </div>
 
-    <div class="settings-card" id="broker-card">
-      <p class="settings-row__title" style="margin-bottom: 4px;">MT4 / MT5 broker account</p>
-      <p class="settings-row__desc" id="broker-intro">Connect your real broker account to pull your actual trades in automatically. Your password is sent once to connect and is never stored here.</p>
-
-      <div id="broker-connected" class="settings-row" hidden style="margin-top: 14px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0;" id="broker-connected-label">—</p>
-          <p class="settings-row__desc" id="broker-connected-status">—</p>
-        </div>
-        <button type="button" class="btn btn--ghost" id="broker-disconnect-btn">Disconnect</button>
-      </div>
-
-      <form id="broker-connect-form" style="margin-top: 14px;" hidden>
-        <div class="journal-form__row">
-          <select id="broker-platform" class="input" required>
-            <option value="mt5">MT5</option>
-            <option value="mt4">MT4</option>
-          </select>
-          <input type="text" id="broker-login" class="input" placeholder="Account number" required inputmode="numeric">
-        </div>
-        <div style="margin-top: 10px;">
-          <input type="text" id="broker-server" class="input" placeholder="Broker server (e.g. Exness-MT5Real8)" required list="broker-server-suggestions" autocomplete="off">
-          <datalist id="broker-server-suggestions">
-            <option value="Exness-MT5Real8">
-            <option value="Exness-MT5Real">
-            <option value="Exness-MT4Real8">
-            <option value="ICMarkets-Live01">
-            <option value="ICMarketsSC-Live01">
-            <option value="XMGlobal-Real 1">
-            <option value="XMGlobal-MT5">
-            <option value="Deriv-Server">
-            <option value="FBS-Real-4">
-            <option value="HFMarketsGlobal-Live">
-            <option value="Pepperstone-Live01">
-            <option value="FXTM-Live">
-          </datalist>
-          <button type="button" id="broker-server-help-toggle" class="error-link" style="background: none; border: none; padding: 0; margin-top: 6px; font-size: 12px; cursor: pointer; display: inline-block;">Don't know your server name?</button>
-          <p id="broker-server-help" class="settings-row__desc" hidden style="margin-top: 6px;">
-            It's shown on the login screen of your MT4/MT5 app (under "Server"), or in the welcome email your broker sent when you opened the account — something like <em>BrokerName-Live01</em> or <em>BrokerName-MT5Real</em>. Start typing your broker's name above and we'll suggest common ones.
-          </p>
-        </div>
-        <div style="position: relative; margin-top: 10px;">
-          <input type="password" id="broker-password" class="input" placeholder="Broker password" required autocomplete="off" style="width: 100%;">
-          <button type="button" id="broker-password-toggle" class="error-link" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; padding: 0; font-size: 12px; cursor: pointer;">Show</button>
-        </div>
-        <p class="settings-row__desc" style="margin-top: 8px; font-size: 12px;">This is your broker's trading password (not your MT4/MT5 investor/read-only password) — it's sent once to connect and we never store it.</p>
-        <button type="submit" id="broker-connect-btn" class="scan-btn" style="margin-top: 12px;">
-          <span class="scan-btn__label">Connect account</span>
-          <span class="scan-btn__spinner" aria-hidden="true"></span>
-        </button>
-        <p id="broker-status" class="credits-status" hidden></p>
-      </form>
-
-      <p id="broker-not-ready" class="settings-row__desc" hidden style="margin-top: 14px;">Broker connections aren't turned on yet — check back soon.</p>
-    </div>
-
     <div class="settings-card">
       <div class="settings-row">
         <div>
@@ -1067,6 +1011,62 @@
 
   <!-- ============ JOURNAL (own tab) ============ -->
   <section class="view journal" id="view-journal" role="tabpanel" aria-labelledby="tab-journal" hidden>
+    <div class="settings-card" id="broker-card" style="margin-bottom: 18px;">
+      <p class="settings-row__title" style="margin-bottom: 4px;">Broker connect</p>
+      <p class="settings-row__desc" id="broker-intro">Connect your real MT4/MT5 broker account and your trades log here automatically — no typing them in by hand. Your password is sent once to connect and is never stored.</p>
+
+      <div id="broker-connected" class="settings-row" hidden style="margin-top: 14px;">
+        <div>
+          <p class="settings-row__title" style="margin-bottom: 0;" id="broker-connected-label">—</p>
+          <p class="settings-row__desc" id="broker-connected-status">—</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="broker-disconnect-btn">Disconnect</button>
+      </div>
+
+      <form id="broker-connect-form" style="margin-top: 14px;" hidden>
+        <div class="journal-form__row">
+          <select id="broker-platform" class="input" required>
+            <option value="mt5">MT5</option>
+            <option value="mt4">MT4</option>
+          </select>
+          <input type="text" id="broker-login" class="input" placeholder="Account number" required inputmode="numeric">
+        </div>
+        <div style="margin-top: 10px;">
+          <input type="text" id="broker-server" class="input" placeholder="Broker server (e.g. Exness-MT5Real8)" required list="broker-server-suggestions" autocomplete="off">
+          <datalist id="broker-server-suggestions">
+            <option value="Exness-MT5Real8">
+            <option value="Exness-MT5Real">
+            <option value="Exness-MT4Real8">
+            <option value="ICMarkets-Live01">
+            <option value="ICMarketsSC-Live01">
+            <option value="XMGlobal-Real 1">
+            <option value="XMGlobal-MT5">
+            <option value="Deriv-Server">
+            <option value="FBS-Real-4">
+            <option value="HFMarketsGlobal-Live">
+            <option value="Pepperstone-Live01">
+            <option value="FXTM-Live">
+          </datalist>
+          <button type="button" id="broker-server-help-toggle" class="error-link" style="background: none; border: none; padding: 0; margin-top: 6px; font-size: 12px; cursor: pointer; display: inline-block;">Don't know your server name?</button>
+          <p id="broker-server-help" class="settings-row__desc" hidden style="margin-top: 6px;">
+            It's shown on the login screen of your MT4/MT5 app (under "Server"), or in the welcome email your broker sent when you opened the account — something like <em>BrokerName-Live01</em> or <em>BrokerName-MT5Real</em>. Start typing your broker's name above and we'll suggest common ones.
+          </p>
+        </div>
+        <div style="position: relative; margin-top: 10px;">
+          <input type="password" id="broker-password" class="input" placeholder="Broker password" required autocomplete="off" style="width: 100%;">
+          <button type="button" id="broker-password-toggle" class="error-link" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; padding: 0; font-size: 12px; cursor: pointer;">Show</button>
+        </div>
+        <p class="settings-row__desc" style="margin-top: 8px; font-size: 12px;">This is your broker's trading password (not your MT4/MT5 investor/read-only password) — it's sent once to connect and we never store it.</p>
+        <button type="submit" id="broker-connect-btn" class="scan-btn" style="margin-top: 12px;">
+          <span class="scan-btn__label">Connect account</span>
+          <span class="scan-btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p id="broker-status" class="credits-status" hidden></p>
+      </form>
+
+      <p id="broker-not-ready" class="settings-row__desc" hidden style="margin-top: 14px;">Broker connections aren't turned on yet — check back soon.</p>
+    </div>
+
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
       Your own record
