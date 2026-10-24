@@ -1197,6 +1197,7 @@
             <th>Joined</th>
             <th>Last active</th>
             <th>Paid</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody id="users-tbody"></tbody>
@@ -1452,7 +1453,47 @@
           <td>${fmtDate(u.created_at)}</td>
           <td>${fmtDate(u.last_sign_in_at)}</td>
           <td class="users-table__paid">${escapeHtml(paidLabel)}</td>
+          <td></td>
         `;
+        const statusCell = tr.lastElementChild;
+        const banBtn = document.createElement("button");
+        banBtn.type = "button";
+        banBtn.className = "btn btn--ghost";
+        banBtn.style.padding = "4px 10px";
+        banBtn.style.fontSize = "12px";
+        if (u.banned) {
+          banBtn.textContent = "Banned — Unban";
+          banBtn.style.color = "var(--bear, #ef4444)";
+        } else {
+          banBtn.textContent = "Ban";
+        }
+        banBtn.addEventListener("click", async () => {
+          const nextBanned = !u.banned;
+          let reason = "";
+          if (nextBanned) {
+            reason = window.prompt(`Reason for banning ${u.email}? (optional)`, "") || "";
+            if (reason === null) return;
+          } else if (!window.confirm(`Unban ${u.email}?`)) {
+            return;
+          }
+          banBtn.disabled = true;
+          try {
+            const session = await Auth.getSession();
+            if (!session) return;
+            const r = await fetch("/api/admin/users/ban", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ email: u.email, banned: nextBanned, reason })
+            });
+            if (r.ok) {
+              u.banned = nextBanned;
+              renderUsersTable();
+            }
+          } catch { /* ignore */ } finally {
+            banBtn.disabled = false;
+          }
+        });
+        statusCell.appendChild(banBtn);
         tbodyEl.appendChild(tr);
       });
       tableEl.hidden = false;

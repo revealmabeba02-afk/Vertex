@@ -44,6 +44,10 @@ begin
     raise exception 'Not authenticated';
   end if;
 
+  if exists (select 1 from public.user_bans where user_id = auth.uid()) then
+    raise exception 'Account suspended';
+  end if;
+
   insert into public.free_scan_log (user_id, scan_date, count)
   values (auth.uid(), current_date, 0)
   on conflict (user_id, scan_date) do nothing;

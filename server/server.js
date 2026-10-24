@@ -2680,6 +2680,27 @@ app.post("/api/admin/credits/adjust", requireUser, async (req, res) => {
   }
 });
 
+// Ban/unban a user by email — suspends scanning without deleting their
+// data (see supabase/user_bans.sql). admin_set_user_banned() re-checks the
+// admin email independently.
+app.post("/api/admin/users/ban", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const email = String(req.body?.email || "").trim();
+  const banned = !!req.body?.banned;
+  const reason = String(req.body?.reason || "").trim().slice(0, 300);
+  if (!email) return res.status(400).json({ error: "Email is required." });
+  try {
+    await supabaseRpc("admin_set_user_banned", { p_email: email, p_banned: banned, p_reason: reason || null }, req.user.token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin ban user error:", err.message);
+    res.status(502).json({ error: err.message || "Could not update that account." });
+  }
+});
+
 // Weekly trading recap — normally sent by an in-process hourly timer (see
 // runWeeklyRecap/setInterval near app.listen below), which checks roughly
 // once an hour whether ~7 days have passed since the last send and, if so,
@@ -3588,6 +3609,12 @@ async function runAnalyze(req, res, symbol, timeframe) {
           .catch(() => {});
       }
     } catch (err) {
+      if (/suspended/i.test(err.message || "")) {
+        return res.status(403).json({
+          error: "Your account has been suspended. Contact support if you think this is a mistake.",
+          code: "account_suspended"
+        });
+      }
       return res.status(402).json({
         error: "You're out of free scans for today and have no credits left. Buy more to keep scanning.",
         code: "no_credits"
