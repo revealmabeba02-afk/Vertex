@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  try {
+    if (localStorage.getItem("vertex-theme") === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+    var savedAccent = localStorage.getItem("vertex-accent");
+    if (savedAccent) {
+      document.documentElement.setAttribute("data-accent", savedAccent);
+    }
+  } catch (e) {}
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0E0B12" />
+<title>Terms of Service · Vertex Chart Scanner</title>
+<meta name="description" content="The terms that govern use of Vertex Chart Scanner." />
+<meta name="robots" content="noindex, follow" />
+<link rel="canonical" href="https://vertex-9s4c.onrender.com/terms" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="stylesheet" href="/site.css" />
+<style>
+  .legal-wrap { max-width: 760px; margin: 0 auto; padding: 48px 20px 80px; }
+  .legal-wrap h1 { font-size: clamp(28px, 4vw, 38px); margin-bottom: 6px; }
+  .legal-wrap .legal-updated { color: var(--text-faint); font-size: 13px; margin-bottom: 36px; }
+  .legal-wrap h2 { font-size: 19px; margin: 32px 0 10px; }
+  .legal-wrap p, .legal-wrap li { color: var(--text-dim); font-size: 14.5px; line-height: 1.7; }
+  .legal-wrap ul { padding-left: 20px; margin: 8px 0 16px; }
+  .legal-wrap a { color: var(--accent); }
+  .legal-callout {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 20px 0;
+    background: color-mix(in srgb, var(--bear) 8%, transparent);
+    font-size: 14px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__pill">
+    <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 200 200" width="20" height="20">
+          <defs>
+            <linearGradient id="vb-ring-tos" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+            <linearGradient id="vb-silver-tos" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+            <linearGradient id="vb-green-tos" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+            <linearGradient id="vb-sheen-tos" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+            <radialGradient id="vb-bg-tos" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
+            <clipPath id="vb-clip-tos"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
+          </defs>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-tos)"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-tos)" stroke-width="6"/>
+          <g clip-path="url(#vb-clip-tos)">
+            <path d="M -10 40 L 90 -10 L 220 -10 L 20 120 Z" fill="url(#vb-sheen-tos)" opacity="0.55"/>
+            <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-tos)" stroke-width="24" stroke-linecap="round"/>
+            <path d="M100,152 L144,50" fill="none" stroke="url(#vb-green-tos)" stroke-width="24" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </span>
+      <span class="brand__name">Vertex Scanner</span>
+    </a>
+    <div class="topbar__actions">
+      <a class="btn btn--ghost" href="/">Home</a>
+    </div>
+  </div>
+</header>
+
+<main class="legal-wrap">
+  <h1>Terms of Service</h1>
+  <p class="legal-updated">Last updated: October 2026</p>
+
+  <p>These terms govern your use of Vertex Chart Scanner ("Vertex", "we", "us"), operated as part of Shadow FX. By creating an account or using Vertex, you agree to these terms.</p>
+
+  <div class="legal-callout">
+    Vertex provides technical, AI-generated analysis of chart data for educational purposes only. It is not financial advice, not a recommendation to buy or sell any instrument, and not a guarantee of any market outcome. Trading forex, gold, indices and crypto carries a high risk of loss. You are solely responsible for your own trading decisions.
+  </div>
+
+  <h2>1. What Vertex is</h2>
+  <p>Vertex is a tool that reads a forex, metals, index or crypto pair you enter and returns an AI-generated read of market structure, bias, key levels and potential trade zones. It also offers a trade journal, scan history, and optional MT4/MT5 broker connectivity so you can track real trades alongside your scans.</p>
+
+  <h2>2. Accounts</h2>
+  <ul>
+    <li>You must provide a valid email address to create an account and are responsible for keeping your password secure.</li>
+    <li>You must be legally permitted to trade the instruments you analyze in your jurisdiction.</li>
+    <li>One account per person. Accounts are not transferable.</li>
+  </ul>
+
+  <h2>3. Credits and payments</h2>
+  <ul>
+    <li>New accounts receive a limited number of free scans. Additional scans are purchased as credit bundles via Whop or Binance Pay.</li>
+    <li>Credits do not expire but have no cash value and cannot be transferred between accounts or redeemed for cash.</li>
+    <li>All sales are final. Refunds are handled on a case-by-case basis — contact support if a payment didn't credit correctly.</li>
+  </ul>
+
+  <h2>4. Broker connections</h2>
+  <p>Connecting an MT4/MT5 account is optional and entirely your choice. Vertex uses a third-party connectivity provider (MetaApi.cloud) to establish this connection; your broker password is sent directly to that provider and is never stored by Vertex. You can disconnect your broker account at any time from Settings.</p>
+
+  <h2>5. Acceptable use</h2>
+  <p>You agree not to:</p>
+  <ul>
+    <li>Attempt to abuse, circumvent, or exploit the free-scan limits, credit system, or referral program.</li>
+    <li>Share your account with others or use automated means to access Vertex outside of the features it provides.</li>
+    <li>Use Vertex's output as the sole basis for any trading decision — it is one input among many, not a substitute for your own judgment or professional advice.</li>
+    <li>Attempt to reverse-engineer, scrape, or resell Vertex's analysis output at scale without permission.</li>
+  </ul>
+
+  <h2>6. No financial advice</h2>
+  <p>Nothing in Vertex constitutes financial, investment, legal or tax advice. We are not a registered investment advisor or broker. Past performance of any strategy or analysis shown is not indicative of future results.</p>
+
+  <h2>7. Limitation of liability</h2>
+  <p>Vertex is provided "as is" without warranties of any kind. We are not liable for any trading losses, missed opportunities, or damages arising from your use of the service, to the maximum extent permitted by law.</p>
+
+  <h2>8. Account termination</h2>
+  <p>You may delete your account at any time from Settings. We may suspend or terminate accounts that violate these terms, attempt to defraud the credit or payment system, or abuse the service.</p>
+
+  <h2>9. Changes to these terms</h2>
+  <p>We may update these terms from time to time. Continued use of Vertex after a change means you accept the updated terms.</p>
+
+  <h2>10. Contact</h2>
+  <p>Questions about these terms? Reach us through the in-app support form at <a href="/app#help">Vertex → Help</a>.</p>
+</main>
+
+</body>
+</html>

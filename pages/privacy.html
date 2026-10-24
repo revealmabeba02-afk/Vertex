@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  try {
+    if (localStorage.getItem("vertex-theme") === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+    var savedAccent = localStorage.getItem("vertex-accent");
+    if (savedAccent) {
+      document.documentElement.setAttribute("data-accent", savedAccent);
+    }
+  } catch (e) {}
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0E0B12" />
+<title>Privacy Policy · Vertex Chart Scanner</title>
+<meta name="description" content="How Vertex Chart Scanner collects, uses and protects your data." />
+<meta name="robots" content="noindex, follow" />
+<link rel="canonical" href="https://vertex-9s4c.onrender.com/privacy" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="stylesheet" href="/site.css" />
+<style>
+  .legal-wrap { max-width: 760px; margin: 0 auto; padding: 48px 20px 80px; }
+  .legal-wrap h1 { font-size: clamp(28px, 4vw, 38px); margin-bottom: 6px; }
+  .legal-wrap .legal-updated { color: var(--text-faint); font-size: 13px; margin-bottom: 36px; }
+  .legal-wrap h2 { font-size: 19px; margin: 32px 0 10px; }
+  .legal-wrap p, .legal-wrap li { color: var(--text-dim); font-size: 14.5px; line-height: 1.7; }
+  .legal-wrap ul { padding-left: 20px; margin: 8px 0 16px; }
+  .legal-wrap a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__pill">
+    <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 200 200" width="20" height="20">
+          <defs>
+            <linearGradient id="vb-ring-pp" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+            <linearGradient id="vb-silver-pp" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+            <linearGradient id="vb-green-pp" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+            <linearGradient id="vb-sheen-pp" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+            <radialGradient id="vb-bg-pp" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
+            <clipPath id="vb-clip-pp"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
+          </defs>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-pp)"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-pp)" stroke-width="6"/>
+          <g clip-path="url(#vb-clip-pp)">
+            <path d="M -10 40 L 90 -10 L 220 -10 L 20 120 Z" fill="url(#vb-sheen-pp)" opacity="0.55"/>
+            <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-pp)" stroke-width="24" stroke-linecap="round"/>
+            <path d="M100,152 L144,50" fill="none" stroke="url(#vb-green-pp)" stroke-width="24" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </span>
+      <span class="brand__name">Vertex Scanner</span>
+    </a>
+    <div class="topbar__actions">
+      <a class="btn btn--ghost" href="/">Home</a>
+    </div>
+  </div>
+</header>
+
+<main class="legal-wrap">
+  <h1>Privacy Policy</h1>
+  <p class="legal-updated">Last updated: October 2026</p>
+
+  <p>Vertex Chart Scanner ("Vertex", "we", "us") is operated as part of Shadow FX. This page explains what information we collect when you use Vertex, how we use it, and the choices you have.</p>
+
+  <h2>1. Information we collect</h2>
+  <ul>
+    <li><strong>Account information:</strong> your email address and password (handled by our authentication provider, Supabase — we never see or store your raw password).</li>
+    <li><strong>Usage data:</strong> the pairs and timeframes you scan, your scan history, your trade journal entries, and your credit balance and purchase history.</li>
+    <li><strong>Broker connection (optional):</strong> if you choose to connect an MT4/MT5 account, we store your account number, server name and connection status. Your broker password is sent once to our connectivity provider (MetaApi.cloud) to establish the connection and is never stored in our own database.</li>
+    <li><strong>Support messages:</strong> anything you send us through the in-app support or feedback forms.</li>
+    <li><strong>Payment data:</strong> if you buy credits, our payment processors (Whop or Binance Pay) handle your payment details directly — we never see or store your card or wallet details, only the amount paid and the resulting credits.</li>
+  </ul>
+
+  <h2>2. How we use your information</h2>
+  <ul>
+    <li>To provide and operate the scanning, journal, history and credits features of Vertex.</li>
+    <li>To respond to support requests and feedback.</li>
+    <li>To send you account-related emails: password resets, purchase receipts, and (if you're active) an optional weekly recap of your trading activity.</li>
+    <li>To detect and prevent abuse of free scans, fraudulent payments, or other misuse of the service.</li>
+  </ul>
+
+  <h2>3. What we don't do</h2>
+  <ul>
+    <li>We don't sell your personal data to third parties.</li>
+    <li>We don't store your broker account password.</li>
+    <li>We don't access your real trading account beyond what's needed to display your own connected account's status, if you choose to connect one.</li>
+  </ul>
+
+  <h2>4. Third-party services</h2>
+  <p>Vertex relies on a small number of third-party services to operate: Supabase (authentication and database), Render (hosting), Resend (transactional email), Whop and Binance Pay (payments), MetaApi.cloud (optional broker connectivity), and an AI chart-analysis provider for scan results. Each of these processes only the data necessary for their function.</p>
+
+  <h2>5. Your rights</h2>
+  <p>You can export a copy of your data (scans, journal, support history) at any time from Settings. You can delete your account and all associated data at any time from Settings → Delete account — this is permanent and cannot be undone. You can also disconnect a broker account at any time, which also removes it from our connectivity provider.</p>
+
+  <h2>6. Data retention</h2>
+  <p>We keep your data for as long as your account is active. If you delete your account, your data is permanently removed, with the exception of records we're legally required to retain (such as payment records for tax/accounting purposes).</p>
+
+  <h2>7. Contact</h2>
+  <p>Questions about this policy or your data? Reach us through the in-app support form at <a href="/app#help">Vertex → Help</a>.</p>
+</main>
+
+<script>document.querySelectorAll("#year").forEach((el) => el.textContent = new Date().getFullYear());</script>
+</body>
+</html>
