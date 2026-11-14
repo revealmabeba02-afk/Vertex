@@ -2818,6 +2818,24 @@ app.get("/api/admin/orders", requireUser, async (req, res) => {
   }
 });
 
+// Who actually paid: every paid credit order, newest first, with the buyer's
+// email, what they bought and how the payment arrived (Whop webhook or marked
+// paid by hand). Read-only — the Pending payments card above is where money
+// is confirmed. Needs supabase/admin_buyers.sql.
+app.get("/api/admin/buyers", requireUser, async (req, res) => {
+  if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const buyers = await supabaseRpc("admin_list_buyers", { p_limit: 200 }, req.user.token);
+    res.json({ buyers: Array.isArray(buyers) ? buyers : [] });
+  } catch (err) {
+    console.error("Admin buyers error:", err.message);
+    res.status(502).json({ error: "Could not load buyers. Has supabase/admin_buyers.sql been run?" });
+  }
+});
+
 app.post("/api/admin/orders/:id/mark-paid", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {

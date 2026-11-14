@@ -117,7 +117,7 @@
 }
 
 .lhero__badge {
-  filter: drop-shadow(0 0 30px color-mix(in srgb, #4FE3A0 45%, transparent));
+  filter: drop-shadow(0 0 30px color-mix(in srgb, var(--action) 45%, transparent));
 }
 
 .lhero__wordmark {
@@ -128,7 +128,7 @@
   letter-spacing: 0.08em;
   color: var(--text);
 }
-.lhero__wordmark span { color: #4FE3A0; }
+.lhero__wordmark span { color: var(--action); }
 
 .lhero__tagline {
   margin: 0;
@@ -145,7 +145,7 @@
   display: inline-block;
   width: 24px;
   height: 1.5px;
-  background: linear-gradient(90deg, transparent, #4FE3A0, transparent);
+  background: linear-gradient(90deg, transparent, var(--action), transparent);
 }
 
 .lhero__title {
@@ -736,8 +736,8 @@
   bottom: 88px;
   transform: translateX(-50%);
   z-index: 60;
-  background: var(--bull, #39D98A);
-  color: #06241a;
+  background: var(--bull);
+  color: var(--action-ink);
   font-weight: 600;
   font-size: 14px;
   padding: 12px 18px;

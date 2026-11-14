@@ -32,7 +32,7 @@
     { selector: "#symbol-input", title: "Pick a pair", body: "Type any pair or symbol — EURUSD, XAUUSD, US30, NAS100 — whatever you trade." },
     { selector: ".scanform", title: "Choose your timeframe", body: "Set the timeframe you scan on, then hit scan. Vertex reads live price bars, no chart screenshot needed." },
     { selector: "#scan-btn", title: "Get your plan", body: "In about 30 seconds you'll get bias, structure, entries, stop loss and take profit — a real trade plan, not just a signal." },
-    { selector: ".sidebar, .mobile-topbar", title: "Everything else lives here", body: "History, News, Settings and Help are all in the menu. Your free scans reset every day." }
+    { selector: ".sidebar, .mobile-topbar", title: "Everything else lives here", body: "History, Credits, Settings and Help are all in the menu. Your free scans reset every day." }
   ];
 
   function startOnboardTour() {

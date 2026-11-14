@@ -13,8 +13,8 @@
   :root{
     --bg-0:#02100a;
     --bg-1:#06201432;
-    --green:#4FE3A0;
-    --green-deep:#17A76B;
+    --green:#18F0F0;
+    --green-deep:#0FA3AE;
     --ink:#F7FFFA;
     --ink-dim:#A9BFB5;
   }
@@ -97,7 +97,7 @@
     gap:10px;
     padding:14px 30px;
     border-radius:999px;
-    background:linear-gradient(135deg,#4FE3A0,#17A76B);
+    background:linear-gradient(135deg,#18F0F0,#0FA3AE);
     color:#06130D;
     font-weight:700;
     font-size:15px;
@@ -134,7 +134,7 @@
         <stop offset="48%" stop-color="#061A11"/>
         <stop offset="100%" stop-color="#010705"/>
       </radialGradient>
-      <linearGradient id="sp-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7EE8B9"/><stop offset="100%" stop-color="#17A76B"/></linearGradient>
+      <linearGradient id="sp-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7EE8B9"/><stop offset="100%" stop-color="#0FA3AE"/></linearGradient>
       <linearGradient id="sp-fade-v" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
         <stop offset="35%" stop-color="#fff" stop-opacity="0.55"/>
@@ -143,17 +143,17 @@
       </linearGradient>
       <mask id="sp-mask"><rect x="0" y="0" width="1000" height="1000" fill="url(#sp-fade-v)"/></mask>
       <linearGradient id="sp-diag" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#4FE3A0" stop-opacity="0.16"/>
-        <stop offset="100%" stop-color="#4FE3A0" stop-opacity="0"/>
+        <stop offset="0%" stop-color="#18F0F0" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#18F0F0" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <rect width="1000" height="1000" fill="url(#sp-bg)"/>
 
     <!-- angular diagonal accent panels, top-right and bottom-left -->
     <polygon points="650,0 1000,0 1000,420" fill="url(#sp-diag)"/>
-    <polygon points="700,0 1000,0 1000,260" fill="none" stroke="#4FE3A0" stroke-opacity="0.18" stroke-width="2"/>
+    <polygon points="700,0 1000,0 1000,260" fill="none" stroke="#18F0F0" stroke-opacity="0.18" stroke-width="2"/>
     <polygon points="0,560 0,1000 380,1000" fill="url(#sp-diag)" transform="rotate(180 500 500)"/>
-    <polygon points="0,740 0,1000 260,1000" fill="none" stroke="#4FE3A0" stroke-opacity="0.18" stroke-width="2"/>
+    <polygon points="0,740 0,1000 260,1000" fill="none" stroke="#18F0F0" stroke-opacity="0.18" stroke-width="2"/>
 
     <g mask="url(#sp-mask)" opacity="0.85">
       <!-- generated ascending candlestick band, stretched across the lower two-thirds -->
@@ -165,28 +165,28 @@
   <main class="splash__wrap">
     <svg class="splash__badge" viewBox="0 0 200 200" aria-hidden="true">
       <defs>
-        <linearGradient id="vb-ring-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+        <linearGradient id="vb-ring-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E6FFFF"/><stop offset="35%" stop-color="#18F0F0"/><stop offset="70%" stop-color="#0B6B76"/><stop offset="100%" stop-color="#18F0F0"/></linearGradient>
         <linearGradient id="vb-silver-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
-        <linearGradient id="vb-green-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+        <linearGradient id="vb-green-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#A8FFFF"/><stop offset="35%" stop-color="#18F0F0"/><stop offset="75%" stop-color="#0FA3AE"/><stop offset="100%" stop-color="#0A7C86"/></linearGradient>
         <linearGradient id="vb-sheen-splash" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-        <radialGradient id="vb-bg-splash" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
-        <radialGradient id="vb-outerglow-splash" cx="50%" cy="38%" r="65%"><stop offset="0%" stop-color="#4FE3A0" stop-opacity="0.5"/><stop offset="60%" stop-color="#4FE3A0" stop-opacity="0.1"/><stop offset="100%" stop-color="#4FE3A0" stop-opacity="0"/></radialGradient>
+        <radialGradient id="vb-bg-splash" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#061817"/><stop offset="100%" stop-color="#000605"/></radialGradient>
+        <radialGradient id="vb-outerglow-splash" cx="50%" cy="38%" r="65%"><stop offset="0%" stop-color="#18F0F0" stop-opacity="0.5"/><stop offset="60%" stop-color="#18F0F0" stop-opacity="0.1"/><stop offset="100%" stop-color="#18F0F0" stop-opacity="0"/></radialGradient>
         <filter id="vb-blur-splash" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
         <clipPath id="vb-clip-splash"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
       </defs>
       <rect x="-20" y="-20" width="240" height="240" fill="url(#vb-outerglow-splash)"/>
       <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-splash)"/>
       <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-splash)" stroke-width="5"/>
-      <rect x="11" y="11" width="178" height="178" rx="38" fill="none" stroke="#4FE3A0" stroke-opacity="0.25" stroke-width="1"/>
+      <rect x="11" y="11" width="178" height="178" rx="38" fill="none" stroke="#18F0F0" stroke-opacity="0.25" stroke-width="1"/>
       <g clip-path="url(#vb-clip-splash)">
-<g opacity="0.55" stroke="#4FE3A0" stroke-width="1.2" fill="none"><path d="M20,30 h25 v15 h20"/><path d="M20,170 h30 v-20 h15"/><path d="M180,40 h-22 v12 h-18"/><path d="M180,160 h-28 v-18 h-12"/><circle cx="45" cy="30" r="2" fill="#4FE3A0"/><circle cx="155" cy="40" r="2" fill="#4FE3A0"/><circle cx="50" cy="170" r="2" fill="#4FE3A0"/><circle cx="152" cy="160" r="2" fill="#4FE3A0"/></g>
+<g opacity="0.55" stroke="#18F0F0" stroke-width="1.2" fill="none"><path d="M20,30 h25 v15 h20"/><path d="M20,170 h30 v-20 h15"/><path d="M180,40 h-22 v12 h-18"/><path d="M180,160 h-28 v-18 h-12"/><circle cx="45" cy="30" r="2" fill="#18F0F0"/><circle cx="155" cy="40" r="2" fill="#18F0F0"/><circle cx="50" cy="170" r="2" fill="#18F0F0"/><circle cx="152" cy="160" r="2" fill="#18F0F0"/></g>
         <path d="M -10 40 L 90 -10 L 220 -10 L 20 120 Z" fill="url(#vb-sheen-splash)" opacity="0.5"/>
-        <ellipse cx="100" cy="108" rx="70" ry="47" fill="none" stroke="#4FE3A0" stroke-width="7" opacity="0.35" filter="url(#vb-blur-splash)"/>
+        <ellipse cx="100" cy="108" rx="70" ry="47" fill="none" stroke="#18F0F0" stroke-width="7" opacity="0.35" filter="url(#vb-blur-splash)"/>
         <ellipse cx="100" cy="108" rx="70" ry="47" fill="none" stroke="url(#vb-ring-splash)" stroke-width="2.5"/>
-        <rect x="40" y="94" width="7" height="36" rx="1.8" fill="url(#vb-green-splash)"/><line x1="43.5" y1="83" x2="43.5" y2="141" stroke="#17A76B" stroke-width="1.6"/>
-        <rect x="55" y="74" width="7" height="50" rx="1.8" fill="url(#vb-green-splash)"/><line x1="58.5" y1="63" x2="58.5" y2="135" stroke="#17A76B" stroke-width="1.6"/>
-        <rect x="137" y="100" width="7" height="30" rx="1.8" fill="url(#vb-green-splash)"/><line x1="140.5" y1="89" x2="140.5" y2="139" stroke="#17A76B" stroke-width="1.6"/>
-        <rect x="151" y="68" width="7" height="54" rx="1.8" fill="url(#vb-green-splash)"/><line x1="154.5" y1="57" x2="154.5" y2="131" stroke="#17A76B" stroke-width="1.6"/>
+        <rect x="40" y="94" width="7" height="36" rx="1.8" fill="url(#vb-green-splash)"/><line x1="43.5" y1="83" x2="43.5" y2="141" stroke="#0FA3AE" stroke-width="1.6"/>
+        <rect x="55" y="74" width="7" height="50" rx="1.8" fill="url(#vb-green-splash)"/><line x1="58.5" y1="63" x2="58.5" y2="135" stroke="#0FA3AE" stroke-width="1.6"/>
+        <rect x="137" y="100" width="7" height="30" rx="1.8" fill="url(#vb-green-splash)"/><line x1="140.5" y1="89" x2="140.5" y2="139" stroke="#0FA3AE" stroke-width="1.6"/>
+        <rect x="151" y="68" width="7" height="54" rx="1.8" fill="url(#vb-green-splash)"/><line x1="154.5" y1="57" x2="154.5" y2="131" stroke="#0FA3AE" stroke-width="1.6"/>
         <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-splash)" stroke-width="24" stroke-linecap="round"/>
         <path d="M100,152 L144,50" fill="none" stroke="url(#vb-green-splash)" stroke-width="24" stroke-linecap="round"/>
       </g>
@@ -246,12 +246,12 @@
     var wickTop = bodyTop - (4 + rand() * 7);
     var wickBot = bodyTop + bodyH + (4 + rand() * 7);
     var bw = colW * 0.4;
-    var fill = (j % 5 === 0) ? '#2E8F62' : 'url(#sp-green)';
+    var fill = (j % 5 === 0) ? '#0E7C88' : 'url(#sp-green)';
 
     var wick = document.createElementNS(svgns, 'line');
     wick.setAttribute('x1', cx); wick.setAttribute('x2', cx);
     wick.setAttribute('y1', wickTop); wick.setAttribute('y2', wickBot);
-    wick.setAttribute('stroke', '#2DAE78');
+    wick.setAttribute('stroke', '#12B8C4');
     wick.setAttribute('stroke-width', '1.8');
     g.appendChild(wick);
 

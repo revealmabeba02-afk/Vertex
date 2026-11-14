@@ -14,7 +14,7 @@
 </script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0E0B12" />
+<meta name="theme-color" content="#001312" />
 <title>Admin · Vertex Chart Scanner</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -106,6 +106,7 @@
   .users-table tr:last-child td { border-bottom: 0; }
   .users-table td.users-table__name { color: var(--text); font-weight: 600; }
   .users-table td.users-table__paid { color: var(--text-faint); }
+  .users-table__email { color: var(--text-faint); font-size: 12.5px; }
   .users-empty {
     padding: 28px 22px;
     text-align: center;
@@ -630,9 +631,9 @@
   }
   .command-rail a:active { transform: translateX(3px) scale(0.985); }
   .command-rail a.is-active {
-    color: #0a0d12;
-    background: var(--bull, #3ddc84);
-    border-color: var(--bull, #3ddc84);
+    color: #02100F;
+    background: var(--bull, #18F0F0);
+    border-color: var(--bull, #18F0F0);
     font-weight: 700;
     box-shadow: 0 0 22px color-mix(in srgb, var(--bull) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--bull) 60%, transparent) inset;
   }
@@ -924,11 +925,11 @@
       <span class="brand__mark" aria-hidden="true">
         <svg viewBox="0 0 200 200" width="20" height="20">
           <defs>
-            <linearGradient id="vb-ring-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAFBF2"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="70%" stop-color="#1E7A52"/><stop offset="100%" stop-color="#4FE3A0"/></linearGradient>
+            <linearGradient id="vb-ring-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E6FFFF"/><stop offset="35%" stop-color="#18F0F0"/><stop offset="70%" stop-color="#0B6B76"/><stop offset="100%" stop-color="#18F0F0"/></linearGradient>
             <linearGradient id="vb-silver-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
-            <linearGradient id="vb-green-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B9FBDB"/><stop offset="35%" stop-color="#4FE3A0"/><stop offset="75%" stop-color="#17A76B"/><stop offset="100%" stop-color="#0C7C4F"/></linearGradient>
+            <linearGradient id="vb-green-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#A8FFFF"/><stop offset="35%" stop-color="#18F0F0"/><stop offset="75%" stop-color="#0FA3AE"/><stop offset="100%" stop-color="#0A7C86"/></linearGradient>
             <linearGradient id="vb-sheen-admin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/><stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.1"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-            <radialGradient id="vb-bg-admin" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#121A17"/><stop offset="100%" stop-color="#020503"/></radialGradient>
+            <radialGradient id="vb-bg-admin" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#061817"/><stop offset="100%" stop-color="#000605"/></radialGradient>
             <clipPath id="vb-clip-admin"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
           </defs>
           <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-admin)"/>
@@ -967,6 +968,7 @@
     <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
     <a href="#health" data-panel-link="health" title="Health">Health</a>
     <a href="#orders" data-panel-link="orders" title="Orders">Orders</a>
+    <a href="#buyers" data-panel-link="buyers" title="Buyers">Buyers</a>
     <a href="#stats" data-panel-link="stats" title="Stats">Stats</a>
     <a href="#analytics" data-panel-link="analytics" title="Usage analytics">Analytics</a>
     <a href="#users" data-panel-link="users" title="Users">Users</a>
@@ -1018,7 +1020,7 @@
         <div class="q2-card__title">Post a video</div>
         <div class="q2-card__desc">Pick a video from your phone and post it straight to YouTube.</div>
       </div>
-      <a href="/api/admin/videos/upload-raw-form" style="flex-shrink:0;padding:10px 18px;border-radius:10px;background:var(--bull,#3ddc84);color:#0a0d12;font-weight:700;text-decoration:none;white-space:nowrap;">Open</a>
+      <a href="/api/admin/videos/upload-raw-form" style="flex-shrink:0;padding:10px 18px;border-radius:10px;background:var(--bull,#18F0F0);color:#02100F;font-weight:700;text-decoration:none;white-space:nowrap;">Open</a>
     </div>
   </div>
 </div>
@@ -1103,6 +1105,43 @@
     <div class="users-card__head">Pending payments</div>
     <div id="orders-list"></div>
     <div class="users-empty" id="orders-empty">Loading…</div>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="buyers">
+  <div class="users-card" id="sec-buyers">
+    <div class="users-card__head">Buyers</div>
+    <p class="users-card__sub" style="margin: -8px 0 14px; color: var(--text-faint); font-size: 13px;">Everyone who has actually paid for credits, newest first. Needs <code>supabase/admin_buyers.sql</code>.</p>
+    <div class="admin-stats" id="buyers-summary" hidden>
+      <div class="stat-card">
+        <div class="stat-card__label">Buyers</div>
+        <div class="stat-card__value" id="buyers-count">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__label">Total paid</div>
+        <div class="stat-card__value" id="buyers-revenue">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__label">Scans sold</div>
+        <div class="stat-card__value" id="buyers-scans">—</div>
+      </div>
+    </div>
+    <div class="users-table-wrap">
+      <table class="users-table" id="buyers-table" hidden>
+        <thead>
+          <tr>
+            <th>Buyer</th>
+            <th>Bundle</th>
+            <th>Scans</th>
+            <th>Paid</th>
+            <th>Via</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody id="buyers-tbody"></tbody>
+      </table>
+      <div class="users-empty" id="buyers-empty">Loading…</div>
+    </div>
   </div>
 </div>
 
@@ -1566,6 +1605,7 @@
     wireQ2YoutubeInsight(authHeader);
     wireQ2Chat(authHeader);
     loadOrders(authHeader);
+    loadBuyers(authHeader);
     loadPurchasePatterns(authHeader);
     loadMonthComparison(authHeader);
     loadAnalytics(authHeader);
@@ -1914,6 +1954,62 @@
           });
         });
       } catch {
+        emptyEl.textContent = "Could not reach the server.";
+      }
+    }
+
+    // Who actually paid. Read-only, built from paid credit_orders rows, so it
+    // covers both Whop webhooks and orders marked paid by hand.
+    async function loadBuyers(authHeader) {
+      const tableEl = document.getElementById("buyers-table");
+      const tbody = document.getElementById("buyers-tbody");
+      const emptyEl = document.getElementById("buyers-empty");
+      const summaryEl = document.getElementById("buyers-summary");
+      try {
+        const res = await fetch("/api/admin/buyers", { headers: authHeader });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          emptyEl.hidden = false;
+          emptyEl.textContent = (data && data.error) || "Could not load buyers.";
+          return;
+        }
+        const buyers = (data && Array.isArray(data.buyers)) ? data.buyers : [];
+        if (buyers.length === 0) {
+          emptyEl.hidden = false;
+          emptyEl.textContent = "No paid orders yet.";
+          return;
+        }
+
+        const totalRevenue = buyers.reduce((sum, b) => sum + (Number(b.amount_usd) || 0), 0);
+        const totalScans = buyers.reduce((sum, b) => sum + (Number(b.scans) || 0), 0);
+        const uniqueBuyers = new Set(buyers.map((b) => String(b.email || "").toLowerCase())).size;
+        document.getElementById("buyers-count").textContent = String(uniqueBuyers);
+        document.getElementById("buyers-revenue").textContent = "$" + totalRevenue.toFixed(2);
+        document.getElementById("buyers-scans").textContent = String(totalScans);
+        summaryEl.hidden = false;
+
+        emptyEl.hidden = true;
+        tbody.innerHTML = "";
+        buyers.forEach((b) => {
+          const when = (() => { try { return new Date(b.paid_at).toLocaleString(); } catch { return ""; } })();
+          const via = String(b.source || "").toLowerCase() === "whop" ? "Whop" : "Manual";
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>
+              <div>${escapeHtml(b.full_name || "—")}</div>
+              <div class="users-table__email">${escapeHtml(b.email || "")}</div>
+            </td>
+            <td>${escapeHtml(b.bundle || "—")}</td>
+            <td>${escapeHtml(String(b.scans ?? "—"))}</td>
+            <td>$${Number(b.amount_usd || 0).toFixed(2)}</td>
+            <td>${escapeHtml(via)}</td>
+            <td>${escapeHtml(when)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+        tableEl.hidden = false;
+      } catch {
+        emptyEl.hidden = false;
         emptyEl.textContent = "Could not reach the server.";
       }
     }
