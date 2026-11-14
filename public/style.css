@@ -313,7 +313,9 @@ body::after {
   overflow-y: auto;
 }
 
-.sidenav { flex: 1 1 auto; min-height: 0; }
+/* Nav sits at the bottom of the sidebar (above the credits/footer block),
+   with the empty space kept at the top under the brand. */
+.sidenav { margin-top: auto; flex: 0 0 auto; min-height: 0; padding-top: 12px; border-top: 1px solid var(--border-soft); }
 
 .sidebar__top {
   display: flex;
@@ -390,7 +392,8 @@ body::after {
 .navpill.is-active::before { background: var(--accent); opacity: 1; }
 
 .sidebar__foot {
-  margin-top: auto;
+  margin-top: 0;
+  padding-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -936,6 +939,37 @@ body::after {
   letter-spacing: 0.04em;
   color: var(--text-faint);
 }
+
+/* Motivational line under the scan form. Quiet by design: one quote, one
+   attribution, fading to the next instead of shouting for attention. */
+.motivation {
+  margin: 26px auto 0;
+  max-width: 56ch;
+  text-align: center;
+  transition: opacity 0.45s ease;
+}
+.motivation.is-fading { opacity: 0; }
+
+.motivation__quote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.motivation__quote::before { content: "“"; color: var(--accent); }
+.motivation__quote::after { content: "”"; color: var(--accent); }
+
+.motivation__author {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.motivation__author::before { content: "— "; }
 
 /* ===========================================================
    Output card

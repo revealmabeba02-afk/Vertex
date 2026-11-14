@@ -461,6 +461,53 @@
   document.documentElement.removeAttribute("data-sidebar");
 
   // --------------------------------------------------------------
+  // Motivating line under the scan form. One quote at a time, starting
+  // from today's date so it stays the same all day, easing to the next
+  // every 20 seconds. Decoration only — never blocks the scanner.
+  // --------------------------------------------------------------
+  const MOTIVATION = [
+    ["The market is a device for transferring money from the impatient to the patient.", "Warren Buffett"],
+    ["Amateurs think about how much money they can make. Professionals think about how much money they could lose.", "Jack Schwager"],
+    ["The goal of a successful trader is to make the best trades. Money is secondary.", "Alexander Elder"],
+    ["Risk comes from not knowing what you're doing.", "Warren Buffett"],
+    ["Cut your losses quickly, let your profits run.", "David Ricardo"],
+    ["If you can't take a small loss, sooner or later you will take the mother of all losses.", "Ed Seykota"],
+    ["The elements of good trading are: cutting losses, cutting losses, and cutting losses.", "Ed Seykota"],
+    ["In trading, the impossible happens about twice a year.", "Ed Seykota"],
+    ["The hard work in trading comes in the preparation. The actual process of trading should be effortless.", "Jack Schwager"],
+    ["There is no single market secret to discover, no single correct way to trade.", "Michael Steinhardt"],
+    ["Price is what you pay. Value is what you get.", "Warren Buffett"],
+    ["Discipline is the bridge between goals and accomplishment.", "Jim Rohn"]
+  ];
+
+  function startMotivation() {
+    const wrap = document.getElementById("motivation");
+    const quoteEl = document.getElementById("motivation-quote");
+    const authorEl = document.getElementById("motivation-author");
+    if (!wrap || !quoteEl || !authorEl) return;
+
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    let index = dayOfYear % MOTIVATION.length;
+
+    function render() {
+      const entry = MOTIVATION[index];
+      quoteEl.textContent = entry[0];
+      authorEl.textContent = entry[1];
+    }
+    render();
+
+    setInterval(() => {
+      wrap.classList.add("is-fading");
+      setTimeout(() => {
+        index = (index + 1) % MOTIVATION.length;
+        render();
+        wrap.classList.remove("is-fading");
+      }, 450);
+    }, 20000);
+  }
+  startMotivation();
+
+  // --------------------------------------------------------------
   // Mobile nav drawer: the sidebar becomes an off-canvas panel below the
   // 760px breakpoint (see style.css), opened by the hamburger in the
   // slim mobile top bar and closed by the backdrop, a nav tap, or Esc.
