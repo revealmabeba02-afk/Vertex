@@ -315,56 +315,12 @@ body::after {
 
 .sidenav { flex: 1 1 auto; min-height: 0; }
 
-/* Collapsed state: sidebar slides out, a small pill button opens it again. */
-:root[data-sidebar="collapsed"] .sidebar {
-  margin-left: -220px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-:root[data-sidebar="collapsed"] .sidebar-open-btn {
-  display: grid;
-}
-
-.sidebar-open-btn {
-  display: none;
-  position: fixed;
-  top: 18px;
-  left: 18px;
-  z-index: 20;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--text);
-  cursor: pointer;
-}
-.sidebar-open-btn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
-
 .sidebar__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-
-.sidebar-close-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.sidebar-close-btn:hover { color: var(--text); background: var(--panel-alt); border-color: var(--border-soft); }
 
 .brand {
   display: flex;
@@ -1010,7 +966,6 @@ body::after {
    centered edge-to-edge. body.scanning is toggled in app.js. */
 body.scanning { overflow: hidden; position: fixed; inset: 0; width: 100%; height: 100%; }
 body.scanning .sidebar,
-body.scanning .sidebar-open-btn { display: none; }
 body.scanning .output {
   position: fixed;
   inset: 0;
@@ -2641,7 +2596,6 @@ body.scanning .scan-hud {
   .app-shell { flex-direction: column; max-width: 100vw; }
 
   .mobile-topbar { display: flex; }
-  .sidebar-open-btn { display: none !important; }
 
   .page { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
 

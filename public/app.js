@@ -452,29 +452,13 @@
   }
 
   // --------------------------------------------------------------
-  // Sidebar collapse: "kick it" open/closed, remembered across visits.
+  // Sidebar: always visible on desktop now (the old collapse button and its
+  // top-left reopen hamburger were removed). Clear any "collapsed" state an
+  // older build saved, so the menu can't come back hidden with no way to
+  // open it again.
   // --------------------------------------------------------------
-  const SIDEBAR_KEY = "vertex-sidebar";
-  const sidebarOpenBtn = document.getElementById("sidebar-open-btn");
-  const sidebarCloseBtn = document.getElementById("sidebar-close-btn");
-
-  function setSidebar(collapsed) {
-    if (collapsed) {
-      document.documentElement.setAttribute("data-sidebar", "collapsed");
-    } else {
-      document.documentElement.removeAttribute("data-sidebar");
-    }
-    if (sidebarOpenBtn) sidebarOpenBtn.hidden = !collapsed;
-    try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "collapsed" : "open"); } catch {}
-  }
-
-  if (sidebarOpenBtn) {
-    sidebarOpenBtn.hidden = document.documentElement.getAttribute("data-sidebar") !== "collapsed";
-    sidebarOpenBtn.addEventListener("click", () => setSidebar(false));
-  }
-  if (sidebarCloseBtn) {
-    sidebarCloseBtn.addEventListener("click", () => setSidebar(true));
-  }
+  try { localStorage.removeItem("vertex-sidebar"); } catch {}
+  document.documentElement.removeAttribute("data-sidebar");
 
   // --------------------------------------------------------------
   // Mobile nav drawer: the sidebar becomes an off-canvas panel below the
