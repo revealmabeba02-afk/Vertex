@@ -1195,7 +1195,7 @@ const analyzeLimiter = rateLimit({
 // --- Routes -------------------------------------------------------------
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, provider: "fxsynapse", accounts: SUPABASE_READY, credits: CREDITS_READY });
+  res.json({ ok: true, provider: "vertex-feed", accounts: SUPABASE_READY, credits: CREDITS_READY });
 });
 
 // --- FXSynapse response shaping ------------------------------------------
@@ -3059,7 +3059,7 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
     ]);
     const checks = [
       { name: "Accounts & database", ...accounts },
-      { name: "Scan provider (FXSynapse)", ...scanProvider },
+      { name: "Scan provider", ...scanProvider },
       { name: "Payments configured", ...paymentsConfigured },
       { name: "Payments network (Binance)", ...paymentsReachable },
       { name: "AI assistant (Q2 / Anthropic)", ...aiAssistant }
@@ -3868,7 +3868,7 @@ async function runAnalyze(req, res, symbol, timeframe) {
         fxRes.status === 401 || fxRes.status === 403
           ? "Vertex's analysis engine is temporarily unavailable. We've been notified — please try again shortly."
           : fxRes.status === 404
-          ? `FXSynapse doesn't carry prices for "${symbol}". Try a major pair, metal or index (e.g. EURUSD, XAUUSD, US30, NAS100).`
+          ? `No price feed for "${symbol}". Try a major pair, metal or index (e.g. EURUSD, XAUUSD, US30, NAS100).`
           : fxRes.status === 429
           ? "Rate limited by the analysis provider. Please try again shortly."
           : fxRes.status === 503
