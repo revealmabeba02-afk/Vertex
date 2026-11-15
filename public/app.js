@@ -2335,7 +2335,7 @@
     // Key level, swing low and swing high. The cover page shows these five
     // labels on its chart, so the real result has to show them too — otherwise
     // the marketing promises levels the product never draws.
-    priceLine(liveCandleSeries, firstNumericLevel(a.market_structure?.key_levels), cssVar("--accent-dim", "#0B8E9E"), "Key level");
+    priceLine(liveCandleSeries, firstNumericLevel(a.market_structure?.key_levels), cssVar("--accent-dim", "#2C6BC4"), "Key level");
 
     let swingLow = null;
     let swingHigh = null;

@@ -10,27 +10,27 @@
    Tokens
    =========================================================== */
 :root {
-  --bg:            #001312;   /* deep teal-black, the new brand base */
-  --panel:         #04211F;
-  --panel-alt:     #062A27;
-  --border:        #0F403C;
-  --border-soft:   #0A302D;
+  --bg:            #060B14;   /* deep navy-black, the brand base */
+  --panel:         #0B1526;
+  --panel-alt:     #101E33;
+  --border:        #1D3355;
+  --border-soft:   #16263F;
 
-  --text:          #E9FFFC;
-  --text-dim:      #93BDB8;
-  --text-faint:    #78A5A0;   /* clears 4.5:1 on --bg; the disclaimer uses it */
+  --text:          #EAF1FF;
+  --text-dim:      #9DB2CE;
+  --text-faint:    #7E96B4;   /* clears 4.5:1 on --bg; the disclaimer uses it */
 
-  --accent:        #18F0F0;   /* electric cyan, matches the Vertex mark */
-  --accent-2:      #0B8E9E;   /* deep teal, the second glow */
+  --accent:        #4C8DFF;   /* electric blue, matches the Vertex mark */
+  --accent-2:      #2C6BC4;   /* deep navy blue, the second glow */
 
-  /* The call to action shares the brand cyan, kept a touch brighter than
+  /* The call to action shares the brand blue, kept a touch brighter than
      --bull so chrome and "bias is up" stay visually distinct. */
-  --action:        #18F0F0;
-  --action-ink:    #002322;
+  --action:        #4C8DFF;
+  --action-ink:    #04101F;
 
   --bull:          #2BE0A6;
   --bear:          #FF5F7E;
-  --neutral:       #7FD4FF;
+  --neutral:       #8FB3FF;
 
   --font-display: 'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -45,18 +45,18 @@
 /* Light mode: same hues, inverted for a bright surface. Accent, bull/bear/
    neutral stay the same so a scan result reads identically in either mode. */
 :root[data-theme="light"] {
-  --bg:            #EFFBFB;
+  --bg:            #F2F5FB;
   --panel:         #FFFFFF;
-  --panel-alt:     #F5FDFD;
-  --border:        #CBE7E6;
-  --border-soft:   #DEF1F0;
+  --panel-alt:     #F7F9FD;
+  --border:        #D3DEEC;
+  --border-soft:   #E3EAF4;
 
-  --text:          #062322;
-  --text-dim:      #456C69;
-  --text-faint:    #5E827F;
+  --text:          #0B1424;
+  --text-dim:      #4C5F78;
+  --text-faint:    #61708A;
 }
 
-/* Accent picker (Settings). Default (no attribute) keeps the brand amber
+/* Accent picker (Settings). Default (no attribute) keeps the brand blue
    above. Each option restyles --accent/--action together so the call to
    action button and the brand glow always match. */
 :root[data-accent="violet"] {
@@ -102,7 +102,7 @@ body {
   isolation: isolate;
 }
 
-/* Backdrop: one deep teal pool with a single soft cyan light source at the
+/* Backdrop: one deep navy pool with a single soft blue light source at the
    top, so panels sit on depth instead of flat black. Deliberately quiet —
    no orbs, no starfield. Structure comes from the grid in body::after. */
 body::before {
@@ -114,7 +114,7 @@ body::before {
   background:
     radial-gradient(70% 42% at 50% -12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
     radial-gradient(55% 40% at 100% 0%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 65%),
-    linear-gradient(180deg, #00201F 0%, var(--bg) 45%, #000A09 100%);
+    linear-gradient(180deg, #0A1524 0%, var(--bg) 45%, #03060C 100%);
 }
 
 :root[data-theme="light"] body::before {
@@ -382,7 +382,7 @@ body::after {
   line-height: 1.02;
   letter-spacing: -0.035em;
   margin: 0 0 16px;
-  /* A quiet top-to-bottom fade from the text colour into a cyan tint gives
+  /* A quiet top-to-bottom fade from the text colour into a blue tint gives
      the headline depth without turning it into a rainbow. */
   background: linear-gradient(180deg, var(--text) 12%, color-mix(in srgb, var(--text) 58%, var(--accent)) 100%);
   -webkit-background-clip: text;
