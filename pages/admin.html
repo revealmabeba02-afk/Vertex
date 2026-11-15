@@ -944,6 +944,7 @@
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
   <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
+  <a href="#money" data-panel-link="money" title="Revenue">Money</a>
   <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
@@ -980,6 +981,24 @@
   <div class="briefing-card">
     <div class="briefing-card__label"><span class="briefing-card__dot" aria-hidden="true"></span>Vertex Scanner Briefing</div>
     <div class="briefing-card__text" id="briefing-text">Reading systems…</div>
+  </div>
+
+  <!-- Money row: King asked for revenue the moment he opens /admin, without
+       digging into the Stats tab. Fed by wireMoney() so it never depends on
+       the stats/users Promise.all below. -->
+  <div class="admin-stats" id="overview-money" style="margin-top:24px;">
+    <div class="stat-card">
+      <div class="stat-card__label">Revenue all-time</div>
+      <div class="stat-card__value" id="ov-money-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Revenue this month</div>
+      <div class="stat-card__value" id="ov-money-month">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Paying buyers</div>
+      <div class="stat-card__value" id="ov-money-buyers">—</div>
+    </div>
   </div>
 </div>
 
@@ -1051,7 +1070,61 @@
       <summary style="cursor:pointer;font-size:13px;color:var(--text-dim);">Past briefs</summary>
       <select id="growth-history" class="input" style="margin-top:10px;max-width:420px;"></select>
     </details>
+
+    <!-- Post templates: 10 ready-made post skeletons, filled with the live
+         numbers from the Watcher (free, instant), then optionally polished
+         by the growth agent (1 run). -->
+    <div style="margin-top:26px;padding-top:20px;border-top:1px solid var(--border-soft);">
+      <div class="q2-card__title" style="margin-bottom:4px;">Post templates</div>
+      <div class="q2-card__desc" style="margin-bottom:12px;">Ten ready-made posts. Pick one, Vertex fills it with the live read from the Watcher, you edit, then optionally let the agent polish the voice. Filling is free — only polish uses a run.</div>
+      <select id="tpl-select" class="input" style="max-width:420px;"></select>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;">
+        <button type="button" class="btn btn--ghost" id="tpl-fill" style="padding:8px 16px;font-size:13px;">Fill from market</button>
+        <button type="button" class="btn btn--primary" id="tpl-polish" style="padding:8px 16px;font-size:13px;">Polish with AI</button>
+        <button type="button" class="btn btn--ghost" id="tpl-copy" style="padding:8px 16px;font-size:13px;">Copy</button>
+      </div>
+      <textarea id="tpl-text" class="input" rows="9" style="width:100%;font-family:var(--font-mono);font-size:13px;line-height:1.6;resize:vertical;" placeholder="Fill from market to see the template come alive…"></textarea>
+      <div id="tpl-status" class="q2-card__status"></div>
+    </div>
   </div>
+</div>
+
+<div class="command-panel" data-panel="money">
+  <!-- Everything that touches money, one screen. This panel fetches the same
+       endpoints the other panels use, so it stays correct even if one of
+       those panels is never opened. -->
+  <p class="eyebrow">
+    <span class="eyebrow__dot" aria-hidden="true"></span>
+    The books
+  </p>
+  <h2 class="hero__title" style="font-size: clamp(24px, 3.5vw, 32px);">Money</h2>
+  <div class="admin-stats" style="margin-top:20px;">
+    <div class="stat-card">
+      <div class="stat-card__label">Revenue all-time</div>
+      <div class="stat-card__value" id="money-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Revenue this month</div>
+      <div class="stat-card__value" id="money-month">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Revenue last month</div>
+      <div class="stat-card__value" id="money-last-month">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Paying buyers</div>
+      <div class="stat-card__value" id="money-buyers">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Total users</div>
+      <div class="stat-card__value" id="money-users">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Avg per paying buyer</div>
+      <div class="stat-card__value" id="money-avg">—</div>
+    </div>
+  </div>
+  <p class="admin-status" style="margin-top:16px;">Full detail: <a href="#stats" data-panel-link="stats" style="color:var(--accent);text-decoration:none;">Stats</a> · <a href="#buyers" data-panel-link="buyers" style="color:var(--accent);text-decoration:none;">Buyers</a> · <a href="#orders" data-panel-link="orders" style="color:var(--accent);text-decoration:none;">Orders</a> · <a href="#analytics" data-panel-link="analytics" style="color:var(--accent);text-decoration:none;">Analytics</a></p>
 </div>
 
 <div class="command-panel" data-panel="video">
@@ -1647,6 +1720,8 @@
     wireQ2Chat(authHeader);
     wireWatcher(authHeader);
     wireGrowth(authHeader);
+    wireMoney(authHeader);
+    wirePostTemplates(authHeader);
     loadOrders(authHeader);
     loadBuyers(authHeader);
     loadPurchasePatterns(authHeader);
@@ -2775,6 +2850,135 @@
           renderHistory();
         } catch {}
       })();
+    }
+
+    // --- Money ---------------------------------------------------------------
+    // One loader that fills both the Overview money row and the Money panel.
+    // Deliberately independent of the stats/users Promise.all below: money
+    // should show up even if the user list is slow or fails.
+    function wireMoney(authHeader) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      (async () => {
+        const [statsRes, monthRes] = await Promise.all([
+          fetch("/api/admin/stats", { headers: authHeader }),
+          fetch("/api/admin/month-comparison", { headers: authHeader })
+        ]);
+        const stats = await statsRes.json().catch(() => null);
+        const month = await monthRes.json().catch(() => null);
+        const total = stats && Number.isFinite(stats.totalRevenue) ? stats.totalRevenue : null;
+        const paying = stats && Number.isFinite(stats.payingUsers) ? stats.payingUsers : null;
+        const users = stats && Number.isFinite(stats.totalUsers) ? stats.totalUsers : null;
+        const tm = month && month.this_month ? Number(month.this_month.revenue_usd || 0) : null;
+        const lm = month && month.last_month ? Number(month.last_month.revenue_usd || 0) : null;
+
+        set("ov-money-total", total === null ? "—" : "$" + total.toFixed(2));
+        set("ov-money-month", tm === null ? "—" : "$" + tm.toFixed(2));
+        set("ov-money-buyers", paying === null ? "—" : String(paying));
+        set("money-total", total === null ? "—" : "$" + total.toFixed(2));
+        set("money-month", tm === null ? "—" : "$" + tm.toFixed(2));
+        set("money-last-month", lm === null ? "—" : "$" + lm.toFixed(2));
+        set("money-buyers", paying === null ? "—" : String(paying));
+        set("money-users", users === null ? "—" : String(users));
+        set("money-avg", total !== null && paying ? "$" + (total / paying).toFixed(2) : "—");
+      })().catch(() => {});
+    }
+
+    // --- Post templates ------------------------------------------------------
+    // Ten skeletons, filled from the Watcher's latest live read (free, no AI),
+    // then optionally polished by the growth agent's "polish" mission.
+    function wirePostTemplates(authHeader) {
+      const TEMPLATES = [
+        { name: "TikTok · POV hook", text: "POV: you stopped staring at charts all day.\n\nI scanned {pair} on the {tf} in 3 seconds.\nBias: {bias}\nEntry zone: {entry}\nStop: {stop}\nTarget: {target}\n\nVertex did that. Not me.\n\n#forex #trading" },
+        { name: "TikTok · 3-second check", text: "The 3-second check before you enter {pair} today:\n\n1. Bias on the {tf}: {bias}\n2. The level that matters: {entry}\n3. Where you're wrong: {stop}\n\nIf all three don't line up, don't click the button." },
+        { name: "Instagram · morning bias", text: "Good morning traders. Here's {pair} on the {tf} right now:\n\n{bias} structure, {conf}% confidence.\n\nLevels that matter:\n→ Entry {entry}\n→ Stop {stop}\n→ Target {target}\n\nSave this before the session opens. Full read free in Vertex (2 scans a day).\n\n#forextrading #xauusd #priceaction" },
+        { name: "Instagram · 5 numbers carousel", text: "5 numbers that decide your {pair} trade today — swipe.\n\nSlide 1: {bias} on the {tf}\nSlide 2: Entry {entry}\nSlide 3: Stop {stop}\nSlide 4: Target {target}\nSlide 5: What kills the idea — a close back through {stop}\n\nFull read in Vertex in seconds. Link in bio." },
+        { name: "YouTube Shorts · I scanned it for you", text: "[HOOK] I scanned {pair} so you don't have to.\n\n[SCREEN RECORDING] Vertex read: {bias} structure on the {tf}.\n\n[SHOW] Entry {entry}. Stop {stop}. Target {target}.\n\n[CLOSE] Three numbers, three seconds. 2 free scans a day — link in the bio." },
+        { name: "X · one-liner", text: "{pair} {tf}: {bias} ({conf}% confidence)\n\nEntry {entry} · Stop {stop} · Target {target}\n\nStructure read off live bars, in 3 seconds." },
+        { name: "X · thread starter", text: "A clean structure read on {pair} — and why I'm (not) interested right now. 🧵\n\n1/ {tf} bias: {bias} at {conf}% confidence.\n2/ Plan: enter near {entry}, take profit at {target}, wrong at {stop}.\n3/ The idea dies if price closes back through {stop}. That's the whole trade.\n4/ You don't need 12 indicators. You need 5 numbers. Vertex gives them in seconds." },
+        { name: "Telegram/Discord · broadcast", text: "📍 {pair} · {tf}\n\nStructure: {bias} ({conf}%)\nEntry zone: {entry}\nStop: {stop}\nTarget: {target}\n\nRead by Vertex from live bars. Not financial advice — do your own check." },
+        { name: "Before/after", text: "Before: 6 charts, 4 indicators, 40 minutes, still guessing.\n\nAfter: one scan.\n{pair} {tf} — {bias}\nEntry {entry} · Stop {stop} · Target {target}\n\nThat's the product. 2 free scans a day." },
+        { name: "CTA · what a scan shows", text: "What a Vertex scan actually shows:\n\n✅ Bias and market structure\n✅ Key levels price respects\n✅ Entry zone, stop, targets\n✅ The exact move that invalidates the idea\n\nToday's live example — {pair} {tf}: {bias}, entry {entry}.\n\n2 free scans a day. No card needed." }
+      ];
+
+      const select = document.getElementById("tpl-select");
+      const textEl = document.getElementById("tpl-text");
+      const statusEl = document.getElementById("tpl-status");
+      const fillBtn = document.getElementById("tpl-fill");
+      const polishBtn = document.getElementById("tpl-polish");
+      const copyBtn = document.getElementById("tpl-copy");
+      if (!select || !textEl) return;
+
+      select.innerHTML = TEMPLATES.map((t, i) => '<option value="' + i + '">' + escapeHtml(t.name) + "</option>").join("");
+
+      function loadTemplate() {
+        textEl.value = TEMPLATES[Number(select.value) || 0].text;
+        statusEl.textContent = "";
+      }
+      select.addEventListener("change", loadTemplate);
+      loadTemplate();
+
+      function fillFromRead(read) {
+        const map = {
+          pair: (read.key || "").split(":")[0] || "—",
+          tf: (read.key || "").split(":")[1] || "—",
+          bias: read.bias || "—",
+          entry: Number.isFinite(read.entry) ? read.entry : "—",
+          stop: Number.isFinite(read.stop) ? read.stop : "—",
+          target: Number.isFinite(read.target) ? read.target : "—",
+          conf: Number.isFinite(read.confidence) ? read.confidence : "—"
+        };
+        return textEl.value.replace(/\{(pair|tf|bias|entry|stop|target|conf)\}/g, (_, k) => String(map[k]));
+      }
+
+      fillBtn.addEventListener("click", async () => {
+        statusEl.textContent = "Pulling the latest read from the Watcher…";
+        try {
+          const res = await fetch("/api/watch/feed?full=1&limit=1", { headers: authHeader });
+          const data = await res.json().catch(() => null);
+          const rows = data && Array.isArray(data.symbolsState) ? data.symbolsState : [];
+          if (!res.ok || !rows.length) {
+            statusEl.textContent = "No market read yet — run a Watcher sweep first, then fill.";
+            return;
+          }
+          textEl.value = fillFromRead(rows[0]);
+          statusEl.textContent = "Filled with the live " + (rows[0].key || "read") + " from the Watcher. Free — no run used.";
+        } catch {
+          statusEl.textContent = "Could not reach the Watcher.";
+        }
+      });
+
+      polishBtn.addEventListener("click", async () => {
+        const draft = textEl.value.trim();
+        if (!draft) { statusEl.textContent = "Nothing to polish yet."; return; }
+        polishBtn.disabled = true;
+        statusEl.textContent = "Polishing the voice… (1 research run)";
+        try {
+          const res = await fetch("/api/growth/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeader },
+            body: JSON.stringify({ kind: "polish", platform: TEMPLATES[Number(select.value) || 0].name, draft })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "Polish failed.";
+            return;
+          }
+          textEl.value = data.brief ? data.brief.text : draft;
+          statusEl.textContent = "Polished. Numbers kept exactly as the market gave them.";
+        } catch {
+          statusEl.textContent = "Network error while polishing.";
+        } finally {
+          polishBtn.disabled = false;
+        }
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(textEl.value);
+          copyBtn.textContent = "Copied";
+          setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+        } catch {}
+      });
     }
 
     async function wireQ2Chat(authHeader) {

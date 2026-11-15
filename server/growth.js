@@ -53,6 +53,22 @@ suggest anything that requires spending money first.
 `.trim();
 
 const MISSIONS = {
+  polish: {
+    label: "Polish a post",
+    // Not a research mission: the draft is already written and filled with
+    // real market numbers by the admin page. The job is voice and punch.
+    prompt: `
+Mission: rewrite the post below so it stops thumbs mid-scroll on its platform. Keep every
+number exactly as given — they come from live market data and must not change. Rules:
+- Hook must be the first line, under 12 words.
+- Short lines, spoken rhythm, no hashtags unless the platform block asks for them.
+- No financial advice, no promises of profit, no emoji spam (max one).
+- Return only the finished post, nothing else.
+
+PLATFORM: {{platform}}
+DRAFT:
+{{draft}}`,
+  },
   posts: {
     label: "Draft social posts",
     prompt: `
@@ -135,7 +151,13 @@ function createGrowthAgent() {
       : "";
   }
 
-  async function callGemini(missionPrompt) {
+  // The raw path skips the search tool: used for voice rewrites where the
+  // facts are already in the draft and grounding would only slow it down.
+  async function callGeminiRaw(prompt) {
+    return callGemini(prompt, { search: false });
+  }
+
+  async function callGemini(missionPrompt, opts = {}) {
     const body = JSON.stringify({
       systemInstruction: {
         parts: [
@@ -148,8 +170,8 @@ function createGrowthAgent() {
           }
         ]
       },
-      contents: [{ role: "user", parts: [{ text: missionPrompt + memoryBlock() }] }],
-      tools: [{ google_search: {} }],
+      contents: [{ role: "user", parts: [{ text: missionPrompt + (opts.search === false ? "" : memoryBlock()) }] }],
+      tools: opts.search === false ? undefined : [{ google_search: {} }],
       generationConfig: { temperature: 0.55, maxOutputTokens: 3072 }
     });
 
@@ -206,7 +228,7 @@ function createGrowthAgent() {
     throw lastFailure || new Error("No Gemini model answered the mission.");
   }
 
-  async function run(kind) {
+  async function run(kind, payload = {}) {
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set on this server.");
     const mission = MISSIONS[kind];
     if (!mission) throw new Error("Unknown growth mission.");
@@ -215,6 +237,30 @@ function createGrowthAgent() {
       throw new Error("Growth agent is capped at " + MAX_RUNS_PER_DAY + " research runs a day. Try again tomorrow.");
     }
     runtime.runsToday += 1;
+
+    let prompt = mission.prompt;
+    if (kind === "polish") {
+      const platform = String(payload.platform || "").slice(0, 60);
+      const draft = String(payload.draft || "").slice(0, 2000);
+      if (!draft.trim()) throw new Error("There is no draft to polish.");
+      prompt = prompt.replace("{{platform}}", platform).replace("{{draft}}", draft);
+      // Voice work, not research: skip the memory block so the rewrite uses
+      // only the draft in front of it.
+      const out = await callGeminiRaw(prompt);
+      const brief = {
+        id: Date.now(),
+        at: new Date().toISOString(),
+        kind,
+        label: "Polished post · " + (platform || "post"),
+        text: out.text,
+        sources: [],
+        searchQueries: [],
+        ungrounded: false
+      };
+      briefs.unshift(brief);
+      if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
+      return brief;
+    }
 
     const out = await callGemini(mission.prompt);
     const brief = {

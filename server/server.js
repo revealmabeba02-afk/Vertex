@@ -1235,7 +1235,7 @@ app.post("/api/growth/run", requireUser, async (req, res) => {
   }
   try {
     const kind = String(req.body?.kind || "").trim();
-    const brief = await growth.run(kind);
+    const brief = await growth.run(kind, req.body || {});
     res.json({ ok: true, brief, feed: growth.feed(5) });
   } catch (err) {
     console.error("Growth run error:", err.message);
