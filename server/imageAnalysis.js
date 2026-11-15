@@ -1,11 +1,16 @@
-// Chart-screenshot analysis: sends an uploaded image to Claude's vision model
-// and shapes the reply into exactly the object the scanner result screen
-// already renders (pair_guess, market_bias, market_structure, potential_entries,
+// Chart-screenshot analysis: sends an uploaded image to a vision model and
+// shapes the reply into exactly the object the scanner result screen already
+// renders (pair_guess, market_bias, market_structure, potential_entries,
 // stop_loss, take_profit, confidence, ...).
 //
-// FXSynapse (the pair scanner) only reads symbols from live bars, so image
-// reading is the one feature that needs a vision model. It shares the same
-// ANTHROPIC_API_KEY as Q2 / support triage. When that key is absent the route
+// Two providers are supported so the feature keeps working when one of them
+// has no credit:
+//   • GEMINI_API_KEY    → Google Gemini (free tier covers images)
+//   • ANTHROPIC_API_KEY → Claude vision
+// Gemini wins when both are configured, because its free tier means chart
+// uploads never stop working just because a card ran dry. FXSynapse (the pair
+// scanner) only reads symbols from live bars, so image reading is the one
+// feature that needs a vision model; when neither key is present the route
 // answers 503 before spending anything, and the pair scanner is unaffected.
 
 const { buildSystemPrompt, buildUserPrompt } = require("./analysisPrompt");
@@ -14,6 +19,12 @@ const IMAGE_ANALYSIS_MODEL = (
   process.env.IMAGE_ANALYSIS_MODEL ||
   process.env.SUPPORT_AI_MODEL ||
   "claude-haiku-4-5-20251001"
+).trim();
+
+const GEMINI_IMAGE_MODEL = (
+  process.env.GEMINI_IMAGE_MODEL ||
+  process.env.GEMINI_MODEL ||
+  "gemini-2.5-flash"
 ).trim();
 
 const BIASES = ["Bullish", "Bearish", "Neutral / Ranging"];
@@ -105,18 +116,36 @@ function mapImageAnalysis(payload, timeframe) {
   };
 }
 
-async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey }) {
-  if (!apiKey) {
-    const err = new Error("Image analysis is not configured on this server.");
-    err.status = 503;
-    throw err;
-  }
-  if (!buffer || !buffer.length) {
-    const err = new Error("The uploaded image was empty.");
-    err.status = 400;
-    throw err;
+// One place to turn a provider's HTTP failure into something a trader can act
+// on. "Out of credit" and "daily free limit" are the two states this app has
+// actually hit in production, so they get explicit copy instead of a raw
+// vendor string.
+function visionError(provider, status, data) {
+  const message = String(
+    (data && (data.error?.message || data.message)) || ""
+  ).trim();
+  const isCredit = /credit balance is too low|purchase credits|billing/i.test(message);
+  const isQuota = /quota|rate limit|exceeded/i.test(message);
+
+  let text;
+  if (status === 401 || status === 403) {
+    text = "The image reader is not authorized right now. Please try the pair scanner, or contact support.";
+  } else if (isCredit) {
+    text = "The chart-photo reader is out of credit. Use the pair scanner for now, or add credit to the image provider.";
+  } else if (status === 429 || isQuota) {
+    text = provider === "gemini"
+      ? "The free image reader has hit its limit for now. Use the pair scanner, or try again later."
+      : "The image reader is rate limited. Please try again shortly.";
+  } else {
+    text = message || "The image reader could not analyze that chart.";
   }
 
+  const e = new Error(text);
+  e.status = 502;
+  return e;
+}
+
+async function callAnthropicVision({ buffer, mimeType, timeframe, apiKey }) {
   let response;
   try {
     response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -158,21 +187,88 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey }) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    console.error("Image analysis error:", response.status, data);
-    const e = new Error(
-      response.status === 401 || response.status === 403
-        ? "The image reader is not authorized right now. Please try the pair scanner, or contact support."
-        : response.status === 429
-        ? "The image reader is rate limited. Please try again shortly."
-        : (data && (data.error?.message || data.message)) || "The image reader could not analyze that chart."
-    );
+    console.error("Image analysis error (anthropic):", response.status, data);
+    throw visionError("anthropic", response.status, data);
+  }
+
+  return Array.isArray(data?.content)
+    ? data.content.filter((b) => b && b.type === "text").map((b) => b.text || "").join("")
+    : "";
+}
+
+async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
+  const url =
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+    encodeURIComponent(GEMINI_IMAGE_MODEL) +
+    ":generateContent";
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType || "image/png",
+                  data: buffer.toString("base64")
+                }
+              },
+              { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json"
+        }
+      }),
+      signal: AbortSignal.timeout(52000)
+    });
+  } catch (err) {
+    const e = new Error("The image reader took too long or could not be reached. Please try again.");
     e.status = 502;
+    e.cause = err;
     throw e;
   }
 
-  const text = Array.isArray(data?.content)
-    ? data.content.filter((b) => b && b.type === "text").map((b) => b.text || "").join("")
-    : "";
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error("Image analysis error (gemini):", response.status, data);
+    throw visionError("gemini", response.status, data);
+  }
+
+  const parts = data?.candidates?.[0]?.content?.parts;
+  return Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
+}
+
+async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKey }) {
+  const anthropicKey = String(apiKey || "").trim();
+  const googleKey = String(geminiKey || "").trim();
+
+  if (!googleKey && !anthropicKey) {
+    const err = new Error("Image analysis is not configured on this server.");
+    err.status = 503;
+    throw err;
+  }
+  if (!buffer || !buffer.length) {
+    const err = new Error("The uploaded image was empty.");
+    err.status = 400;
+    throw err;
+  }
+
+  const text = googleKey
+    ? await callGeminiVision({ buffer, mimeType, timeframe, apiKey: googleKey })
+    : await callAnthropicVision({ buffer, mimeType, timeframe, apiKey: anthropicKey });
 
   let payload;
   try {

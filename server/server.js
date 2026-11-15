@@ -396,6 +396,12 @@ function extractWhopPaymentFields(data) {
 const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
 const SUPPORT_AI_MODEL = (process.env.SUPPORT_AI_MODEL || "claude-haiku-4-5-20251001").trim();
 
+// Optional: free-tier Google Gemini key for reading chart screenshots. When it
+// is set, chart-photo scanning keeps working even if the Anthropic balance is
+// zero, which is exactly the state this app found itself in. Image reading is
+// the only feature that needs a vision key; the pair scanner never touches it.
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
+
 const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Vertex Chart Scanner (vertex-9s4c.onrender.com), a forex chart analysis tool.
 
 What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick a timeframe, and get back a technical read calculated from live price bars — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, take-profit targets, and a confidence % (shown as an animated ring by the pair name and an animated bar in the trade stats — it reflects how aligned the plan, risk/reward and top-down timeframes are, not a win-rate promise). No chart screenshot is needed or accepted. It is a technical read, not financial advice.
@@ -1117,9 +1123,9 @@ app.get("/config.js", (req, res) => {
         supabaseUrl: SUPABASE_READY ? SUPABASE_URL : "",
         supabaseAnonKey: SUPABASE_READY ? SUPABASE_ANON_KEY : "",
         ready: SUPABASE_READY,
-        // Chart-photo scanning needs the vision model, so the app can hide /
+        // Chart-photo scanning needs a vision model, so the app can hide /
         // explain the Upload tab instead of offering a button that 503s.
-        imageScan: !!ANTHROPIC_API_KEY
+        imageScan: !!(GEMINI_API_KEY || ANTHROPIC_API_KEY)
       }) +
       ";"
   );
@@ -3677,12 +3683,12 @@ const scansInFlight = new Set();
 // symbol, so this route uses Claude's vision model through
 // server/imageAnalysis.js instead. Same rules as the pair scanner: one scan
 // is charged up front, a failure refunds it, the result is saved to history.
-// If ANTHROPIC_API_KEY is missing the route answers 503 before charging
+// If neither vision key is present the route answers 503 before charging
 // anything, and the pair scanner keeps working exactly as before.
 app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart"), async (req, res) => {
-  if (!ANTHROPIC_API_KEY) {
+  if (!GEMINI_API_KEY && !ANTHROPIC_API_KEY) {
     return res.status(503).json({
-      error: "Chart-photo reading isn't switched on yet. Add ANTHROPIC_API_KEY on the server, or pick a pair instead.",
+      error: "Chart-photo reading isn't switched on yet. Add GEMINI_API_KEY on the server, or pick a pair instead.",
       code: "image_scan_unavailable"
     });
   }
@@ -3736,7 +3742,8 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
         buffer: req.file.buffer,
         mimeType: req.file.mimetype,
         timeframe,
-        apiKey: ANTHROPIC_API_KEY
+        apiKey: ANTHROPIC_API_KEY,
+        geminiKey: GEMINI_API_KEY
       });
 
       if (!isChart) {
