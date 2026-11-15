@@ -942,6 +942,7 @@
   <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
   <a href="#clicks" data-panel-link="clicks" title="Link clicks" class="command-rail__pinned">Clicks</a>
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
+  <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
   <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
@@ -992,6 +993,33 @@
       <input type="text" id="q2-chat-input" placeholder="Say something to Q2…" autocomplete="off" />
       <button type="submit" class="btn btn--primary" id="q2-chat-send">Send</button>
     </form>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="watcher">
+  <!-- The watcher's control room: what it is watching, what it found, and a
+       manual sweep button so the loop can be proven without waiting for the
+       next interval. Reuses the app's own watch styles from style.css so the
+       admin view and the user view can never drift apart visually. -->
+  <div class="q2-card" id="sec-watcher">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Market watcher</div>
+        <div class="q2-card__desc">Vertex re-reads your market list on a schedule and records every real change — bias flips, new plans, levels moving. Reads come from the same provider as scans; the daily cap protects the plan.</div>
+      </div>
+      <button type="button" class="btn btn--primary" id="watch-tick-btn" style="flex-shrink:0;white-space:nowrap;">Run a sweep now</button>
+    </div>
+    <div class="watch-panel" style="margin:16px 0 14px;">
+      <div class="watch-panel__head">
+        <span class="watch-dot" id="admin-watch-dot" data-state="idle" aria-hidden="true"></span>
+        <span class="watch-panel__state" id="admin-watch-state">Checking the watcher…</span>
+      </div>
+      <p class="watch-panel__meta" id="admin-watch-meta" style="margin-bottom:0;"></p>
+    </div>
+    <div class="watch-symbols" id="admin-watch-symbols"></div>
+    <div id="admin-watch-empty" class="users-empty">No changes recorded yet. The watcher speaks the first time a read differs from the one before it.</div>
+    <ul class="watch-feed" id="admin-watch-feed" hidden></ul>
+    <div class="q2-card__status" id="admin-watch-status"></div>
   </div>
 </div>
 
@@ -1586,6 +1614,7 @@
     wireQ2Insight(authHeader);
     wireQ2YoutubeInsight(authHeader);
     wireQ2Chat(authHeader);
+    wireWatcher(authHeader);
     loadOrders(authHeader);
     loadBuyers(authHeader);
     loadPurchasePatterns(authHeader);
@@ -2474,6 +2503,124 @@
           btn.textContent = original;
         }
       });
+    }
+
+    // --- Watcher control room ----------------------------------------------
+    // Reads the same feed the user's Watcher tab sees, plus a manual sweep
+    // button (POST /api/watch/tick) that only the admin email can call.
+    let watchTimer = null;
+    function wireWatcher(authHeader) {
+      const dotEl = document.getElementById("admin-watch-dot");
+      const stateEl = document.getElementById("admin-watch-state");
+      const metaEl = document.getElementById("admin-watch-meta");
+      const symbolsEl = document.getElementById("admin-watch-symbols");
+      const feedEl = document.getElementById("admin-watch-feed");
+      const emptyEl = document.getElementById("admin-watch-empty");
+      const statusEl = document.getElementById("admin-watch-status");
+      const btn = document.getElementById("watch-tick-btn");
+      if (!stateEl || !feedEl) return;
+      let busy = false;
+
+      function ago(iso) {
+        const t = Date.parse(iso || "");
+        if (!Number.isFinite(t)) return "never";
+        const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+        if (mins < 1) return "just now";
+        if (mins < 60) return mins + "m ago";
+        const hrs = Math.round(mins / 60);
+        if (hrs < 24) return hrs + "h ago";
+        return Math.round(hrs / 24) + "d ago";
+      }
+
+      function render(data) {
+        let state = "idle";
+        let label = "Watcher is starting up";
+        if (!data.enabled) { state = "off"; label = "Watcher is switched off (WATCH_ENABLED=false)"; }
+        else if (!data.marketOpen) { state = "closed"; label = "Market closed — nothing to re-read"; }
+        else if (data.lastTickAt) { state = "live"; label = "Watching " + (data.watching || 0) + " read" + ((data.watching || 0) === 1 ? "" : "s") + ", last pass " + ago(data.lastTickAt); }
+        else { state = "live"; label = "Watching — first pass on the way"; }
+        dotEl.dataset.state = state;
+        stateEl.textContent = label;
+
+        const meta = [];
+        if (data.intervalMinutes) meta.push("every " + data.intervalMinutes + " min");
+        if (Array.isArray(data.timeframes) && data.timeframes.length) meta.push(data.timeframes.join("/"));
+        if (Number.isFinite(data.callsToday)) meta.push(data.callsToday + " of " + (data.maxCallsPerDay || "—") + " reads used today");
+        if (data.ticks) meta.push(data.ticks + " sweeps this session");
+        if (data.lastError) meta.push("last error: " + data.lastError);
+        metaEl.textContent = meta.join(" · ");
+
+        const rows = Array.isArray(data.symbolsState) ? data.symbolsState : [];
+        if (rows.length) {
+          symbolsEl.hidden = false;
+          symbolsEl.innerHTML = rows.map((row) => {
+            const bias = (row.bias || "Unclear").toLowerCase();
+            const tone = bias === "bullish" ? "bull" : bias === "bearish" ? "bear" : "flat";
+            const bits = [];
+            if (row.hasPlan && Number.isFinite(row.entry)) bits.push("entry " + row.entry);
+            if (Number.isFinite(row.confidence)) bits.push(row.confidence + "%");
+            return '<div class="watch-chip" data-tone="' + tone + '"><span class="watch-chip__sym">' + escapeHtml(row.key) + '</span><span class="watch-chip__bias">' + escapeHtml(bias) + '</span><span class="watch-chip__meta">' + escapeHtml(bits.join(" · ") || row.structure || "—") + '</span><span class="watch-chip__time">' + escapeHtml(ago(row.at)) + '</span></div>';
+          }).join("");
+        } else {
+          symbolsEl.hidden = true;
+        }
+
+        const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+        emptyEl.hidden = alerts.length > 0;
+        feedEl.hidden = alerts.length === 0;
+        feedEl.innerHTML = alerts.map((a) =>
+          '<li class="watch-item" data-severity="' + escapeHtml(a.severity || "low") + '"><div class="watch-item__top"><span class="watch-item__sym">' + escapeHtml(a.symbol || "—") + " · " + escapeHtml(a.timeframe || "—") + '</span><span class="watch-item__time">' + escapeHtml(ago(a.at)) + '</span></div><p class="watch-item__title">' + escapeHtml(a.title || "Change detected") + '</p><p class="watch-item__detail">' + escapeHtml(a.detail || "") + '</p></li>'
+        ).join("");
+      }
+
+      async function load() {
+        if (busy) return;
+        busy = true;
+        try {
+          const res = await fetch("/api/watch/feed?full=1&limit=30", { headers: authHeader });
+          if (!res.ok) {
+            dotEl.dataset.state = "off";
+            stateEl.textContent = res.status === 403 ? "Not authorized." : "Could not reach the watcher.";
+            return;
+          }
+          render(await res.json());
+        } catch {
+          dotEl.dataset.state = "off";
+          stateEl.textContent = "Could not reach the watcher.";
+        } finally {
+          busy = false;
+        }
+      }
+
+      if (btn) {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "Sweeping…";
+          statusEl.textContent = "";
+          try {
+            const res = await fetch("/api/watch/tick?force=1", { method: "POST", headers: authHeader });
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+              statusEl.textContent = (data && data.error) || "Sweep failed.";
+            } else if (data && typeof data.calls === "number") {
+              statusEl.textContent = "Sweep done: " + data.calls + " read" + (data.calls === 1 ? "" : "s") + ", " + (data.alerts || 0) + " change" + ((data.alerts || 0) === 1 ? "" : "s") + " recorded.";
+            }
+          } catch {
+            statusEl.textContent = "Sweep failed — network error.";
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "Run a sweep now";
+            load();
+          }
+        });
+      }
+
+      // Refresh only while the panel is on screen; cheap and never in the way.
+      watchTimer = setInterval(() => {
+        const panel = document.querySelector('.command-panel[data-panel="watcher"]');
+        if (panel && panel.classList.contains("is-active")) load();
+      }, 60 * 1000);
+      load();
     }
 
     async function wireQ2Chat(authHeader) {

@@ -1198,11 +1198,74 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, provider: "vertex-feed", accounts: SUPABASE_READY, credits: CREDITS_READY });
 });
 
+// --- Watcher routes -------------------------------------------------------
+// The feed is what the dashboard polls. Reading it is also what wakes the
+// loop up: on a sleeping free instance the interval never fires, so the first
+// request after idle triggers a catch-up sweep instead of waiting for a clock
+// that isn't running.
+app.get("/api/watch/feed", requireUser, (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
+    watcher.maybeTick();
+    res.json({ ok: true, ...watcher.feed({ limit, full: req.query.full === "1" }) });
+  } catch (err) {
+    console.error("Watch feed error:", err.message);
+    res.status(500).json({ error: "Could not read the watcher right now." });
+  }
+});
+
+// Admin-only: force a sweep now, even outside market hours, so the loop can
+// be proven end to end without waiting for the next interval.
+app.post("/api/watch/tick", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const result = await watcher.tick({ force: req.query.force === "1" || req.body?.force === true });
+    res.json({ ok: true, ...result, feed: watcher.feed({ limit: 10 }) });
+  } catch (err) {
+    console.error("Watch tick error:", err.message);
+    res.status(500).json({ error: err.message || "Watcher tick failed." });
+  }
+});
+
 // --- FXSynapse response shaping ------------------------------------------
 // Moved to analysisMapper.js so the standalone auto-post job can reuse the
 // exact same mapping without pulling in the whole Express app.
 const { mapFxSynapseToAnalysis } = require("./analysisMapper");
 const { analyzeChartImage } = require("./imageAnalysis");
+
+// --- Market watcher ------------------------------------------------------
+// The loop that keeps looking between scans. It calls the provider through
+// the exact same request a scan uses, so a watched read and a scanned read
+// can never disagree about what the market is doing.
+const { createWatcher } = require("./watch");
+
+async function fetchChartForWatcher(symbol, timeframe) {
+  if (!FXSYNAPSE_API_KEY) throw new Error("Market data is not configured on this server.");
+  const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_CHART_PATH}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${FXSYNAPSE_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ symbol, timeframe, top_down: true }),
+    signal: AbortSignal.timeout(55000)
+  });
+  const rawBody = await fxRes.text();
+  let data;
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    throw new Error(`Unreadable market data for ${symbol}.`);
+  }
+  if (!fxRes.ok) {
+    throw new Error(data?.detail || data?.error || `Market data unavailable for ${symbol} (${fxRes.status}).`);
+  }
+  return data;
+}
+
+const watcher = createWatcher({ fetchChart: fetchChartForWatcher });
 
 
 // --- Scan history ---------------------------------------------------------
@@ -3955,6 +4018,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Vertex Chart Scanner running at http://localhost:${PORT}`);
   console.log(`Using provider: FXSynapse AI (${FXSYNAPSE_BASE_URL})`);
+  watcher.start();
 });
 
 // Weekly recap: checked once an hour (not scheduled to a specific day/time)

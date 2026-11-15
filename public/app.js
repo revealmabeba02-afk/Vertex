@@ -331,6 +331,7 @@
 
   const views = {
     scan: document.getElementById("view-scan"),
+    watch: document.getElementById("view-watch"),
     credits: document.getElementById("view-credits"),
     news: document.getElementById("view-news"),
     how: document.getElementById("view-how"),
@@ -341,7 +342,7 @@
     settings: document.getElementById("view-settings")
   };
   const tabs = document.querySelectorAll(".navpill[data-view]");
-  const HASH_TO_VIEW = { "#credits": "credits", "#news": "news", "#how": "how", "#history": "history", "#journal": "journal", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
+  const HASH_TO_VIEW = { "#credits": "credits", "#watch": "watch", "#news": "news", "#how": "how", "#history": "history", "#journal": "journal", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
 
   // Each section should feel like turning to its own page, not a tab
   // crossfading on top of the last one. So the old page fully leaves
@@ -375,6 +376,7 @@
     }
     window.scrollTo({ top: 0, behavior: "auto" });
     if (name === "history") loadHistory();
+    if (name === "watch") { loadWatch(); startWatchPolling(); } else { stopWatchPolling(); }
     if (name === "whats-new") loadWhatsNew();
     if (name === "journal") { loadJournal(); loadBrokerAccount(); }
     if (name === "credits") refreshBalance();
@@ -2991,6 +2993,149 @@
     } catch {
       // History is a nice-to-have; a failed fetch just leaves the empty state.
     }
+  }
+
+  // --- Watcher ------------------------------------------------------------
+  // Renders /api/watch/feed. Every row here is a diff between two real reads,
+  // so there is no generated commentary to take on faith: you can see the
+  // before and after numbers in the detail line.
+  const watchDot = document.getElementById("watch-dot");
+  const watchState = document.getElementById("watch-state");
+  const watchMeta = document.getElementById("watch-meta");
+  const watchSymbolsEl = document.getElementById("watch-symbols");
+  const watchFeed = document.getElementById("watch-feed");
+  const watchEmpty = document.getElementById("watch-empty");
+  const watchRefreshBtn = document.getElementById("watch-refresh");
+  let watchPoll = null;
+  let watchBusy = false;
+
+  function watchAgo(iso) {
+    const t = Date.parse(iso || "");
+    if (!Number.isFinite(t)) return "never";
+    const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  }
+
+  function renderWatchSymbols(rows) {
+    if (!watchSymbolsEl) return;
+    if (!rows || !rows.length) {
+      watchSymbolsEl.hidden = true;
+      watchSymbolsEl.innerHTML = "";
+      return;
+    }
+    watchSymbolsEl.hidden = false;
+    watchSymbolsEl.innerHTML = rows.map((row) => {
+      const bias = (row.bias || "Unclear").toLowerCase();
+      const tone = bias === "bullish" ? "bull" : bias === "bearish" ? "bear" : "flat";
+      const bits = [];
+      if (row.hasPlan && Number.isFinite(row.entry)) bits.push(`entry ${row.entry}`);
+      if (Number.isFinite(row.confidence)) bits.push(`${row.confidence}%`);
+      return `
+        <div class="watch-chip" data-tone="${tone}">
+          <span class="watch-chip__sym">${escapeHtmlClient(row.key)}</span>
+          <span class="watch-chip__bias">${escapeHtmlClient(bias)}</span>
+          <span class="watch-chip__meta">${escapeHtmlClient(bits.join(" · ") || row.structure || "—")}</span>
+          <span class="watch-chip__time">${escapeHtmlClient(watchAgo(row.at))}</span>
+        </div>`;
+    }).join("");
+  }
+
+  function renderWatchFeed(data) {
+    const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+    if (watchEmpty) watchEmpty.hidden = alerts.length > 0;
+    if (watchFeed) {
+      watchFeed.hidden = alerts.length === 0;
+      watchFeed.innerHTML = alerts.map((a) => `
+        <li class="watch-item" data-severity="${escapeHtmlClient(a.severity || "low")}">
+          <div class="watch-item__top">
+            <span class="watch-item__sym">${escapeHtmlClient(a.symbol || "—")} · ${escapeHtmlClient(a.timeframe || "—")}</span>
+            <span class="watch-item__time">${escapeHtmlClient(watchAgo(a.at))}</span>
+          </div>
+          <p class="watch-item__title">${escapeHtmlClient(a.title || "Change detected")}</p>
+          <p class="watch-item__detail">${escapeHtmlClient(a.detail || "")}</p>
+        </li>`).join("");
+    }
+  }
+
+  function renderWatchStatus(data) {
+    if (!watchDot || !watchState || !watchMeta) return;
+    let state = "idle";
+    let label = "Watcher is starting up";
+    if (!data.enabled) {
+      state = "off";
+      label = "Watcher is switched off";
+    } else if (!data.marketOpen) {
+      state = "closed";
+      label = "Market closed — nothing to re-read";
+    } else if (data.lastTickAt) {
+      state = "live";
+      label = `Watching ${data.watching || 0} read${(data.watching || 0) === 1 ? "" : "s"}, last pass ${watchAgo(data.lastTickAt)}`;
+    } else {
+      state = "live";
+      label = "Watching — first pass on the way";
+    }
+    watchDot.dataset.state = state;
+    watchState.textContent = label;
+
+    const meta = [];
+    if (data.intervalMinutes) meta.push(`every ${data.intervalMinutes} min`);
+    if (Array.isArray(data.timeframes) && data.timeframes.length) meta.push(data.timeframes.join("/"));
+    if (Number.isFinite(data.callsToday)) meta.push(`${data.callsToday} of ${data.maxCallsPerDay || "—"} reads used today`);
+    meta.push("no credits spent");
+    if (data.lastError) meta.push("last error: " + data.lastError);
+    watchMeta.textContent = meta.join(" · ");
+  }
+
+  async function loadWatch() {
+    if (watchBusy) return;
+    watchBusy = true;
+    try {
+      const session = await Auth.getSession();
+      if (!session) {
+        if (watchDot) watchDot.dataset.state = "off";
+        if (watchState) watchState.textContent = "Sign in to run the watcher";
+        return;
+      }
+      const res = await fetch("/api/watch/feed?full=1", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) {
+        if (watchState) watchState.textContent = "Could not reach the watcher";
+        if (watchDot) watchDot.dataset.state = "off";
+        return;
+      }
+      const data = await res.json();
+      renderWatchStatus(data);
+      renderWatchSymbols(data.symbolsState);
+      renderWatchFeed(data);
+    } catch {
+      if (watchDot) watchDot.dataset.state = "off";
+      if (watchState) watchState.textContent = "Could not reach the watcher";
+    } finally {
+      watchBusy = false;
+    }
+  }
+
+  function startWatchPolling() {
+    if (watchPoll) return;
+    watchPoll = setInterval(() => {
+      if (!views.watch || views.watch.hidden) { stopWatchPolling(); return; }
+      loadWatch();
+    }, 60 * 1000);
+  }
+  function stopWatchPolling() {
+    if (watchPoll) clearInterval(watchPoll);
+    watchPoll = null;
+  }
+  if (watchRefreshBtn) {
+    watchRefreshBtn.addEventListener("click", () => {
+      watchRefreshBtn.classList.add("is-busy");
+      loadWatch().finally(() => watchRefreshBtn.classList.remove("is-busy"));
+    });
   }
 
   const historyBiasFilter = document.getElementById("history-bias-filter");

@@ -3543,3 +3543,183 @@ body.scanning .scan-hud {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* ===========================================================
+   Watcher
+   The one screen that is never a single answer: it holds the
+   latest read for each symbol and the changes between reads.
+   =========================================================== */
+.watch-panel {
+  margin: 18px 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-alt) 70%, transparent), var(--panel));
+}
+.watch-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.watch-panel__state {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.watch-panel__meta {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+/* The dot is the whole status vocabulary: breathing = watching,
+   still = closed or off. No spinner, because nothing is loading. */
+.watch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: 0 0 auto;
+}
+.watch-dot[data-state="live"] {
+  background: var(--bull);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 55%, transparent);
+  animation: watch-pulse 2.4s ease-out infinite;
+}
+.watch-dot[data-state="closed"] { background: var(--neutral); }
+.watch-dot[data-state="off"] { background: var(--bear); }
+@keyframes watch-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 50%, transparent); }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--bull) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bull) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .watch-dot[data-state="live"] { animation: none; }
+}
+
+.watch-symbols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.watch-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-soft);
+  border-left: 2px solid var(--text-faint);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-alt) 45%, transparent);
+}
+.watch-chip[data-tone="bull"] { border-left-color: var(--bull); }
+.watch-chip[data-tone="bear"] { border-left-color: var(--bear); }
+.watch-chip[data-tone="flat"] { border-left-color: var(--neutral); }
+.watch-chip__sym {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.watch-chip__bias {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-dim);
+}
+.watch-chip[data-tone="bull"] .watch-chip__bias { color: var(--bull); }
+.watch-chip[data-tone="bear"] .watch-chip__bias { color: var(--bear); }
+.watch-chip__meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.watch-chip__time {
+  font-size: 11px;
+  color: var(--text-faint);
+  opacity: 0.85;
+}
+
+.watch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.watch-head__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.watch-refresh {
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.watch-refresh:hover { color: var(--text); border-color: var(--border); }
+.watch-refresh.is-busy { opacity: 0.5; cursor: progress; }
+
+.watch-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.watch-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 2px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+.watch-item[data-severity="high"] {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+.watch-item[data-severity="medium"] { border-left-color: var(--accent-2); }
+.watch-item__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.watch-item__sym {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.watch-item__time {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.watch-item__title {
+  margin: 0 0 3px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.watch-item__detail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}

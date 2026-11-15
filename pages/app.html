@@ -99,6 +99,10 @@
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V4a1 1 0 011-1h3M17 3h3a1 1 0 011 1v3M21 17v3a1 1 0 01-1 1h-3M7 21H4a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="3"/></svg>
     <span>Scan</span>
   </a>
+  <a class="navpill bottom-tabbar__item" href="#watch" data-view="watch" role="tab" aria-selected="false" aria-controls="view-watch">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3l2-6 3 12 3-9 2 3h5"/></svg>
+    <span>Watcher</span>
+  </a>
   <a class="navpill bottom-tabbar__item" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
     <span>History</span>
@@ -142,6 +146,7 @@
 
   <nav class="sidenav" role="tablist" aria-label="Sections">
     <a class="navpill is-active" href="#scan" data-view="scan" role="tab" aria-selected="true" aria-controls="view-scan" id="tab-scan">Scanner</a>
+    <a class="navpill" href="#watch" data-view="watch" role="tab" aria-selected="false" aria-controls="view-watch" id="tab-watch">Watcher</a>
     <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
     <a class="navpill" href="#help" data-view="help" role="tab" aria-selected="false" aria-controls="view-help" id="tab-help">Help</a>
@@ -1013,6 +1018,35 @@
     <div id="history-empty" class="history-empty">No scans yet — your results will show up here.</div>
     <div id="history-no-match" class="history-empty" hidden>No scans match that pair.</div>
     <div id="history-list" class="history-list" hidden></div>
+  </section>
+
+  <!-- ============ WATCHER (own tab) ============
+       The product's memory. Every other screen answers a question once; this
+       one keeps re-asking it and only speaks when the answer changes. -->
+  <section class="view watch" id="view-watch" role="tabpanel" aria-labelledby="tab-watch" hidden>
+    <p class="eyebrow">
+      <span class="eyebrow__dot" aria-hidden="true"></span>
+      Always watching
+    </p>
+    <h1 class="hero__title">Watcher</h1>
+    <p class="hero__lede">Vertex re-reads the market on a schedule and only tells you when the read actually changes: a bias flip, a new plan, levels moving. Watching costs you no credits.</p>
+
+    <div class="watch-panel" id="watch-panel">
+      <div class="watch-panel__head">
+        <span class="watch-dot" id="watch-dot" data-state="idle" aria-hidden="true"></span>
+        <span class="watch-panel__state" id="watch-state">Checking the watcher…</span>
+      </div>
+      <p class="watch-panel__meta" id="watch-meta"></p>
+    </div>
+
+    <div class="watch-symbols" id="watch-symbols" hidden></div>
+
+    <div class="watch-head">
+      <h2 class="watch-head__title">What changed</h2>
+      <button type="button" class="watch-refresh" id="watch-refresh">Refresh</button>
+    </div>
+    <div id="watch-empty" class="history-empty">Nothing to report yet. The watcher records a change the first time a read differs from the one before it.</div>
+    <ul class="watch-feed" id="watch-feed" hidden></ul>
   </section>
 
   <!-- ============ JOURNAL (own tab) ============ -->
