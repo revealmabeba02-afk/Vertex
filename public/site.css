@@ -751,3 +751,86 @@
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ===========================================================
+   Photography: dark abstract tech surfaces
+   Three free-licence Unsplash photos (commercially usable, no
+   attribution required), each darkened and tinted so it reads as
+   texture under the teal palette instead of as a picture. Kept in
+   one block so the imagery can be swapped or removed in one place.
+   =========================================================== */
+
+/* ---- Landing hero: cinematic backdrop behind the badge and title ---- */
+.page-landing .lhero { isolation: isolate; }
+
+.page-landing .lhero::before {
+  content: "";
+  position: absolute;
+  top: clamp(-140px, -10vw, -60px);
+  left: 50%;
+  width: min(1240px, calc(100% + 18vw));
+  height: calc(100% + clamp(110px, 13vw, 200px));
+  transform: translateX(-50%);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(56% 50% at 50% 32%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 74%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 30%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 68%, transparent) 54%,
+      var(--bg) 96%
+    ),
+    url("/img/hero-tech.jpg") center 42% / cover no-repeat;
+  opacity: 0.92;
+  -webkit-mask-image: radial-gradient(70% 64% at 50% 32%, #000 34%, transparent 84%);
+  mask-image: radial-gradient(70% 64% at 50% 32%, #000 34%, transparent 84%);
+}
+
+@media (max-width: 640px) {
+  .page-landing .lhero::before {
+    top: clamp(-90px, -14vw, -50px);
+    width: calc(100% + 28px);
+    height: calc(100% + 90px);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--bg) 34%, transparent) 0%, color-mix(in srgb, var(--bg) 74%, transparent) 58%, var(--bg) 96%),
+      url("/img/hero-tech-sm.jpg") center 40% / cover no-repeat;
+  }
+}
+
+/* ---- App: the same material, but only just visible behind panels ---- */
+.page-app .app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: url("/img/app-grid.jpg") center top / cover no-repeat;
+  opacity: 0.3;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.4) 52%, transparent 90%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.4) 52%, transparent 90%);
+}
+
+/* ---- Closing call-to-action band: ridge photo as a divider surface ---- */
+.cta-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.cta-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("/img/band-ridge.jpg") center 32% / cover no-repeat;
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 90%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 90%);
+}
+
+/* Light theme needs far less of a dark photo behind dark text. */
+:root[data-theme="light"] .page-landing .lhero::before { opacity: 0.3; }
+:root[data-theme="light"] .page-app .app-shell::before { opacity: 0.1; }
+:root[data-theme="light"] .cta-band::before { opacity: 0.14; }
