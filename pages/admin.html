@@ -943,6 +943,7 @@
   <a href="#clicks" data-panel-link="clicks" title="Link clicks" class="command-rail__pinned">Clicks</a>
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
+  <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
   <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
@@ -1020,6 +1021,36 @@
     <div id="admin-watch-empty" class="users-empty">No changes recorded yet. The watcher speaks the first time a read differs from the one before it.</div>
     <ul class="watch-feed" id="admin-watch-feed" hidden></ul>
     <div class="q2-card__status" id="admin-watch-status"></div>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="growth">
+  <!-- The growth agent: goes online (Gemini + Google Search grounding) and
+       writes marketing/growth briefs. One founder, zero budget — so every
+       suggestion must be executable alone and cost nothing. -->
+  <div class="q2-card" id="sec-growth">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">Growth agent</div>
+        <div class="q2-card__desc">The brain's marketing side. It goes online, finds what's working in the trading-content space right now, and writes briefs: post drafts, where traders are gathering, what to build next. It remembers its recent briefs and builds on them.</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 10px;">
+      <button type="button" class="btn btn--primary" data-growth-kind="posts" style="white-space:nowrap;">Draft social posts</button>
+      <button type="button" class="btn btn--primary" data-growth-kind="research" style="white-space:nowrap;">Find new growth</button>
+      <button type="button" class="btn btn--primary" data-growth-kind="ideas" style="white-space:nowrap;">Level-up ideas</button>
+    </div>
+    <div class="q2-card__status" id="growth-status"></div>
+    <div id="growth-output" style="display:none;margin-top:14px;padding:16px 18px;border:1px solid var(--border-soft);border-radius:10px;background:color-mix(in srgb, var(--panel-alt) 55%, transparent);font-size:13.5px;line-height:1.65;color:var(--text);white-space:pre-wrap;max-height:520px;overflow-y:auto;"></div>
+    <div id="growth-sources" style="display:none;margin-top:12px;font-size:12.5px;line-height:1.7;"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;">
+      <button type="button" class="btn btn--ghost" id="growth-copy" style="display:none;padding:6px 14px;font-size:12.5px;">Copy brief</button>
+      <span id="growth-quota" style="font-size:12px;color:var(--text-faint);"></span>
+    </div>
+    <details id="growth-history-wrap" style="margin-top:14px;" hidden>
+      <summary style="cursor:pointer;font-size:13px;color:var(--text-dim);">Past briefs</summary>
+      <select id="growth-history" class="input" style="margin-top:10px;max-width:420px;"></select>
+    </details>
   </div>
 </div>
 
@@ -1615,6 +1646,7 @@
     wireQ2YoutubeInsight(authHeader);
     wireQ2Chat(authHeader);
     wireWatcher(authHeader);
+    wireGrowth(authHeader);
     loadOrders(authHeader);
     loadBuyers(authHeader);
     loadPurchasePatterns(authHeader);
@@ -2621,6 +2653,128 @@
         if (panel && panel.classList.contains("is-active")) load();
       }, 60 * 1000);
       load();
+    }
+
+    // --- Growth agent -------------------------------------------------------
+    // Sends a research mission to /api/growth/run, renders the grounded brief
+    // with its sources, and mirrors every brief into localStorage so the
+    // history survives a server restart (the server keeps it in memory only).
+    function wireGrowth(authHeader) {
+      const statusEl = document.getElementById("growth-status");
+      const outputEl = document.getElementById("growth-output");
+      const sourcesEl = document.getElementById("growth-sources");
+      const copyBtn = document.getElementById("growth-copy");
+      const quotaEl = document.getElementById("growth-quota");
+      const historyWrap = document.getElementById("growth-history-wrap");
+      const historySel = document.getElementById("growth-history");
+      if (!statusEl || !outputEl) return;
+
+      const LS_KEY = "vx_growth_briefs";
+      let briefs = [];
+      try { briefs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { briefs = []; }
+
+      function saveLocal() {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(briefs.slice(0, 40))); } catch {}
+      }
+
+      function showBrief(b) {
+        outputEl.textContent = b.text || "(empty brief)";
+        outputEl.style.display = "block";
+        const src = Array.isArray(b.sources) ? b.sources.filter((s) => s && s.uri) : [];
+        if (src.length) {
+          sourcesEl.style.display = "block";
+          sourcesEl.innerHTML = "Sources: " + src.map((s) =>
+            '<a href="' + escapeHtml(s.uri) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(s.title || s.uri) + "</a>"
+          ).join(" · ");
+        } else if (b.ungrounded) {
+          sourcesEl.style.display = "block";
+          sourcesEl.textContent = "No live sources this run — the model answered from its own knowledge (search tool unavailable).";
+        } else {
+          sourcesEl.style.display = "none";
+        }
+        copyBtn.style.display = "inline-block";
+        copyBtn.dataset.brief = b.text || "";
+      }
+
+      function renderHistory() {
+        if (!briefs.length) { historyWrap.hidden = true; return; }
+        historyWrap.hidden = false;
+        historySel.innerHTML = briefs.map((b, i) =>
+          '<option value="' + i + '">' + escapeHtml((b.at || "").slice(0, 10) + " · " + (b.label || b.kind || "brief")) + "</option>"
+        ).join("");
+        historySel.onchange = () => {
+          const b = briefs[Number(historySel.value)];
+          if (b) showBrief(b);
+        };
+      }
+
+      function setQuota(data) {
+        if (data && Number.isFinite(data.runsToday)) {
+          quotaEl.textContent = data.runsToday + " of " + (data.maxRunsPerDay || 10) + " research runs used today" + (data.ready === false ? " · GEMINI_API_KEY missing" : "");
+        }
+      }
+
+      const buttons = [...document.querySelectorAll("[data-growth-kind]")];
+      buttons.forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const kind = btn.dataset.growthKind;
+          buttons.forEach((b) => { b.disabled = true; });
+          statusEl.textContent = "Researching online — this can take up to 90 seconds…";
+          outputEl.style.display = "none";
+          sourcesEl.style.display = "none";
+          copyBtn.style.display = "none";
+          try {
+            const res = await fetch("/api/growth/run", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...authHeader },
+              body: JSON.stringify({ kind })
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+              statusEl.textContent = (data && data.error) || "The growth agent could not finish.";
+              return;
+            }
+            statusEl.textContent = "";
+            briefs.unshift(data.brief);
+            briefs = briefs.slice(0, 40);
+            saveLocal();
+            renderHistory();
+            showBrief(data.brief);
+            setQuota(data.feed);
+          } catch {
+            statusEl.textContent = "Network error while running the mission.";
+          } finally {
+            buttons.forEach((b) => { b.disabled = false; });
+          }
+        });
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(copyBtn.dataset.brief || "");
+          copyBtn.textContent = "Copied";
+          setTimeout(() => { copyBtn.textContent = "Copy brief"; }, 1500);
+        } catch {
+          copyBtn.textContent = "Copy failed";
+        }
+      });
+
+      // Restore history even if the server restarted with an empty memory.
+      (async () => {
+        try {
+          const res = await fetch("/api/growth/feed?limit=10", { headers: authHeader });
+          if (!res.ok) return;
+          const data = await res.json();
+          setQuota(data);
+          if (Array.isArray(data.briefs) && data.briefs.length) {
+            const seen = new Set(briefs.map((b) => b.id));
+            data.briefs.forEach((b) => { if (!seen.has(b.id)) briefs.push(b); });
+            briefs.sort((a, b2) => (b2.id || 0) - (a.id || 0));
+            saveLocal();
+          }
+          renderHistory();
+        } catch {}
+      })();
     }
 
     async function wireQ2Chat(authHeader) {

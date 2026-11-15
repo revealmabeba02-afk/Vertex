@@ -1214,6 +1214,35 @@ app.get("/api/watch/feed", requireUser, (req, res) => {
   }
 });
 
+// --- Growth agent routes ---------------------------------------------------
+// Admin-only: run a research mission (posts / research / ideas) or read the
+// brief history. Capped by GROWTH_MAX_RUNS_PER_DAY to protect the free quota.
+app.get("/api/growth/feed", requireUser, (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    res.json({ ok: true, ...growth.feed(Number(req.query.limit) || 10) });
+  } catch (err) {
+    console.error("Growth feed error:", err.message);
+    res.status(500).json({ error: "Could not read the growth agent right now." });
+  }
+});
+
+app.post("/api/growth/run", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const kind = String(req.body?.kind || "").trim();
+    const brief = await growth.run(kind);
+    res.json({ ok: true, brief, feed: growth.feed(5) });
+  } catch (err) {
+    console.error("Growth run error:", err.message);
+    res.status(502).json({ error: err.message || "The growth agent could not complete the mission." });
+  }
+});
+
 // Admin-only: force a sweep now, even outside market hours, so the loop can
 // be proven end to end without waiting for the next interval.
 app.post("/api/watch/tick", requireUser, async (req, res) => {
@@ -1266,6 +1295,11 @@ async function fetchChartForWatcher(symbol, timeframe) {
 }
 
 const watcher = createWatcher({ fetchChart: fetchChartForWatcher });
+
+// The growth brain: goes online through Gemini's Google Search grounding and
+// writes marketing/growth briefs for the owner. Admin-only endpoints.
+const { createGrowthAgent } = require("./growth");
+const growth = createGrowthAgent();
 
 
 // --- Scan history ---------------------------------------------------------
