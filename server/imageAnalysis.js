@@ -25,9 +25,21 @@ const GEMINI_IMAGE_MODEL = (
   process.env.GEMINI_IMAGE_MODEL ||
   process.env.GEMINI_MODEL ||
   // Google retires dated Gemini models for new keys ("no longer available to
-  // new users"), so point at the moving alias instead of pinning a version.
-  "gemini-flash-latest"
+  // new users"), so keep a list and use whichever answers.
+  "gemini-3.8-flash"
 ).trim();
+
+// Free-tier capacity moves around, so a single model name is a single point of
+// failure: the alias can 503 during a demand spike and a pinned version can be
+// retired for new keys. Try them in order and use whichever answers.
+const GEMINI_IMAGE_MODELS = [
+  ...new Set(
+    GEMINI_IMAGE_MODEL.split(",")
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .concat(["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash"])
+  )
+];
 
 const BIASES = ["Bullish", "Bearish", "Neutral / Ranging"];
 
@@ -199,58 +211,79 @@ async function callAnthropicVision({ buffer, mimeType, timeframe, apiKey }) {
 }
 
 async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
-  const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/" +
-    encodeURIComponent(GEMINI_IMAGE_MODEL) +
-    ":generateContent";
-
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": apiKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
-        contents: [
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+    contents: [
+      {
+        role: "user",
+        parts: [
           {
-            role: "user",
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType || "image/png",
-                  data: buffer.toString("base64")
-                }
-              },
-              { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2048,
-          responseMimeType: "application/json"
-        }
-      }),
-      signal: AbortSignal.timeout(52000)
-    });
-  } catch (err) {
-    const e = new Error("The image reader took too long or could not be reached. Please try again.");
-    e.status = 502;
-    e.cause = err;
-    throw e;
+            inlineData: {
+              mimeType: mimeType || "image/png",
+              data: buffer.toString("base64")
+            }
+          },
+          { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json"
+    }
+  });
+
+  let lastFailure = null;
+
+  for (const model of GEMINI_IMAGE_MODELS) {
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) +
+      ":generateContent";
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json"
+        },
+        body,
+        signal: AbortSignal.timeout(52000)
+      });
+    } catch (err) {
+      lastFailure = { kind: "network", err };
+      continue;
+    }
+
+    const data = await response.json().catch(() => null);
+    if (response.ok) {
+      const parts = data?.candidates?.[0]?.content?.parts;
+      const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
+      if (text.trim()) return text;
+      lastFailure = { kind: "empty", status: response.status, data };
+      continue;
+    }
+
+    console.error("Image analysis error (gemini/" + model + "):", response.status, data);
+
+    // A model that is retired, overloaded or missing is worth retrying on the
+    // next name in the list. Auth, credit and quota failures are not — the
+    // next model would fail exactly the same way.
+    const retryable = response.status === 404 || response.status === 503 || response.status === 429;
+    if (!retryable) throw visionError("gemini", response.status, data);
+    lastFailure = { kind: "http", status: response.status, data };
   }
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    console.error("Image analysis error (gemini):", response.status, data);
-    throw visionError("gemini", response.status, data);
+  if (lastFailure && lastFailure.kind === "http") {
+    throw visionError("gemini", lastFailure.status, lastFailure.data);
   }
-
-  const parts = data?.candidates?.[0]?.content?.parts;
-  return Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
+  const e = new Error("The image reader took too long or could not be reached. Please try again.");
+  e.status = 502;
+  if (lastFailure && lastFailure.err) e.cause = lastFailure.err;
+  throw e;
 }
 
 async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKey }) {
