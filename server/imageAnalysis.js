@@ -24,7 +24,9 @@ const IMAGE_ANALYSIS_MODEL = (
 const GEMINI_IMAGE_MODEL = (
   process.env.GEMINI_IMAGE_MODEL ||
   process.env.GEMINI_MODEL ||
-  "gemini-2.5-flash"
+  // Google retires dated Gemini models for new keys ("no longer available to
+  // new users"), so point at the moving alias instead of pinning a version.
+  "gemini-flash-latest"
 ).trim();
 
 const BIASES = ["Bullish", "Bearish", "Neutral / Ranging"];
