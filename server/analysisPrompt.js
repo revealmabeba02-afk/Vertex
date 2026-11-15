@@ -35,6 +35,7 @@ Rules you must follow:
 - Respond with ONLY a single valid JSON object, no markdown code fences, no commentary before or after it. The JSON must match this exact shape:
 
 {
+  "is_chart": boolean,                  // true only if the image really is a price/trading chart
   "pair_guess": string | null,          // instrument symbol if visible/legible on the chart, else null
   "timeframe_analyzed": string,         // the timeframe label provided to you
   "market_bias": "Bullish" | "Bearish" | "Neutral / Ranging",

@@ -1116,7 +1116,10 @@ app.get("/config.js", (req, res) => {
         // above, so a misplaced secret key is never served from here.
         supabaseUrl: SUPABASE_READY ? SUPABASE_URL : "",
         supabaseAnonKey: SUPABASE_READY ? SUPABASE_ANON_KEY : "",
-        ready: SUPABASE_READY
+        ready: SUPABASE_READY,
+        // Chart-photo scanning needs the vision model, so the app can hide /
+        // explain the Upload tab instead of offering a button that 503s.
+        imageScan: !!ANTHROPIC_API_KEY
       }) +
       ";"
   );
@@ -1193,6 +1196,7 @@ app.get("/api/health", (req, res) => {
 // Moved to analysisMapper.js so the standalone auto-post job can reuse the
 // exact same mapping without pulling in the whole Express app.
 const { mapFxSynapseToAnalysis } = require("./analysisMapper");
+const { analyzeChartImage } = require("./imageAnalysis");
 
 
 // --- Scan history ---------------------------------------------------------
@@ -2882,13 +2886,22 @@ async function checkScanProvider() {
 }
 
 async function checkPaymentsConfigured() {
-  if (!CREDITS_READY) return { ok: false, detail: "Missing one of BINANCE_API_KEY/SECRET/CREDIT_FULFILL_SECRET." };
+  if (WHOP_READY) return { ok: true, detail: "Whop webhook is configured (primary route)." };
+  if (!CREDITS_READY) return { ok: false, detail: "Missing one of BINANCE_API_KEY/SECRET/CREDIT_FULFILL_SECRET, and WHOP_WEBHOOK_SECRET is not set." };
   return { ok: true, detail: "Binance keys and fulfill secret are set." };
 }
 
 async function checkPaymentsReachable() {
+  // Whop is the primary payment route now. Binance is a fallback, and its API
+  // refuses requests from some host regions (Render gets HTTP 451), which used
+  // to make the public status page report payments as broken even though
+  // buying worked fine through Whop. A configured Whop webhook is the real
+  // signal that people can pay, so check that first.
+  if (WHOP_READY) {
+    return { ok: true, detail: "Whop webhook configured (primary route). Binance is a fallback and may be unreachable from this host." };
+  }
   try {
-    // A free, unsigned Binance endpoint — just checks the network path to
+    // A free, unsigned Binance endpoint - just checks the network path to
     // Binance works at all, independent of whether our API key is valid.
     const r = await fetch("https://api.binance.com/api/v3/ping", { signal: AbortSignal.timeout(6000) });
     return { ok: r.ok, detail: r.ok ? "Binance API reachable." : `Binance responded with HTTP ${r.status}.` };
@@ -3658,6 +3671,97 @@ app.post("/api/admin/feedback/:id/status", requireUser, async (req, res) => {
 // be mid-flight at a time; a second one is told to wait rather than
 // charged. Cleared in a `finally` below so it never gets stuck.
 const scansInFlight = new Set();
+
+// --- Image scanning --------------------------------------------------------
+// Upload a chart screenshot and have it read. FXSynapse only works from a
+// symbol, so this route uses Claude's vision model through
+// server/imageAnalysis.js instead. Same rules as the pair scanner: one scan
+// is charged up front, a failure refunds it, the result is saved to history.
+// If ANTHROPIC_API_KEY is missing the route answers 503 before charging
+// anything, and the pair scanner keeps working exactly as before.
+app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart"), async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(503).json({
+      error: "Chart-photo reading isn't switched on yet. Add ANTHROPIC_API_KEY on the server, or pick a pair instead.",
+      code: "image_scan_unavailable"
+    });
+  }
+
+  const timeframe = String(req.body?.timeframe || "").trim().toUpperCase();
+  if (!req.file) {
+    return res.status(400).json({ error: "Choose a chart screenshot (PNG, JPG or WEBP) first." });
+  }
+  if (!timeframe || !isValidTimeframe(timeframe)) {
+    return res.status(400).json({ error: "Pick a timeframe." });
+  }
+  if (scansInFlight.has(req.user.id)) {
+    return res.status(429).json({ error: "A scan is already running for your account. Please wait for it to finish." });
+  }
+  scansInFlight.add(req.user.id);
+
+  try {
+    let scanSource = null;
+    if (CREDITS_READY) {
+      try {
+        const result = await supabaseRpc("use_scan", {}, req.user.token);
+        scanSource = result?.source || "paid";
+        if (result?.low_credit_alert) {
+          fetch(
+            `${SUPABASE_URL}/rest/v1/user_prefs?select=low_credit_alert_opt_out&limit=1`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.user.token}` }, signal: AbortSignal.timeout(8000) }
+          )
+            .then((r) => (r.ok ? r.json() : []))
+            .then((rows) => {
+              const optedOut = Array.isArray(rows) && rows[0] && rows[0].low_credit_alert_opt_out;
+              if (!optedOut) return sendLowCreditAlertEmail(req.user.email, result.balance);
+            })
+            .catch(() => {});
+        }
+      } catch (err) {
+        if (/suspended/i.test(err.message || "")) {
+          return res.status(403).json({
+            error: "Your account has been suspended. Contact support if you think this is a mistake.",
+            code: "account_suspended"
+          });
+        }
+        return res.status(402).json({
+          error: "You're out of free scans for today and have no credits left. Buy more to keep scanning.",
+          code: "no_credits"
+        });
+      }
+    }
+
+    try {
+      const { isChart, analysis } = await analyzeChartImage({
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        timeframe,
+        apiKey: ANTHROPIC_API_KEY
+      });
+
+      if (!isChart) {
+        await refundIfSpent(req.user, scanSource);
+        return res.status(422).json({
+          error: "That doesn't look like a trading chart. Upload a screenshot of a price chart and try again.",
+          code: "not_a_chart"
+        });
+      }
+
+      res.json({ analysis, timeframe });
+      saveHistoryRow(req.user, analysis, timeframe); // fire-and-forget
+    } catch (err) {
+      await refundIfSpent(req.user, scanSource);
+      saveScanFailure(req.user, "chart image", timeframe, err.message || "Image analysis failed");
+      // Never pass a provider 401 straight through: the browser treats a 401
+      // from this API as a dead login session and signs the user out.
+      res.status(err.status === 400 ? 400 : 502).json({
+        error: err.message || "Could not read that chart image. Please try again."
+      });
+    }
+  } finally {
+    scansInFlight.delete(req.user.id);
+  }
+});
 
 app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
   const symbol = String(req.body?.symbol || "").trim().toUpperCase();

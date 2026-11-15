@@ -256,6 +256,24 @@
   const formError = document.getElementById("form-error");
   const scanHudBg = document.getElementById("scan-hud-bg");
 
+  // Scan mode + chart upload (declared here so the submit handler and
+  // updateScanBtnState below can see them).
+  const scanModeBtns = Array.from(document.querySelectorAll(".scan-mode"));
+  const scanPairPanel = document.getElementById("scan-pair-panel");
+  const scanImagePanel = document.getElementById("scan-image-panel");
+  const chartInput = document.getElementById("chart-file");
+  const chartDropzone = document.getElementById("chart-dropzone");
+  const chartEmpty = document.getElementById("chart-dropzone-empty");
+  const chartPreviewWrap = document.getElementById("chart-preview-wrap");
+  const chartPreview = document.getElementById("chart-preview");
+  const chartRemove = document.getElementById("chart-remove");
+  const imageModeNote = document.getElementById("image-mode-note");
+
+  const imageScanEnabled = !!(window.APP_CONFIG && window.APP_CONFIG.imageScan);
+  let scanMode = "image";
+  let chartFile = null;
+  let chartPreviewUrl = null;
+
   const stateEmpty = document.getElementById("state-empty");
   const stateLoading = document.getElementById("state-loading");
   const stateResult = document.getElementById("state-result");
@@ -561,6 +579,10 @@
   // is enabled — both are required by FXSynapse's API.
   // --------------------------------------------------------------
   function updateScanBtnState() {
+    if (scanMode === "image") {
+      scanBtn.disabled = !(chartFile && timeframeSelect.value);
+      return;
+    }
     scanBtn.disabled = !(symbolInput.value.trim() && timeframeSelect.value);
   }
 
@@ -597,6 +619,106 @@
     clearTimeframe();
     updateScanBtnState();
   }
+
+  // --------------------------------------------------------------
+  // Scan mode: upload a chart screenshot, or name a pair. The timeframe
+  // stays shared because both paths need one. The Upload tab is the default
+  // whenever the server reports a vision key; otherwise the app opens on the
+  // pair scanner and explains why.
+  // --------------------------------------------------------------
+  function setScanMode(mode) {
+    scanMode = mode === "pair" ? "pair" : "image";
+    scanModeBtns.forEach((btn) => {
+      const on = btn.dataset.scanMode === scanMode;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (scanPairPanel) scanPairPanel.hidden = scanMode !== "pair";
+    if (scanImagePanel) scanImagePanel.hidden = scanMode !== "image";
+
+    if (imageModeNote) {
+      if (scanMode === "image" && !imageScanEnabled) {
+        imageModeNote.textContent = "Chart-photo reading isn't switched on for this server yet. Add an ANTHROPIC_API_KEY on Render, or use the pair scanner for now.";
+        imageModeNote.hidden = false;
+      } else {
+        imageModeNote.hidden = true;
+      }
+    }
+
+    clearFormError();
+    updateScanBtnState();
+  }
+
+  scanModeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setScanMode(btn.dataset.scanMode));
+  });
+
+  function setChartFile(file) {
+    if (!file) {
+      chartFile = null;
+      if (chartPreviewUrl) { URL.revokeObjectURL(chartPreviewUrl); chartPreviewUrl = null; }
+      if (chartInput) chartInput.value = "";
+      if (chartPreviewWrap) chartPreviewWrap.hidden = true;
+      if (chartEmpty) chartEmpty.hidden = false;
+      if (chartRemove) chartRemove.hidden = true;
+      updateScanBtnState();
+      return;
+    }
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type)) {
+      showFormError("Please choose a PNG, JPG or WEBP screenshot.");
+      return;
+    }
+    if (file.size > 7 * 1024 * 1024) {
+      showFormError("That image is over 7 MB. Please choose a smaller screenshot.");
+      return;
+    }
+
+    chartFile = file;
+    if (chartPreviewUrl) URL.revokeObjectURL(chartPreviewUrl);
+    chartPreviewUrl = URL.createObjectURL(file);
+    if (chartPreview) chartPreview.src = chartPreviewUrl;
+    if (chartPreviewWrap) chartPreviewWrap.hidden = false;
+    if (chartEmpty) chartEmpty.hidden = true;
+    if (chartRemove) chartRemove.hidden = false;
+    clearFormError();
+    updateScanBtnState();
+  }
+
+  if (chartInput) {
+    chartInput.addEventListener("change", () => {
+      setChartFile(chartInput.files && chartInput.files[0]);
+    });
+  }
+
+  if (chartRemove) {
+    chartRemove.addEventListener("click", (e) => {
+      // The remove control lives inside the <label for="chart-file">, so
+      // without this a click would open the file picker again.
+      e.preventDefault();
+      e.stopPropagation();
+      setChartFile(null);
+    });
+  }
+
+  if (chartDropzone) {
+    ["dragenter", "dragover"].forEach((name) => {
+      chartDropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        chartDropzone.classList.add("is-dragover");
+      });
+    });
+    ["dragleave", "dragend"].forEach((name) => {
+      chartDropzone.addEventListener(name, () => chartDropzone.classList.remove("is-dragover"));
+    });
+    chartDropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      chartDropzone.classList.remove("is-dragover");
+      const dropped = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (dropped) setChartFile(dropped);
+    });
+  }
+
+  setScanMode(imageScanEnabled ? "image" : "pair");
 
   // ---- Watchlist: a quick-glance strip of saved pairs, stored per-browser
   // in localStorage (no backend table needed for a convenience list like
@@ -738,6 +860,19 @@
     if (scanInFlight) return;
     clearFormError();
 
+    if (scanMode === "image") {
+      if (!chartFile) {
+        showFormError("Choose a chart screenshot first.");
+        return;
+      }
+      if (!timeframeSelect.value) {
+        showFormError("Pick a timeframe.");
+        return;
+      }
+      await runScan("", timeframeSelect.value, chartFile);
+      return;
+    }
+
     const symbol = symbolInput.value.trim().toUpperCase();
     if (!symbol) {
       showFormError("Enter a pair or symbol first.");
@@ -760,6 +895,10 @@
 
   retryBtn.addEventListener("click", () => {
     if (scanInFlight) return;
+    if (scanMode === "image" && chartFile && timeframeSelect.value) {
+      runScan("", timeframeSelect.value, chartFile);
+      return;
+    }
     const symbol = symbolInput.value.trim().toUpperCase();
     if (symbol && timeframeSelect.value) {
       runScan(symbol, timeframeSelect.value);
@@ -781,6 +920,10 @@
   if (rescanSameBtn) {
     rescanSameBtn.addEventListener("click", () => {
       if (scanInFlight) return;
+      if (scanMode === "image" && chartFile && timeframeSelect.value) {
+        runScan("", timeframeSelect.value, chartFile);
+        return;
+      }
       try {
         const raw = localStorage.getItem(LAST_SCAN_KEY);
         if (!raw) return;
@@ -1338,8 +1481,8 @@
   }
   restoreLastScan();
 
-  async function runScan(symbol, timeframe) {
-    saveLastScan(symbol, timeframe);
+  async function runScan(symbol, timeframe, imageFile = null) {
+    if (!imageFile) saveLastScan(symbol, timeframe);
     scanInFlight = true;
     setLoadingUI(true);
     if (scanHudBg) scanHudBg.hidden = true;
@@ -1353,15 +1496,29 @@
       // Ask for the session at scan time rather than caching it: supabase-js
       // refreshes the access token when it is close to expiring.
       const session = await Auth.getSession();
-      const headers = { "Content-Type": "application/json" };
+      const headers = {};
       if (session) headers.Authorization = `Bearer ${session.access_token}`;
 
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ symbol, timeframe }),
-        signal: controller.signal
-      });
+      let res;
+      if (imageFile) {
+        const body = new FormData();
+        body.append("chart", imageFile);
+        body.append("timeframe", timeframe);
+        res = await fetch("/api/analyze-image", {
+          method: "POST",
+          headers,
+          body,
+          signal: controller.signal
+        });
+      } else {
+        headers["Content-Type"] = "application/json";
+        res = await fetch("/api/analyze", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ symbol, timeframe }),
+          signal: controller.signal
+        });
+      }
 
       if (res.status === 401) {
         // The server did not accept the token. Drop it here too, otherwise the

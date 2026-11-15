@@ -55,52 +55,6 @@
 </head>
 <body>
 
-<!-- Background rings + starfield. Decorative only. -->
-<div class="orbs" aria-hidden="true">
-  <span class="orb orb--ring orb--a"></span>
-  <span class="orb orb--ring orb--b"></span>
-  <span class="orb orb--blob orb--c"></span>
-  <span class="orb orb--blob orb--d"></span>
-  <div class="stars">
-    <span class="star" style="--x:8%; --y:14%; --d:0s; --s:2.4s;"></span>
-    <span class="star" style="--x:22%; --y:62%; --d:0.6s; --s:3.1s;"></span>
-    <span class="star" style="--x:35%; --y:30%; --d:1.1s; --s:2.8s;"></span>
-    <span class="star" style="--x:48%; --y:80%; --d:0.3s; --s:3.6s;"></span>
-    <span class="star" style="--x:58%; --y:18%; --d:1.6s; --s:2.5s;"></span>
-    <span class="star" style="--x:67%; --y:52%; --d:0.9s; --s:3.3s;"></span>
-    <span class="star" style="--x:78%; --y:8%; --d:0.2s; --s:2.9s;"></span>
-    <span class="star" style="--x:85%; --y:70%; --d:1.4s; --s:3.4s;"></span>
-    <span class="star" style="--x:12%; --y:88%; --d:0.8s; --s:2.6s;"></span>
-    <span class="star" style="--x:92%; --y:40%; --d:1.9s; --s:3.0s;"></span>
-    <span class="star" style="--x:40%; --y:6%; --d:0.5s; --s:3.7s;"></span>
-    <span class="star" style="--x:72%; --y:90%; --d:1.2s; --s:2.7s;"></span>
-    <span class="star" style="--x:3%; --y:45%; --d:1.3s; --s:3.2s;"></span>
-    <span class="star" style="--x:16%; --y:5%; --d:0.4s; --s:2.6s;"></span>
-    <span class="star" style="--x:28%; --y:95%; --d:1.8s; --s:3.5s;"></span>
-    <span class="star" style="--x:44%; --y:40%; --d:0.7s; --s:2.9s;"></span>
-    <span class="star" style="--x:52%; --y:62%; --d:1.5s; --s:3.1s;"></span>
-    <span class="star" style="--x:62%; --y:30%; --d:0.1s; --s:2.7s;"></span>
-    <span class="star" style="--x:70%; --y:4%; --d:1.0s; --s:3.4s;"></span>
-    <span class="star" style="--x:80%; --y:48%; --d:0.5s; --s:2.5s;"></span>
-    <span class="star" style="--x:88%; --y:85%; --d:1.7s; --s:3.3s;"></span>
-    <span class="star" style="--x:95%; --y:20%; --d:0.9s; --s:2.8s;"></span>
-    <span class="star" style="--x:5%; --y:72%; --d:1.2s; --s:3.6s;"></span>
-    <span class="star" style="--x:30%; --y:15%; --d:0.3s; --s:2.4s;"></span>
-    <span class="star" style="--x:55%; --y:92%; --d:1.6s; --s:3.0s;"></span>
-    <span class="star" style="--x:75%; --y:60%; --d:0.6s; --s:2.6s;"></span>
-    <span class="star" style="--x:18%; --y:35%; --d:0.2s; --s:3.3s;"></span>
-    <span class="star" style="--x:38%; --y:68%; --d:1.1s; --s:2.5s;"></span>
-    <span class="star" style="--x:46%; --y:12%; --d:0.8s; --s:3.1s;"></span>
-    <span class="star" style="--x:64%; --y:78%; --d:1.4s; --s:2.8s;"></span>
-    <span class="star" style="--x:84%; --y:28%; --d:0.5s; --s:3.4s;"></span>
-    <span class="star" style="--x:10%; --y:55%; --d:1.9s; --s:2.6s;"></span>
-    <span class="star" style="--x:97%; --y:65%; --d:0.3s; --s:3.2s;"></span>
-    <span class="star" style="--x:25%; --y:5%; --d:1.0s; --s:2.9s;"></span>
-    <span class="star star--shoot" style="--x:85%; --y:16%; --sd:1s; --ss:9s;"></span>
-    <span class="star star--shoot" style="--x:20%; --y:22%; --sd:5s; --ss:12s;"></span>
-    <span class="star star--shoot" style="--x:60%; --y:10%; --sd:9.5s; --ss:14s;"></span>
-  </div>
-</div>
 
 <div class="app-shell">
 
@@ -225,8 +179,8 @@
       AI-powered analysis
     </p>
     <span id="streak-badge" class="streak-badge" hidden>🔥 <span id="streak-value">0</span> day streak</span>
-    <h1 class="hero__title">Scan a pair</h1>
-    <p class="hero__lede">Live structure, levels and a trade plan in about 30 seconds.</p>
+    <h1 class="hero__title">Scan any chart</h1>
+    <p class="hero__lede">Drop a chart screenshot or name a pair — structure, levels and a trade plan in about 30 seconds.</p>
 
     <div class="session-clock" id="session-clock" aria-label="Market session status">
       <div class="session-clock__pill" data-session="sydney"><span class="session-clock__dot"></span><span class="session-clock__name">Sydney</span></div>
@@ -238,6 +192,39 @@
     <p class="setup-notice" id="setup-notice" hidden>Accounts are not connected yet, so scanning is switched off. Add the Supabase keys to <code>server/.env</code> and restart. See SUPABASE_SETUP.md.</p>
 
     <form id="scan-form" class="scanform" novalidate>
+
+      <div class="scan-modes" role="tablist" aria-label="Scan mode">
+        <button type="button" class="scan-mode is-active" data-scan-mode="image" role="tab" aria-selected="true">
+          Upload chart
+        </button>
+        <button type="button" class="scan-mode" data-scan-mode="pair" role="tab" aria-selected="false">
+          Pick a pair
+        </button>
+      </div>
+
+      <div class="scan-panel" id="scan-image-panel">
+        <label class="dropzone" id="chart-dropzone" for="chart-file">
+          <input type="file" id="chart-file" accept="image/png,image/jpeg,image/webp" hidden />
+          <span class="dropzone__empty" id="chart-dropzone-empty">
+            <span class="dropzone__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            </span>
+            <span class="dropzone__text">Drop your chart screenshot here</span>
+            <span class="dropzone__hint">or click to choose · PNG, JPG or WEBP · up to 7 MB</span>
+          </span>
+          <span class="dropzone__preview" id="chart-preview-wrap" hidden>
+            <img id="chart-preview" alt="Selected chart screenshot" />
+          </span>
+          <button type="button" class="dropzone__remove" id="chart-remove" hidden>Remove</button>
+          <span class="corner corner--tl" aria-hidden="true"></span>
+          <span class="corner corner--tr" aria-hidden="true"></span>
+          <span class="corner corner--bl" aria-hidden="true"></span>
+          <span class="corner corner--br" aria-hidden="true"></span>
+        </label>
+        <p class="scan-panel__note" id="image-mode-note" hidden></p>
+      </div>
+
+      <div class="scan-panel" id="scan-pair-panel" hidden>
 
       <div class="watchlist" id="watchlist-strip" hidden>
         <span class="watchlist__label">Watchlist</span>
@@ -266,6 +253,7 @@
         />
         <span class="symbol-field__hint">Major pairs, metals and indices — FXSynapse reads live price bars, no screenshot needed.</span>
       </label>
+      </div>
 
       <fieldset class="tf">
         <legend class="tf__legend">Timeframe</legend>
@@ -816,111 +804,71 @@
       Preferences
     </p>
     <h1 class="hero__title">Settings</h1>
-    <p class="hero__lede">Make Vertex Scanner look the way you want.</p>
+    <p class="hero__lede">Your account, how Vertex emails you, and your data. Nothing else.</p>
 
     <div class="settings-card">
-      <p class="settings-row__title" style="margin-bottom: 4px;">Account</p>
+      <div class="settings-card__head">
+        <p class="settings-row__title">Account</p>
+        <p class="settings-row__desc">Your login and how to get back in.</p>
+      </div>
+
       <div class="settings-row">
         <div>
-          <p class="settings-row__desc" style="margin-bottom: 0;">Signed in as</p>
-          <p class="settings-row__title" id="settings-account-email" style="margin-top: 2px;">—</p>
+          <p class="settings-row__desc">Signed in as</p>
+          <p class="settings-row__title" id="settings-account-email">—</p>
         </div>
         <button type="button" class="btn btn--ghost" id="settings-logout-btn">Log out</button>
       </div>
-      <div class="settings-row" id="settings-admin-row" hidden style="margin-top: 12px;">
+
+      <div class="settings-row" id="settings-admin-row" hidden>
         <div>
-          <p class="settings-row__title" style="margin-bottom: 0;">Admin dashboard</p>
-          <p class="settings-row__desc">Users, orders, broker accounts, support, content and analytics.</p>
+          <p class="settings-row__title">Admin dashboard</p>
+          <p class="settings-row__desc">Users, buyers, orders, analytics and support.</p>
         </div>
         <a href="/admin" class="btn btn--ghost">Open admin</a>
       </div>
-      <p class="settings-row__desc" style="margin-top: 12px;">Have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
 
-      <div style="margin-top: 14px;">
+      <div class="settings-actions">
         <button type="button" class="btn btn--ghost" id="settings-change-email-toggle">Change email</button>
-        <form id="settings-change-email-form" style="margin-top: 10px;" hidden>
-          <div class="field">
-            <label class="field__label" for="settings-new-email">New email</label>
-            <input type="email" id="settings-new-email" class="input" autocomplete="email" placeholder="you@example.com" required />
-          </div>
-          <button type="submit" id="settings-change-email-btn" class="scan-btn" style="margin-top: 10px;">
-            <span class="scan-btn__label">Send confirmation</span>
-            <span class="scan-btn__spinner" aria-hidden="true"></span>
-          </button>
-          <p id="settings-change-email-status" class="credits-status" hidden></p>
-        </form>
-      </div>
-
-      <div style="margin-top: 14px;">
         <button type="button" class="btn btn--ghost" id="settings-change-password-toggle">Change password</button>
-        <form id="settings-change-password-form" style="margin-top: 10px;" hidden>
-          <div class="field">
-            <label class="field__label" for="settings-new-password">New password</label>
-            <div class="field__wrap">
-              <input type="password" id="settings-new-password" class="input" autocomplete="new-password" placeholder="At least 8 characters" required />
-              <button type="button" class="pw-toggle" data-toggle="settings-new-password" aria-label="Show password">Show</button>
-            </div>
+      </div>
+
+      <form id="settings-change-email-form" class="settings-inline-form" hidden>
+        <div class="field">
+          <label class="field__label" for="settings-new-email">New email</label>
+          <input type="email" id="settings-new-email" class="input" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+        <button type="submit" id="settings-change-email-btn" class="scan-btn">
+          <span class="scan-btn__label">Send confirmation</span>
+          <span class="scan-btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p id="settings-change-email-status" class="credits-status" hidden></p>
+      </form>
+
+      <form id="settings-change-password-form" class="settings-inline-form" hidden>
+        <div class="field">
+          <label class="field__label" for="settings-new-password">New password</label>
+          <div class="field__wrap">
+            <input type="password" id="settings-new-password" class="input" autocomplete="new-password" placeholder="At least 8 characters" required />
+            <button type="button" class="pw-toggle" data-toggle="settings-new-password" aria-label="Show password">Show</button>
           </div>
-          <button type="submit" id="settings-change-password-btn" class="scan-btn" style="margin-top: 10px;">
-            <span class="scan-btn__label">Update password</span>
-            <span class="scan-btn__spinner" aria-hidden="true"></span>
-          </button>
-          <p id="settings-change-password-status" class="credits-status" hidden></p>
-        </form>
-      </div>
+        </div>
+        <button type="submit" id="settings-change-password-btn" class="scan-btn">
+          <span class="scan-btn__label">Update password</span>
+          <span class="scan-btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p id="settings-change-password-status" class="credits-status" hidden></p>
+      </form>
 
-      <div class="settings-row" style="margin-top: 12px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0;">Your data</p>
-          <p class="settings-row__desc">Download a copy of your scans, journal and support history.</p>
-        </div>
-        <button type="button" class="btn btn--ghost" id="settings-export-data-btn">Export data</button>
-      </div>
-      <div class="settings-row" style="margin-top: 12px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0;">Weekly recap emails</p>
-          <p class="settings-row__desc">A weekly summary of your trades, win rate and scans.</p>
-        </div>
-        <label class="auth-remember-row" style="margin: 0;">
-          <input type="checkbox" id="settings-weekly-recap-toggle" class="auth-remember-check" />
-        </label>
-      </div>
-      <div class="settings-row" style="margin-top: 12px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0;">Low-credit alert emails</p>
-          <p class="settings-row__desc">A heads-up email when your paid scan credits run low.</p>
-        </div>
-        <label class="auth-remember-row" style="margin: 0;">
-          <input type="checkbox" id="settings-low-credit-alert-toggle" class="auth-remember-check" />
-        </label>
-      </div>
-      <div class="settings-row" id="settings-install-row" hidden style="margin-top: 12px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0;">Install app</p>
-          <p class="settings-row__desc">Add Vertex to your home screen for one-tap access, like a real app.</p>
-        </div>
-        <button type="button" class="btn btn--ghost" id="settings-install-btn">Install</button>
-      </div>
-
-      <div class="settings-row" style="margin-top: 12px;">
-        <div>
-          <p class="settings-row__title" style="margin-bottom: 0; color: var(--danger, #ef4444);">Delete account</p>
-          <p class="settings-row__desc">Permanently deletes your account and all your data — scans, journal, broker connection. This can't be undone.</p>
-        </div>
-        <button type="button" class="btn btn--ghost" id="settings-delete-account-toggle">Delete account</button>
-      </div>
-      <div id="settings-delete-account-confirm" style="margin-top: 10px;" hidden>
-        <p class="settings-row__desc">Type <strong>DELETE</strong> below to confirm. This is permanent.</p>
-        <div class="journal-form__row">
-          <input type="text" id="settings-delete-account-input" class="input" placeholder="Type DELETE" />
-          <button type="button" class="btn btn--ghost" id="settings-delete-account-confirm-btn" style="border-color: var(--danger, #ef4444); color: var(--danger, #ef4444);">Permanently delete</button>
-        </div>
-        <p id="settings-delete-account-status" class="credits-status" hidden></p>
-      </div>
-      <p class="settings-row__desc" style="margin-top: 14px;"><a href="/terms" target="_blank" class="error-link">Terms of Service</a> · <a href="/privacy" target="_blank" class="error-link">Privacy Policy</a></p>
+      <p class="settings-note">Have a data question? <a href="#help" class="error-link">Contact support</a>.</p>
     </div>
 
     <div class="settings-card">
+      <div class="settings-card__head">
+        <p class="settings-row__title">Preferences</p>
+        <p class="settings-row__desc">How the app looks and what lands in your inbox.</p>
+      </div>
+
       <div class="settings-row">
         <div>
           <p class="settings-row__title">Appearance</p>
@@ -937,30 +885,66 @@
         </button>
       </div>
 
-      <div class="settings-row settings-row--column">
+      <div class="settings-row">
         <div>
-          <p class="settings-row__title">Accent color</p>
-          <p class="settings-row__desc">Pick the color used for highlights and the Vertex Scanner mark.</p>
+          <p class="settings-row__title">Weekly recap emails</p>
+          <p class="settings-row__desc">A weekly summary of your trades, win rate and scans.</p>
         </div>
-        <div class="swatch-row" id="accent-swatches" role="radiogroup" aria-label="Accent color">
-          <button type="button" class="swatch" data-accent="" style="--sw:#18F0F0" aria-label="Cyan (default)" role="radio" aria-checked="true"></button>
-          <button type="button" class="swatch" data-accent="violet" style="--sw:#8A6CFF" aria-label="Violet" role="radio" aria-checked="false"></button>
-          <button type="button" class="swatch" data-accent="emerald" style="--sw:#3FBF8A" aria-label="Emerald" role="radio" aria-checked="false"></button>
-          <button type="button" class="swatch" data-accent="sky" style="--sw:#4FA8E0" aria-label="Sky" role="radio" aria-checked="false"></button>
-          <button type="button" class="swatch" data-accent="rose" style="--sw:#E0618F" aria-label="Rose" role="radio" aria-checked="false"></button>
+        <label class="auth-remember-row" style="margin: 0;">
+          <input type="checkbox" id="settings-weekly-recap-toggle" class="auth-remember-check" />
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <p class="settings-row__title">Low-credit alert emails</p>
+          <p class="settings-row__desc">A heads-up email when your paid scan credits run low.</p>
         </div>
+        <label class="auth-remember-row" style="margin: 0;">
+          <input type="checkbox" id="settings-low-credit-alert-toggle" class="auth-remember-check" />
+        </label>
+      </div>
+
+      <div class="settings-row" id="settings-install-row" hidden>
+        <div>
+          <p class="settings-row__title">Install app</p>
+          <p class="settings-row__desc">Add Vertex to your home screen for one-tap access, like a real app.</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="settings-install-btn">Install</button>
       </div>
     </div>
 
     <div class="settings-card">
-      <p class="settings-row__title" style="margin-bottom: 4px;">Invite friends, earn credits</p>
-      <p class="settings-row__desc" style="margin-bottom: 14px;">Share your link — you get 2 credits the first time a friend you referred actually buys credits.</p>
-      <div class="referral-row">
-        <input type="text" id="referral-link-input" class="input" readonly value="Loading…" aria-label="Your referral link">
-        <button type="button" id="referral-copy-btn" class="scan-btn">Copy</button>
+      <div class="settings-card__head">
+        <p class="settings-row__title">Data &amp; privacy</p>
+        <p class="settings-row__desc">Take your data with you, or remove your account.</p>
       </div>
-      <p class="credits-status" id="referral-copy-status" hidden></p>
-      <p class="settings-row__desc" id="referral-stats" style="margin-top: 14px;">—</p>
+
+      <div class="settings-row">
+        <div>
+          <p class="settings-row__title">Your data</p>
+          <p class="settings-row__desc">Download a copy of your scans and support history.</p>
+        </div>
+        <button type="button" class="btn btn--ghost" id="settings-export-data-btn">Export data</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <p class="settings-row__title settings-row__title--danger">Delete account</p>
+          <p class="settings-row__desc">Permanently deletes your account and all your data — scans, journal, broker connection. This can't be undone.</p>
+        </div>
+        <button type="button" class="btn btn--ghost btn--danger" id="settings-delete-account-toggle">Delete account</button>
+      </div>
+      <div id="settings-delete-account-confirm" class="settings-inline-form" hidden>
+        <p class="settings-row__desc">Type <strong>DELETE</strong> below to confirm. This is permanent.</p>
+        <div class="journal-form__row">
+          <input type="text" id="settings-delete-account-input" class="input" placeholder="Type DELETE" />
+          <button type="button" class="btn btn--ghost btn--danger" id="settings-delete-account-confirm-btn">Permanently delete</button>
+        </div>
+        <p id="settings-delete-account-status" class="credits-status" hidden></p>
+      </div>
+
+      <p class="settings-note"><a href="/terms" target="_blank" class="error-link">Terms of Service</a> · <a href="/privacy" target="_blank" class="error-link">Privacy Policy</a></p>
     </div>
   </section>
 
