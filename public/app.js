@@ -2267,6 +2267,20 @@
     return liveChart;
   }
 
+  // Key levels arrive as human strings ("1.0850", "1.0800 – 1.0820",
+  // "Resistance: 1.09"). Pull the first usable number so the chart can draw
+  // a line for it; anything unreadable is simply skipped.
+  function firstNumericLevel(levels) {
+    if (!Array.isArray(levels)) return null;
+    for (const raw of levels) {
+      const match = String(raw).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+      if (!match) continue;
+      const n = parseFloat(match[0]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+
   function priceLine(series, value, color, title) {
     if (typeof value !== "number" || Number.isNaN(value)) return;
     series.createPriceLine({
@@ -2318,7 +2332,74 @@
     priceLine(liveCandleSeries, a.stop_loss?.value_raw, cssVar("--bear", "#E25C63"), "Stop");
     priceLine(liveCandleSeries, firstTarget?.target_raw, cssVar("--bull", "#3FBF8A"), "Target");
 
+    // Key level, swing low and swing high. The cover page shows these five
+    // labels on its chart, so the real result has to show them too — otherwise
+    // the marketing promises levels the product never draws.
+    priceLine(liveCandleSeries, firstNumericLevel(a.market_structure?.key_levels), cssVar("--accent-dim", "#0B8E9E"), "Key level");
+
+    let swingLow = null;
+    let swingHigh = null;
+    for (const c of candles) {
+      if (typeof c.low === "number" && (swingLow === null || c.low < swingLow)) swingLow = c.low;
+      if (typeof c.high === "number" && (swingHigh === null || c.high > swingHigh)) swingHigh = c.high;
+    }
+    priceLine(liveCandleSeries, swingLow, cssVar("--bear", "#E25C63"), "Low");
+    priceLine(liveCandleSeries, swingHigh, cssVar("--bull", "#3FBF8A"), "High");
+
     liveChart.timeScale().fitContent();
+  }
+
+  // Builds the Entry / Key level / Target / Low / High strip — the five labels
+  // the cover page shows. Each pill is independent: if a scan has no real
+  // number for one of them, that pill hides rather than showing a fake dash.
+  function renderKeyline(a) {
+    const strip = document.getElementById("res-keyline");
+    if (!strip) return;
+
+    const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+    const firstTarget = Array.isArray(a.take_profit) ? a.take_profit[0] : null;
+    const candles = Array.isArray(a.candles) ? a.candles : [];
+
+    let swingLow = null;
+    let swingHigh = null;
+    for (const c of candles) {
+      if (typeof c.low === "number" && (swingLow === null || c.low < swingLow)) swingLow = c.low;
+      if (typeof c.high === "number" && (swingHigh === null || c.high > swingHigh)) swingHigh = c.high;
+    }
+
+    const keyLevels = a.market_structure && a.market_structure.key_levels;
+    const keyLevelText = Array.isArray(keyLevels) && keyLevels.length ? String(keyLevels[0]).trim() : null;
+
+    const rows = [
+      ["entry", firstEntry && firstEntry.entry_raw, firstEntry && firstEntry.entry_zone],
+      ["level", firstNumericLevel(keyLevels), keyLevelText],
+      ["target", firstTarget && firstTarget.target_raw, firstTarget && firstTarget.target],
+      ["low", swingLow, null],
+      ["high", swingHigh, null]
+    ];
+
+    let any = false;
+    for (const [key, num, fallback] of rows) {
+      const item = document.getElementById("res-keyline-" + key + "-item");
+      const valueEl = document.getElementById("res-keyline-" + key);
+      if (!item || !valueEl) continue;
+
+      let text = null;
+      if (typeof num === "number" && Number.isFinite(num)) text = fmtRaw(num);
+      else if (typeof fallback === "string" && fallback.trim()) text = fallback.trim();
+      else if (typeof fallback === "number" && Number.isFinite(fallback)) text = fmtRaw(fallback);
+
+      if (text) {
+        valueEl.textContent = text;
+        item.hidden = false;
+        any = true;
+      } else {
+        valueEl.textContent = "";
+        item.hidden = true;
+      }
+    }
+
+    strip.hidden = !any;
   }
 
   let lastResultForCopy = null;
@@ -2327,6 +2408,7 @@
     lastResultForCopy = { a, timeframe };
     syncWatchlistStar();
     renderChart(a);
+    renderKeyline(a);
     document.getElementById("res-pair").textContent = a.pair_guess ? friendlySymbol(a.pair_guess) : "Symbol unclear";
     document.getElementById("res-tf").textContent = timeframe ? (TF_LABELS[timeframe] || timeframe) : "Timeframe not set";
 

@@ -429,6 +429,33 @@
 
       <p id="res-low-confidence-note" class="settings-row__desc" style="margin: -4px 0 14px; padding: 10px 12px; border: 1px solid var(--amber, #d97706); border-radius: 8px; color: var(--amber, #d97706);" hidden>⚠ Low confidence read — the chart doesn't show a clean setup right now. Consider waiting for a clearer signal rather than trading this one.</p>
 
+      <!-- The five levels the site promises on the cover page — Entry,
+           Key level, Target, Low and High — shown as a single strip so the
+           read is visible before anyone scrolls. Each pill hides itself when
+           the scan genuinely has no number for it. -->
+      <div id="res-keyline" class="keyline" hidden>
+        <div class="keyline__item keyline__item--entry" id="res-keyline-entry-item" hidden>
+          <span class="keyline__label">Entry</span>
+          <span class="keyline__value" id="res-keyline-entry">—</span>
+        </div>
+        <div class="keyline__item keyline__item--level" id="res-keyline-level-item" hidden>
+          <span class="keyline__label">Key level</span>
+          <span class="keyline__value" id="res-keyline-level">—</span>
+        </div>
+        <div class="keyline__item keyline__item--target" id="res-keyline-target-item" hidden>
+          <span class="keyline__label">Target</span>
+          <span class="keyline__value" id="res-keyline-target">—</span>
+        </div>
+        <div class="keyline__item keyline__item--low" id="res-keyline-low-item" hidden>
+          <span class="keyline__label">Low</span>
+          <span class="keyline__value" id="res-keyline-low">—</span>
+        </div>
+        <div class="keyline__item keyline__item--high" id="res-keyline-high-item" hidden>
+          <span class="keyline__label">High</span>
+          <span class="keyline__value" id="res-keyline-high">—</span>
+        </div>
+      </div>
+
       <div id="res-chart-wrap" class="chart-wrap" hidden>
         <div class="chart-wrap__head">
           <span class="chart-wrap__title">Live chart</span>
@@ -436,6 +463,9 @@
             <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--entry"></i>Entry</span>
             <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--sl"></i>Stop</span>
             <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--tp"></i>Target</span>
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--level"></i>Key level</span>
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--low"></i>Low</span>
+            <span class="chart-wrap__legend-item"><i class="chart-wrap__swatch chart-wrap__swatch--high"></i>High</span>
           </span>
         </div>
         <div id="res-chart" class="chart-wrap__canvas"></div>
