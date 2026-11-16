@@ -2992,7 +2992,16 @@ async function checkAiAssistant() {
     const out = await generateText({ prompt: "reply with the word ok", maxTokens: 12, temperature: 0, timeoutMs: 9000 });
     return { ok: true, detail: `AI reachable via ${out.provider === "gemini" ? "Gemini (free tier)" : "Anthropic"}.` };
   } catch (err) {
-    return { ok: false, detail: `AI is not answering: ${err.message}` };
+    const raw = String(err.message || "");
+    // A rejected key is the single most likely failure here and the least
+    // obvious from a stack trace, so name the fix instead of echoing Google.
+    const rejectedKey = /401|API key not valid|UNAUTHENTICATED|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(raw);
+    return {
+      ok: false,
+      detail: rejectedKey
+        ? "The Gemini key on this server is not accepted by Google (401 API key not valid). Make a free key at aistudio.google.com/apikey and replace GEMINI_API_KEY — until then Q2, the briefing, both insights, support triage, the growth agent and image scans cannot answer."
+        : `AI is not answering: ${raw}`
+    };
   }
 }
 
@@ -3499,7 +3508,14 @@ app.post("/api/admin/q2/chat", requireUser, async (req, res) => {
     res.json({ reply: (out.text || "").trim() || "…" });
   } catch (err) {
     console.error("Q2 chat error:", err.message);
-    res.status(502).json({ error: "Could not reach Q2." });
+    // "Could not reach Q2" tells King nothing when the real cause is a key
+    // Google refused. Say which one and where to replace it.
+    const rejectedKey = /401|API key not valid|UNAUTHENTICATED|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(String(err.message || ""));
+    res.status(502).json({
+      error: rejectedKey
+        ? "Q2 can't think: the Gemini key on this server is rejected by Google. Replace GEMINI_API_KEY with a free key from aistudio.google.com/apikey."
+        : "Could not reach Q2."
+    });
   }
 });
 

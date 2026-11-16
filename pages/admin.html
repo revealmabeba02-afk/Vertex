@@ -152,6 +152,33 @@
   }
   .system-alert__text strong { display: block; margin-bottom: 2px; color: var(--text); }
   .system-alert__text span { color: var(--text-dim); }
+
+  /* Wrong-account gate. Same shape as the system alert but calmer (accent,
+     not red): nothing is broken, the page is just signed in as the wrong
+     person. */
+  .admin-gate {
+    margin: 0 0 18px;
+    padding: 16px 18px;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .admin-gate__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .admin-gate__text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-dim);
+  }
   .briefing-card__label {
     display: flex;
     align-items: center;
@@ -940,30 +967,44 @@
   </div>
 
   <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
-  <a href="#clicks" data-panel-link="clicks" title="Link clicks" class="command-rail__pinned">Clicks</a>
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
   <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
   <a href="#money" data-panel-link="money" title="Revenue">Money</a>
-  <a href="#video" data-panel-link="video" title="Post a video">Post a video</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
   <details class="command-rail__group">
-    <summary>Settings</summary>
-    <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
+    <summary>Business</summary>
     <a href="#health" data-panel-link="health" title="Health">Health</a>
+    <a href="#clicks" data-panel-link="clicks" title="Link clicks">Clicks</a>
     <a href="#orders" data-panel-link="orders" title="Orders">Orders</a>
     <a href="#buyers" data-panel-link="buyers" title="Buyers">Buyers</a>
     <a href="#stats" data-panel-link="stats" title="Stats">Stats</a>
     <a href="#analytics" data-panel-link="analytics" title="Usage analytics">Analytics</a>
     <a href="#users" data-panel-link="users" title="Users">Users</a>
-    <a href="#broker" data-panel-link="broker" title="Broker accounts">Broker accounts</a>
+  </details>
+
+  <details class="command-rail__group">
+    <summary>Support &amp; settings</summary>
     <a href="#support" data-panel-link="support" title="Support">Support</a>
     <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
+    <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
+    <a href="#broker" data-panel-link="broker" title="Broker accounts">Broker accounts</a>
     <a href="#audit" data-panel-link="audit" title="Audit log">Audit log</a>
   </details>
 </nav>
 <main class="admin-wrap command-main">
+
+<!-- Shown only when the browser is signed in as a non-admin account. Without
+     this, every panel silently renders "Not authorized" and the page looks
+     broken instead of explaining that it needs the admin login. -->
+<div class="admin-gate" id="admin-gate" hidden>
+  <div>
+    <div class="admin-gate__title">Signed in as the wrong account</div>
+    <div class="admin-gate__text" id="admin-gate-text">The admin data only loads for the admin account.</div>
+  </div>
+  <button type="button" class="btn btn--primary" id="admin-gate-switch" style="padding:9px 18px;font-size:13px;white-space:nowrap;">Switch account</button>
+</div>
 <div class="command-panel" data-panel="overview">
   <p class="eyebrow">
     <span class="eyebrow__dot" aria-hidden="true"></span>
@@ -1141,18 +1182,6 @@
   </div>
 
   <p class="admin-status" style="margin-top:16px;">Full detail: <a href="#stats" data-panel-link="stats" style="color:var(--accent);text-decoration:none;">Stats</a> · <a href="#buyers" data-panel-link="buyers" style="color:var(--accent);text-decoration:none;">Buyers</a> · <a href="#orders" data-panel-link="orders" style="color:var(--accent);text-decoration:none;">Orders</a> · <a href="#analytics" data-panel-link="analytics" style="color:var(--accent);text-decoration:none;">Analytics</a></p>
-</div>
-
-<div class="command-panel" data-panel="video">
-  <div class="q2-card" id="sec-video">
-    <div class="q2-card__head">
-      <div>
-        <div class="q2-card__title">Post a video</div>
-        <div class="q2-card__desc">Pick a video from your phone and post it straight to YouTube.</div>
-      </div>
-      <a href="/api/admin/videos/upload-raw-form" style="flex-shrink:0;padding:10px 18px;border-radius:10px;background:var(--bull,#4C8DFF);color:#02100F;font-weight:700;text-decoration:none;white-space:nowrap;">Open</a>
-    </div>
-  </div>
 </div>
 
 <div class="command-panel" data-panel="ai">
@@ -1720,6 +1749,27 @@
     }
     const authHeader = { Authorization: `Bearer ${session.access_token}` };
     window.__adminAuthHeader = authHeader;
+
+    // Wrong-account check. Every admin API is gated on the admin email, so a
+    // normal account gets 403 everywhere and each panel just says "Not
+    // authorized" — indistinguishable from the page being broken. Prove it
+    // once, up front, and offer the account switch.
+    (async () => {
+      try {
+        const probe = await fetch("/api/admin/stats", { headers: authHeader });
+        if (probe.status !== 403) return;
+        const gate = document.getElementById("admin-gate");
+        const textEl = document.getElementById("admin-gate-text");
+        const btn = document.getElementById("admin-gate-switch");
+        if (!gate || !textEl) return;
+        const who = (session.user && session.user.email) || "this account";
+        textEl.textContent =
+          "You're signed in as " + who +
+          ". Revenue, users, support and the agents only load for the admin account, so the panels below will stay blank.";
+        gate.hidden = false;
+        if (btn) btn.addEventListener("click", () => Auth.signOut());
+      } catch { /* the panels' own error states cover this */ }
+    })();
 
     // Briefing, health and support all load independently of the stats/users
     // block below — a failure in one never blocks the others from showing.
