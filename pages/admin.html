@@ -1125,6 +1125,21 @@
       <div class="stat-card__value" id="money-avg">—</div>
     </div>
   </div>
+
+  <!-- Wealth chart: revenue month by month, built in the browser from the
+       buyers list (every paid order already carries paid_at + amount_usd).
+       Deliberately needs no new SQL function, so it starts working the moment
+       King is logged in with the admin email. -->
+  <div class="pattern-card">
+    <div style="padding:18px 22px 6px;">
+      <div class="q2-card__title" style="margin-bottom:4px;">Money over time</div>
+      <div class="q2-card__desc">Every paid order, bucketed by month. The green bar is your best month so far.</div>
+    </div>
+    <div id="wealth-empty" class="users-empty" style="padding:16px 22px;">Loading…</div>
+    <div id="wealth-bars" class="pattern-card" style="margin:0;border:0;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;" hidden></div>
+    <p class="pattern-card__note" id="wealth-note" hidden></p>
+  </div>
+
   <p class="admin-status" style="margin-top:16px;">Full detail: <a href="#stats" data-panel-link="stats" style="color:var(--accent);text-decoration:none;">Stats</a> · <a href="#buyers" data-panel-link="buyers" style="color:var(--accent);text-decoration:none;">Buyers</a> · <a href="#orders" data-panel-link="orders" style="color:var(--accent);text-decoration:none;">Orders</a> · <a href="#analytics" data-panel-link="analytics" style="color:var(--accent);text-decoration:none;">Analytics</a></p>
 </div>
 
@@ -2860,12 +2875,14 @@
     function wireMoney(authHeader) {
       const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
       (async () => {
-        const [statsRes, monthRes] = await Promise.all([
+        const [statsRes, monthRes, buyersRes] = await Promise.all([
           fetch("/api/admin/stats", { headers: authHeader }),
-          fetch("/api/admin/month-comparison", { headers: authHeader })
+          fetch("/api/admin/month-comparison", { headers: authHeader }),
+          fetch("/api/admin/buyers", { headers: authHeader }).catch(() => null)
         ]);
         const stats = await statsRes.json().catch(() => null);
         const month = await monthRes.json().catch(() => null);
+        const buyersData = buyersRes ? await buyersRes.json().catch(() => null) : null;
         const total = stats && Number.isFinite(stats.totalRevenue) ? stats.totalRevenue : null;
         const paying = stats && Number.isFinite(stats.payingUsers) ? stats.payingUsers : null;
         const users = stats && Number.isFinite(stats.totalUsers) ? stats.totalUsers : null;
@@ -2881,7 +2898,71 @@
         set("money-buyers", paying === null ? "—" : String(paying));
         set("money-users", users === null ? "—" : String(users));
         set("money-avg", total !== null && paying ? "$" + (total / paying).toFixed(2) : "—");
+
+        renderWealthChart(buyersData && Array.isArray(buyersData.buyers) ? buyersData.buyers : null);
       })().catch(() => {});
+    }
+
+    // Wealth chart: the last 12 months of paid revenue, bucketed in the browser
+    // straight from the buyers list. No new SQL, no new endpoint. Months with no
+    // orders still render as empty bars so quiet stretches are visible.
+    function renderWealthChart(buyers) {
+      const emptyEl = document.getElementById("wealth-empty");
+      const barsEl = document.getElementById("wealth-bars");
+      const noteEl = document.getElementById("wealth-note");
+      if (!emptyEl || !barsEl || !noteEl) return;
+      if (!buyers) {
+        emptyEl.textContent = "Could not load paid orders.";
+        return;
+      }
+      if (!buyers.length) {
+        emptyEl.textContent = "No paid orders yet. The chart fills in the first time someone buys.";
+        return;
+      }
+      const buckets = [];
+      const byKey = {};
+      const now = new Date();
+      for (let i = 11; i >= 0; i -= 1) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+        const bucket = {
+          key,
+          label: d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+          total: 0,
+          orders: 0
+        };
+        buckets.push(bucket);
+        byKey[key] = bucket;
+      }
+      buyers.forEach((row) => {
+        if (!row || !row.paid_at) return;
+        const when = new Date(row.paid_at);
+        if (Number.isNaN(when.getTime())) return;
+        const key = when.getFullYear() + "-" + String(when.getMonth() + 1).padStart(2, "0");
+        const bucket = byKey[key];
+        if (!bucket) return;
+        bucket.total += Number(row.amount_usd || 0);
+        bucket.orders += 1;
+      });
+      const max = Math.max(1, ...buckets.map((b) => b.total));
+      const best = buckets.reduce((a, b) => (b.total > a.total ? b : a), buckets[0]);
+      emptyEl.hidden = true;
+      barsEl.hidden = false;
+      barsEl.innerHTML = "";
+      buckets.forEach((b) => {
+        const row = document.createElement("div");
+        row.className = "pattern-row" + (b.total > 0 && b === best ? " is-best" : "");
+        row.innerHTML = '<div class="pattern-row__label">' + b.label + '</div>' +
+          '<div class="pattern-row__track"><div class="pattern-row__fill" style="width:' + Math.round((b.total / max) * 100) + '%"></div></div>' +
+          '<div class="pattern-row__count">' + (b.total > 0 ? "$" + b.total.toFixed(2) : "—") + '</div>';
+        barsEl.appendChild(row);
+      });
+      const total12 = buckets.reduce((sum, b) => sum + b.total, 0);
+      const orders12 = buckets.reduce((sum, b) => sum + b.orders, 0);
+      noteEl.hidden = false;
+      noteEl.textContent = "Last 12 months: $" + total12.toFixed(2) + " across " + orders12 +
+        " paid order" + (orders12 === 1 ? "" : "s") + ". Best month: " + best.label +
+        (best.total > 0 ? " ($" + best.total.toFixed(2) + ")" : "") + ".";
     }
 
     // --- Post templates ------------------------------------------------------

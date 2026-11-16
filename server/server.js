@@ -3105,7 +3105,7 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
       { name: "Scan provider", ...scanProvider },
       { name: "Payments configured", ...paymentsConfigured },
       { name: "Payments network (Binance)", ...paymentsReachable },
-      { name: "AI assistant (Q2 / Anthropic)", ...aiAssistant }
+      { name: "AI assistant (Q2)", ...aiAssistant }
     ];
     const okCount = checks.filter((c) => c.ok).length;
     res.json({ percent: Math.round((okCount / checks.length) * 100), checks });
@@ -3117,9 +3117,11 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
 
 // --- AI Briefing -----------------------------------------------------------
 // A short "welcome back" status briefing for the admin page, built from the
-// same real data as the health card, user stats and support inbox. Uses the
-// same ANTHROPIC_API_KEY as support AI triage; falls back to a plain
-// templated summary (no AI, but still real numbers) if that key isn't set.
+// same real data as the health card, user stats and support inbox. Goes
+// through server/aiText.js like every other AI feature, so it keeps working
+// on whichever provider is alive (free Gemini first, Anthropic as fallback);
+// falls back to a plain templated summary (no AI, but still real numbers) if
+// no provider answers.
 const BRIEFING_AI_SYSTEM_PROMPT = `You are a loyal, sharp AI assistant giving the owner of "Vertex Chart Scanner" a short status briefing, in the style of a calm, capable aide reporting to their commander. Always address them as "sir". Open with a short "Welcome back, sir" style greeting, then report the real numbers you're given in plain, confident language. If something needs attention (a failing system check, open support tickets, pending payments, failed scans), flag it clearly and say what to do about it. When failedScans is greater than 0, always mention the count and, if failedScanReasons is non-empty, name the top reason — this is the kind of thing sir specifically wants surfaced, not buried. If everything looks good, say so and keep it short. Never invent numbers you weren't given — only use what's in the data. Keep it under 90 words, plain text, no markdown, no bullet points, written as natural spoken sentences.`;
 
 async function aiBriefing(data) {
