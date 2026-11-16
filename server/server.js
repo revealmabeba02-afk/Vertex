@@ -394,6 +394,11 @@ function extractWhopPaymentFields(data) {
 // suggestion, same as before this feature existed. Get a key from
 // https://console.anthropic.com/settings/keys.
 const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+
+// Every text-AI feature goes through one engine so a dead provider can't take
+// five features down at once. Gemini (free) is preferred; Anthropic is the
+// fallback.
+const { generateText, hasProvider } = require("./aiText");
 const SUPPORT_AI_MODEL = (process.env.SUPPORT_AI_MODEL || "claude-haiku-4-5-20251001").trim();
 
 // Optional: free-tier Google Gemini key for reading chart screenshots. When it
@@ -442,30 +447,16 @@ const FEEDBACK_AI_SYSTEM_PROMPT = `You are Q2, the AI running on Vertex Chart Sc
 Write a short, warm, genuine acknowledgment (under 60 words, plain text, no markdown). Reference something specific from what they actually wrote, so it doesn't read as generic. Do NOT promise it will be built, give a timeline, or claim it's already planned — only the site owner decides that. Just make them feel heard, and reply with only the message text, nothing else.`;
 
 async function aiAcknowledgeFeedback(message) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 150,
-        system: FEEDBACK_AI_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: message }]
-      }),
-      signal: AbortSignal.timeout(15000)
+    const out = await generateText({
+      system: FEEDBACK_AI_SYSTEM_PROMPT,
+      prompt: message,
+      maxTokens: 150,
+      temperature: 0.6,
+      timeoutMs: 15000
     });
-    const data = await r.json();
-    if (!r.ok) {
-      console.error("Feedback AI error:", r.status, data);
-      return null;
-    }
-    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("").trim() : "";
-    return text || null;
+    return out.text || null;
   } catch (err) {
     console.error("Feedback AI ack failed:", err.message);
     return null;
@@ -473,30 +464,22 @@ async function aiAcknowledgeFeedback(message) {
 }
 
 async function aiTriageSupportMessage(message, isAdmin) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 400,
-        system: isAdmin ? SUPPORT_AI_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : SUPPORT_AI_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: message }]
-      }),
-      signal: AbortSignal.timeout(20000)
+    const out = await generateText({
+      system: isAdmin ? SUPPORT_AI_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : SUPPORT_AI_SYSTEM_PROMPT,
+      prompt: message,
+      maxTokens: 400,
+      temperature: 0.4,
+      timeoutMs: 20000
     });
-    const data = await r.json();
-    if (!r.ok) {
-      console.error("Support AI error:", r.status, data);
-      return null;
-    }
-    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("") : "";
-    const parsed = JSON.parse(text.trim());
+    // Models sometimes wrap JSON in a fence even when told not to. Pull the
+    // outermost object rather than trusting the wrapper.
+    const raw = String(out.text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1));
     if (!parsed || typeof parsed.reply !== "string") return null;
     return { confidence: parsed.confidence === "high" ? "high" : "low", reply: parsed.reply.trim() };
   } catch (err) {
@@ -548,33 +531,16 @@ const Q3_SYSTEM_PROMPT = `You are "Ask about this scan" inside Vertex Chart Scan
 - Reply with ONLY the answer text, no JSON, no preamble.`;
 
 async function aiExplainScan(analysis, question, isAdmin) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: Q3_AI_MODEL,
-        max_tokens: 300,
-        system: isAdmin ? Q3_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : Q3_SYSTEM_PROMPT,
-        messages: [{
-          role: "user",
-          content: `Scan result JSON:\n${JSON.stringify(analysis)}\n\nQuestion: ${question}`
-        }]
-      }),
-      signal: AbortSignal.timeout(20000)
+    const out = await generateText({
+      system: isAdmin ? Q3_SYSTEM_PROMPT + ADMIN_TONE_ADDENDUM : Q3_SYSTEM_PROMPT,
+      prompt: `Scan result JSON:\n${JSON.stringify(analysis)}\n\nQuestion: ${question}`,
+      maxTokens: 300,
+      temperature: 0.3,
+      timeoutMs: 20000
     });
-    const data = await r.json();
-    if (!r.ok) {
-      console.error("Q3 AI error:", r.status, data);
-      return null;
-    }
-    const text = Array.isArray(data.content) ? data.content.map((b) => b.text || "").join("") : "";
-    return text.trim() || null;
+    return (out.text || "").trim() || null;
   } catch (err) {
     console.error("Q3 explain failed:", err.message);
     return null;
@@ -3019,34 +2985,14 @@ async function checkPaymentsReachable() {
 // enough to run on every health check and surfaces billing problems here,
 // front and center, instead of buried in console.error calls.
 async function checkAiAssistant() {
-  if (!ANTHROPIC_API_KEY) return { ok: false, detail: "ANTHROPIC_API_KEY not configured — Q2 can't talk at all." };
+  if (!hasProvider()) {
+    return { ok: false, detail: "No AI key configured (GEMINI_API_KEY or ANTHROPIC_API_KEY) — Q2 can't talk at all." };
+  }
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 1,
-        messages: [{ role: "user", content: "hi" }]
-      }),
-      signal: AbortSignal.timeout(8000)
-    });
-    if (r.ok) return { ok: true, detail: "Anthropic API reachable, key valid." };
-    const data = await r.json().catch(() => null);
-    const message = data?.error?.message || `HTTP ${r.status}`;
-    const isCredit = /credit balance is too low/i.test(message);
-    return {
-      ok: false,
-      detail: isCredit
-        ? "Out of Anthropic credit — Q2 chat, Q2 Insight and the AI briefing have all stopped working. Add credit at console.anthropic.com."
-        : `Anthropic API error: ${message}`
-    };
+    const out = await generateText({ prompt: "reply with the word ok", maxTokens: 12, temperature: 0, timeoutMs: 9000 });
+    return { ok: true, detail: `AI reachable via ${out.provider === "gemini" ? "Gemini (free tier)" : "Anthropic"}.` };
   } catch (err) {
-    return { ok: false, detail: `Could not reach Anthropic: ${err.message}` };
+    return { ok: false, detail: `AI is not answering: ${err.message}` };
   }
 }
 
@@ -3177,30 +3123,16 @@ app.get("/api/admin/health", requireUser, async (req, res) => {
 const BRIEFING_AI_SYSTEM_PROMPT = `You are a loyal, sharp AI assistant giving the owner of "Vertex Chart Scanner" a short status briefing, in the style of a calm, capable aide reporting to their commander. Always address them as "sir". Open with a short "Welcome back, sir" style greeting, then report the real numbers you're given in plain, confident language. If something needs attention (a failing system check, open support tickets, pending payments, failed scans), flag it clearly and say what to do about it. When failedScans is greater than 0, always mention the count and, if failedScanReasons is non-empty, name the top reason — this is the kind of thing sir specifically wants surfaced, not buried. If everything looks good, say so and keep it short. Never invent numbers you weren't given — only use what's in the data. Keep it under 90 words, plain text, no markdown, no bullet points, written as natural spoken sentences.`;
 
 async function aiBriefing(data) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 250,
-        system: BRIEFING_AI_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: JSON.stringify(data) }]
-      }),
-      signal: AbortSignal.timeout(15000)
+    const out = await generateText({
+      system: BRIEFING_AI_SYSTEM_PROMPT,
+      prompt: JSON.stringify(data),
+      maxTokens: 250,
+      temperature: 0.5,
+      timeoutMs: 15000
     });
-    const result = await r.json();
-    if (!r.ok) {
-      console.error("Briefing AI error:", r.status, result);
-      return null;
-    }
-    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
-    return text.trim() || null;
+    return (out.text || "").trim() || null;
   } catch (err) {
     console.error("Briefing AI failed:", err.message);
     return null;
@@ -3395,35 +3327,16 @@ app.post("/api/admin/q2", requireUser, async (req, res) => {
 const Q2_INSIGHT_SYSTEM_PROMPT = `You are a sharp, honest intelligence aide reporting to the owner of "Vertex Chart Scanner" on what users actually think of the app, based on their real support messages and feedback submissions. Address the owner as "sir". Be direct and unflattering where warranted — this is a status report, not PR. Call out: recurring complaints or bugs, anything people praise, feature requests worth taking seriously, and the overall mood (frustrated, happy, indifferent). If there's too little data to say anything meaningful, say so plainly rather than inventing a read. Keep it under 150 words, plain text, no markdown.`;
 
 async function aiQ2Insight(supportMessages, feedbackMessages) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 400,
-        system: Q2_INSIGHT_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: JSON.stringify({ supportMessages, feedbackMessages })
-          }
-        ]
-      }),
-      signal: AbortSignal.timeout(20000)
+    const out = await generateText({
+      system: Q2_INSIGHT_SYSTEM_PROMPT,
+      prompt: JSON.stringify({ supportMessages, feedbackMessages }),
+      maxTokens: 400,
+      temperature: 0.4,
+      timeoutMs: 20000
     });
-    const result = await r.json();
-    if (!r.ok) {
-      console.error("Q2 insight AI error:", r.status, result);
-      return null;
-    }
-    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
-    return text.trim() || null;
+    return (out.text || "").trim() || null;
   } catch (err) {
     console.error("Q2 insight AI failed:", err.message);
     return null;
@@ -3466,30 +3379,16 @@ app.get("/api/admin/q2/insight", requireUser, async (req, res) => {
 const Q2_YOUTUBE_INSIGHT_SYSTEM_PROMPT = `You are a sharp, honest intelligence aide reporting to the owner of "Vertex Chart Scanner" on how viewers are reacting to his YouTube videos, based on real comment data (video title, and each comment's text and like count). Address the owner as "sir". Be direct — this is a status report, not PR. Call out: genuine praise vs skepticism/doubt (e.g. "is this real?"), questions people keep asking, anything mocked or criticized, and the overall mood. Note which specific video is getting the strongest reaction if one stands out. If there's too little data to say anything meaningful, say so plainly rather than inventing a read. Keep it under 150 words, plain text, no markdown.`;
 
 async function aiQ2YoutubeInsight(videosWithComments) {
-  if (!ANTHROPIC_API_KEY) return null;
+  if (!hasProvider()) return null;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 400,
-        system: Q2_YOUTUBE_INSIGHT_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: JSON.stringify(videosWithComments) }]
-      }),
-      signal: AbortSignal.timeout(20000)
+    const out = await generateText({
+      system: Q2_YOUTUBE_INSIGHT_SYSTEM_PROMPT,
+      prompt: JSON.stringify(videosWithComments),
+      maxTokens: 400,
+      temperature: 0.4,
+      timeoutMs: 20000
     });
-    const result = await r.json();
-    if (!r.ok) {
-      console.error("Q2 YouTube insight AI error:", r.status, result);
-      return null;
-    }
-    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
-    return text.trim() || null;
+    return (out.text || "").trim() || null;
   } catch (err) {
     console.error("Q2 YouTube insight AI failed:", err.message);
     return null;
@@ -3561,8 +3460,8 @@ app.post("/api/admin/q2/chat", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
   }
-  if (!ANTHROPIC_API_KEY) {
-    return res.status(503).json({ error: "No ANTHROPIC_API_KEY configured — Q2 can't talk yet." });
+  if (!hasProvider()) {
+    return res.status(503).json({ error: "No AI provider configured — Q2 can't talk yet." });
   }
   const { message, history } = req.body || {};
   if (!message || typeof message !== "string") {
@@ -3588,28 +3487,14 @@ app.post("/api/admin/q2/chat", requireUser, async (req, res) => {
           .map((h) => ({ role: h.role === "assistant" ? "assistant" : "user", content: h.content }))
       : [];
 
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: SUPPORT_AI_MODEL,
-        max_tokens: 500,
-        system: `${Q2_CHAT_SYSTEM_PROMPT}\n\nCurrent live snapshot: ${JSON.stringify(snapshot)}`,
-        messages: [...priorTurns, { role: "user", content: message }]
-      }),
-      signal: AbortSignal.timeout(25000)
+    const out = await generateText({
+      system: `${Q2_CHAT_SYSTEM_PROMPT}\n\nCurrent live snapshot: ${JSON.stringify(snapshot)}`,
+      messages: [...priorTurns, { role: "user", content: message }],
+      maxTokens: 500,
+      temperature: 0.6,
+      timeoutMs: 25000
     });
-    const result = await r.json();
-    if (!r.ok) {
-      console.error("Q2 chat AI error:", r.status, result);
-      return res.status(502).json({ error: "Q2 couldn't think of a reply just now." });
-    }
-    const text = Array.isArray(result.content) ? result.content.map((b) => b.text || "").join("") : "";
-    res.json({ reply: text.trim() || "…" });
+    res.json({ reply: (out.text || "").trim() || "…" });
   } catch (err) {
     console.error("Q2 chat error:", err.message);
     res.status(502).json({ error: "Could not reach Q2." });

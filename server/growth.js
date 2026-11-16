@@ -69,6 +69,33 @@ PLATFORM: {{platform}}
 DRAFT:
 {{draft}}`,
   },
+  wealth: {
+    label: "Wealth niche play",
+    // The three biggest money niches are health, wealth and relationships.
+    // Vertex lives in wealth, so this mission is about reaching the much
+    // larger money-making audience without becoming the thing that audience
+    // is right to distrust (gurus, fake screenshots, "get rich" promises).
+    prompt: `
+Mission: research the WEALTH / money-making niche as it is performing right now (use Google
+Search — check what wealth, side-income and financial-freedom creators are posting this week
+and what is actually getting views).
+
+Our product is Vertex: a chart scanner for forex traders (2 free scans a day, pay-per-scan,
+no subscription, no signal group). It is a tool, not a promise.
+
+Deliver, in plain text with clear section headers:
+1. THE AUDIENCE — who consumes wealth content right now: what they want, what they fear, and
+   what makes them instantly distrust a finance account. Be specific, with sources.
+2. THE HONEST BRIDGE — how a chart-reading tool earns a place in a wealth audience WITHOUT
+   looking like a guru pitch. Name the exact positioning sentence to use.
+3. 8 HOOKS — hooks performing in wealth content this week, rewritten for Vertex. No profit
+   promises, no "I made $10k", no fake screenshots.
+4. CONTENT LADDER — a 3-stage funnel: (a) broad wealth hook, (b) the free scan as the proof,
+   (c) the paid pack. Give the specific video/post type at each stage and what the CTA is.
+5. PLATFORM ANGLES — one concrete play each for TikTok, Instagram and YouTube Shorts.
+6. ONE MOVE — the single thing to do this week, first step written out.
+      `.trim(),
+  },
   posts: {
     label: "Draft social posts",
     prompt: `
