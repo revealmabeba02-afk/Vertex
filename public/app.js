@@ -344,6 +344,15 @@
   const tabs = document.querySelectorAll(".navpill[data-view]");
   const HASH_TO_VIEW = { "#credits": "credits", "#watch": "watch", "#news": "news", "#how": "how", "#history": "history", "#journal": "journal", "#whats-new": "whats-new", "#help": "help", "#settings": "settings" };
 
+  // Watch-tab polling state. Declared up here (not next to the Watcher code
+  // further down) because showView() below calls stopWatchPolling() on the
+  // very first applyView() at page load. With these declared later, that call
+  // throws "Cannot access 'watchPoll' before initialization" and the whole
+  // script dies on load — which silently killed every listener below it,
+  // including the Upload chart and Pick a pair tabs and the Scan button.
+  let watchPoll = null;
+  let watchBusy = false;
+
   // Each section should feel like turning to its own page, not a tab
   // crossfading on top of the last one. So the old page fully leaves
   // (fades + slides out) before the new page is shown and slides in —
@@ -3006,8 +3015,8 @@
   const watchFeed = document.getElementById("watch-feed");
   const watchEmpty = document.getElementById("watch-empty");
   const watchRefreshBtn = document.getElementById("watch-refresh");
-  let watchPoll = null;
-  let watchBusy = false;
+  // watchPoll / watchBusy are declared near the top of this scope; see the
+  // comment there for why they cannot live down here.
 
   function watchAgo(iso) {
     const t = Date.parse(iso || "");
