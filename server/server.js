@@ -936,14 +936,15 @@ async function quickPostHandler(req, res) {
 
 // Posts a video King already made/recorded himself, straight to YouTube —
 // no generation step, just upload. Disk storage (not memory) since these
-// files run tens of MB, which would be a bad idea to hold in RAM on a
-// 512MB instance; the temp file is deleted right after upload either way.
+// files run tens of MB. The cap below is deliberately small: the uploader
+// has to hold the whole file in RAM to build the multipart body, and this
+// instance only has 512 MB. A 300 MB limit used to crash the server.
 const uploadRawVideo = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, require("os").tmpdir()),
     filename: (req, file, cb) => cb(null, `vx-raw-${crypto.randomBytes(6).toString("hex")}.mp4`)
   }),
-  limits: { fileSize: 300 * 1024 * 1024 },
+  limits: { fileSize: 48 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!/^video\//.test(file.mimetype)) {
       return cb(new Error("Please upload a video file."));
@@ -3957,6 +3958,19 @@ app.listen(PORT, () => {
   console.log(`Using provider: FXSynapse AI (${FXSYNAPSE_BASE_URL})`);
   watcher.start();
 });
+
+// Memory watch. The free instance has 512 MB and Node's heap is capped by
+// --max-old-space-size in package.json; when it runs out the process aborts
+// and everything goes down at once. This doesn't prevent it, it makes the
+// cause visible in the logs (with the number) before the crash instead of
+// after, so the next expensive code path can be found quickly.
+setInterval(() => {
+  const mb = (n) => Math.round(n / (1024 * 1024));
+  const { heapUsed, heapTotal, rss } = process.memoryUsage();
+  if (mb(heapUsed) > 250 || mb(rss) > 420) {
+    console.warn(`[mem] heap ${mb(heapUsed)}/${mb(heapTotal)} MB, rss ${mb(rss)} MB`);
+  }
+}, 15 * 60 * 1000).unref();
 
 // Weekly recap: checked once an hour (not scheduled to a specific day/time)
 // so it doesn't matter when the server happens to be up — runWeeklyRecap's

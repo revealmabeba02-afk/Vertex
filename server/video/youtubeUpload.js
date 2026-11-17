@@ -32,6 +32,20 @@ async function getAccessToken() {
 // YouTube Studio once he's happy with how it looks, without risking an
 // embarrassing public post from an untested pipeline.
 async function uploadVideo(filePath, { title, description, tags, privacyStatus = "unlisted" }) {
+  // This builds the whole multipart body in RAM, so a file of size N needs
+  // roughly 2N of heap (the read buffer plus the concatenated copy). On the
+  // 512 MB free instance a big video is an instant out-of-memory crash that
+  // takes the entire app down with it - scans, watcher, admin, everything.
+  // Refuse anything that can't fit comfortably instead of dying.
+  const MAX_UPLOAD_BYTES = 48 * 1024 * 1024;
+  const { size } = fs.statSync(filePath);
+  if (size > MAX_UPLOAD_BYTES) {
+    const mb = (size / (1024 * 1024)).toFixed(0);
+    throw new Error(
+      `That video is ${mb} MB. Uploads from this server are capped at 48 MB so the app can't run out of memory - trim it, or post it straight from your phone.`
+    );
+  }
+
   const accessToken = await getAccessToken();
   const videoBuffer = fs.readFileSync(filePath);
 
