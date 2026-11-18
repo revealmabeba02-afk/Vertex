@@ -19,7 +19,10 @@ const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
 const GEMINI_MODEL = (
   process.env.GEMINI_MODEL ||
   process.env.GEMINI_TEXT_MODEL ||
-  "gemini-3.8-flash"
+  // Leading with the currently-healthy model rather than the flagship — an
+  // overloaded flagship 503s slowly and burns the caller's patience before
+  // the first model that actually answers. Same reasoning as imageAnalysis.
+  "gemini-3.6-flash"
 ).trim();
 
 const GEMINI_MODELS = [
@@ -27,7 +30,14 @@ const GEMINI_MODELS = [
     GEMINI_MODEL.split(",")
       .map((m) => m.trim())
       .filter(Boolean)
-      .concat(["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash"])
+      .concat([
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest"
+      ])
   )
 ];
 

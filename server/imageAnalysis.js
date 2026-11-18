@@ -25,19 +25,33 @@ const GEMINI_IMAGE_MODEL = (
   process.env.GEMINI_IMAGE_MODEL ||
   process.env.GEMINI_MODEL ||
   // Google retires dated Gemini models for new keys ("no longer available to
-  // new users"), so keep a list and use whichever answers.
-  "gemini-3.8-flash"
+  // new users"), so keep a list and use whichever answers. Leading with the
+  // currently-healthy model rather than the flagship: a 503 from an
+  // overloaded flagship costs ~10-20s of dead time before the first model
+  // that actually answers.
+  "gemini-3.6-flash"
 ).trim();
 
 // Free-tier capacity moves around, so a single model name is a single point of
-// failure: the alias can 503 during a demand spike and a pinned version can be
-// retired for new keys. Try them in order and use whichever answers.
+// failure: the alias can 503 during a demand spike, a pinned version can be
+// retired for new keys, and popular models can hit per-model quota. Live
+// tested 2026-11-18: 3.6-flash answered fast, 3.8-flash and the aliases were
+// 503/429 at that moment, the 2.5 models are retired for new keys. Order is
+// quality-first among the models that actually answer, with the litest
+// models last as the near-always-available fallback.
 const GEMINI_IMAGE_MODELS = [
   ...new Set(
     GEMINI_IMAGE_MODEL.split(",")
       .map((m) => m.trim())
       .filter(Boolean)
-      .concat(["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash"])
+      .concat([
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest"
+      ])
   )
 ];
 
@@ -235,6 +249,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   });
 
   let lastFailure = null;
+  const startedAt = Date.now();
 
   for (const model of GEMINI_IMAGE_MODELS) {
     const url =
@@ -262,7 +277,10 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
     if (response.ok) {
       const parts = data?.candidates?.[0]?.content?.parts;
       const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
-      if (text.trim()) return text;
+      if (text.trim()) {
+        console.log(`Image analysis answered by gemini/${model} in ${Date.now() - startedAt}ms`);
+        return text;
+      }
       lastFailure = { kind: "empty", status: response.status, data };
       continue;
     }
