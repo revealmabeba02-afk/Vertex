@@ -2467,6 +2467,28 @@
       levelsEl.appendChild(li);
     });
 
+    // Smart-money concepts the engine detected on this scan (order blocks,
+    // liquidity sweeps, FVGs, BOS/CHoCH, equal levels). Hidden entirely for
+    // image scans and any analysis that didn't carry them.
+    const conceptsWrap = document.getElementById("res-concepts-wrap");
+    const conceptsEl = document.getElementById("res-concepts");
+    if (conceptsWrap && conceptsEl) {
+      conceptsEl.innerHTML = "";
+      const conceptGroups = a.concepts || {};
+      const conceptRows = ["order_blocks", "liquidity_sweeps", "fvgs", "breaks", "equal_levels"]
+        .flatMap((k) => (Array.isArray(conceptGroups[k]) ? conceptGroups[k] : []));
+      if (conceptRows.length) {
+        conceptRows.forEach((row) => {
+          const li = document.createElement("li");
+          li.textContent = row;
+          conceptsEl.appendChild(li);
+        });
+        conceptsWrap.hidden = false;
+      } else {
+        conceptsWrap.hidden = true;
+      }
+    }
+
     const entriesEl = document.getElementById("res-entries");
     entriesEl.innerHTML = "";
     const entries = Array.isArray(a.potential_entries) ? a.potential_entries : [];

@@ -106,6 +106,52 @@ function conceptSummary(concepts) {
   return parts.length ? `Detected: ${parts.join(", ")}.` : "";
 }
 
+// --- Smart-money concepts --------------------------------------------------
+// FXSynapse measures order blocks, liquidity sweeps, FVGs, BOS/CHoCH breaks
+// and equal levels on every scan and returns them alongside the plan — but
+// keyed by candle index and full of repeats (a level swept by several candles
+// comes back once per candle). These helpers dedupe, keep the most recent
+// few, and turn each one into a short human line for the result card.
+function dedupeLatest(items, keyFn, n) {
+  const seen = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item) continue;
+    const k = keyFn(item);
+    if (k == null) continue;
+    const prev = seen.get(k);
+    if (!prev || (item.candleIdx ?? -1) > (prev.candleIdx ?? -1)) seen.set(k, item);
+  }
+  return Array.from(seen.values())
+    .sort((a, b) => (b.candleIdx ?? -1) - (a.candleIdx ?? -1))
+    .slice(0, n);
+}
+
+function buildConcepts(fx, digits) {
+  const bullish = (s) => /bull/i.test(s || "");
+  const conceptLists = {
+    order_blocks: dedupeLatest(fx.orderBlocks, (ob) => (typeof ob?.top === "number" ? `${ob.type}:${ob.top}:${ob.bottom}` : null), 3).map((ob) =>
+      `${bullish(ob.type) ? "Bullish" : "Bearish"} order block ${fmtNum(ob.bottom, digits)}–${fmtNum(ob.top, digits)}`
+    ),
+    liquidity_sweeps: dedupeLatest(fx.sweeps, (s) => (typeof s?.sweptPrice === "number" ? `${s.type}:${s.sweptPrice}` : null), 3).map((s) =>
+      `${/sell/i.test(s.type || "") ? "Sell-side" : "Buy-side"} liquidity sweep at ${fmtNum(s.sweptPrice, digits)}`
+    ),
+    fvgs: dedupeLatest(fx.fvgs, (f) => (typeof f?.top === "number" ? `${f.type}:${f.top}:${f.bottom}` : null), 3).map((f) =>
+      `${bullish(f.type) ? "Bullish" : "Bearish"} FVG ${fmtNum(f.bottom, digits)}–${fmtNum(f.top, digits)}${f.mitigatedIdx != null ? " (filled)" : " (open)"}`
+    ),
+    breaks: dedupeLatest(fx.breaks, (b) => (typeof b?.price === "number" ? `${b.type}:${b.price}:${b.direction}` : null), 3).map((b) =>
+      `${String(b.type || "Break").toUpperCase()} ${b.direction || ""} through ${fmtNum(b.price, digits)}`.replace(/\s+/g, " ")
+    ),
+    equal_levels: dedupeLatest(fx.equalLevels, (e) => (typeof e?.top === "number" ? `${e.top}:${e.bottom}` : null), 3).map((e) =>
+      `Equal highs/lows ${fmtNum(e.bottom, digits)}–${fmtNum(e.top, digits)}`
+    )
+  };
+  const out = {};
+  for (const [key, lines] of Object.entries(conceptLists)) {
+    if (lines.length) out[key] = lines;
+  }
+  return out;
+}
+
 // FXSynapse's docs say plan.side is "buy"/"sell", but we were seeing every
 // single scan come back Sell — turns out some responses use "long"/"short"
 // instead, and the old code only ever matched the literal string "buy", so
@@ -195,15 +241,21 @@ function mapFxSynapseToAnalysis(fx) {
       }]
     : [];
 
-  const targets = Array.isArray(plan.targets)
-    ? plan.targets.map((t, i) => ({
-        target: fmtNum(t, digits),
-        target_raw: typeof t === "number" ? t : null,
-        rationale: `Target ${i + 1}`
-      }))
-    : [];
+  // FXSynapse moved from a plan.targets array to named target1/target2/target3
+  // fields (see the live response) without the old one going away — accept
+  // both, so take-profits and R:R don't silently go empty again if their
+  // shape shifts once more.
+  const rawTargets = Array.isArray(plan.targets) && plan.targets.length
+    ? plan.targets
+    : [plan.target1, plan.target2, plan.target3].filter((t) => typeof t === "number");
 
-  const firstTarget = Array.isArray(plan.targets) && typeof plan.targets[0] === "number" ? plan.targets[0] : null;
+  const targets = rawTargets.map((t, i) => ({
+    target: fmtNum(t, digits),
+    target_raw: typeof t === "number" ? t : null,
+    rationale: `Target ${i + 1}`
+  }));
+
+  const firstTarget = typeof rawTargets[0] === "number" ? rawTargets[0] : null;
   const rr = planOk ? computeRR(plan.entry, plan.stop, firstTarget) : null;
   const rrRatio = planOk && typeof plan.entry === "number" && typeof plan.stop === "number" && typeof firstTarget === "number" && plan.entry !== plan.stop
     ? Math.abs(firstTarget - plan.entry) / Math.abs(plan.entry - plan.stop)
@@ -225,6 +277,7 @@ function mapFxSynapseToAnalysis(fx) {
 
   const structureLabel = (fx.marketStructure || "range").replace(/^\w/, (c) => c.toUpperCase());
   const confidenceResult = computeConfidence({ planOk, rrRatio, topDown: fx.topDown, bias, structureLabel });
+  const concepts = buildConcepts(fx, digits);
 
   return {
     pair_guess: fx.symbol || null,
@@ -243,10 +296,11 @@ function mapFxSynapseToAnalysis(fx) {
     stop_loss: {
       suggestion: planOk ? fmtNum(plan.stop, digits) : "—",
       value_raw: planOk && typeof plan.stop === "number" ? plan.stop : null,
-      rationale: planOk ? "Calculated from the nearest invalidating structure." : ""
+      rationale: planOk ? (plan.rule || "Calculated from the nearest invalidating structure.") : ""
     },
     take_profit: targets,
     risk_reward_estimate: rr || (planOk ? "No clean target to measure against yet." : "No active trade to estimate."),
+    concepts,
     invalidation: planOk
       ? `Plan is invalidated if price closes back through ${fmtNum(plan.stop, digits)}.`
       : "No directional plan right now, so nothing to invalidate.",
