@@ -3668,6 +3668,11 @@ const mentorshipLimiter = rateLimit({
   message: { error: "Too many applications from this network. Please try again later." }
 });
 
+// Where applications are delivered. Resend's shared sender can only deliver
+// to the account owner's own address until a domain is verified there, so
+// default to ADMIN_EMAIL rather than the link-alert inbox.
+const MENTORSHIP_EMAIL = (process.env.MENTORSHIP_EMAIL || ADMIN_EMAIL || LINK_ALERT_EMAIL).trim();
+
 function cleanField(value, max) {
   return String(value == null ? "" : value)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
@@ -3692,7 +3697,7 @@ app.post("/api/mentorship/apply", mentorshipLimiter, async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
   if (!challenge) return res.status(400).json({ error: "Tell me the one thing you struggle with most." });
 
-  if (!RESEND_API_KEY || !LINK_ALERT_EMAIL) {
+  if (!RESEND_API_KEY || !MENTORSHIP_EMAIL) {
     return res.status(503).json({
       error: "Applications aren't being accepted online right now. Message @verte.x6 on Instagram and you'll get a reply.",
       code: "mentorship_offline"
@@ -3724,7 +3729,7 @@ app.post("/api/mentorship/apply", mentorshipLimiter, async (req, res) => {
       },
       body: JSON.stringify({
         from: LINK_ALERT_FROM,
-        to: [LINK_ALERT_EMAIL],
+        to: [MENTORSHIP_EMAIL],
         reply_to: email,
         subject: `Mentorship application — ${name}`,
         text: lines
