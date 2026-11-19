@@ -4,10 +4,11 @@
 // and BOS/CHoCH breaks as labelled lines — instead of only listing them as
 // text.
 //
-// The model reports vertical positions as percent of image height (0 = top,
-// 100 = bottom) because reading a screenshot's price axis back into real
-// pixel coordinates is unreliable. Zones span most of the chart width, which
-// is how SMC traders draw them anyway.
+// The model reports the concepts as PRICES plus a calibration of the chart's
+// visible price axis (highest/lowest axis label and where each sits
+// vertically). Mapping price -> height here is far more reliable than asking
+// a vision model for pixel positions directly. Zones span most of the chart
+// width, which is how SMC traders draw them anyway.
 //
 // Purely additive: every call is best-effort and returns the original buffer
 // unchanged if anything is missing or malformed.
@@ -28,6 +29,11 @@ const PALETTE = {
 const PLAN_DASH = { entry: "", stop: "6 4", target: "4 5", level: "2 5" };
 
 const MAX_PER_TYPE = 3;
+
+// A marked-up copy is sent back to the browser as base64, so a 4000px phone
+// screenshot would bloat the response. 1800px keeps labels and candles crisp
+// while keeping the payload small enough to load quickly on mobile data.
+const MAX_ANNOTATE_WIDTH = 1800;
 
 function esc(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -215,7 +221,15 @@ function buildOverlaySvg(width, height, concepts, priceScale, planLevels) {
 async function annotateChartImage({ buffer, concepts, priceScale, planLevels }) {
   if (!buffer || !buffer.length) return null;
   try {
-    const meta = await sharp(buffer).metadata();
+    // Downscale first so the overlay text is drawn crisp at the final size
+    // (and so EXIF-rotated phone shots are upright before calibrating).
+    const base = await sharp(buffer)
+      .rotate()
+      .resize({ width: MAX_ANNOTATE_WIDTH, withoutEnlargement: true })
+      .png()
+      .toBuffer();
+
+    const meta = await sharp(base).metadata();
     const width = meta.width;
     const height = meta.height;
     if (!width || !height || width < 100 || height < 100) return null;
@@ -223,7 +237,7 @@ async function annotateChartImage({ buffer, concepts, priceScale, planLevels }) 
     const svg = buildOverlaySvg(width, height, concepts || {}, priceScale, planLevels);
     if (!svg) return null;
 
-    const out = await sharp(buffer)
+    const out = await sharp(base)
       .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
       .png()
       .toBuffer();
