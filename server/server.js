@@ -4170,9 +4170,41 @@ setInterval(() => {
 // own ~6.5-day gate (weekly_recap_claim_if_due) is what actually decides
 // whether it's due, persisted in app_config so it survives restarts.
 setInterval(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 60 * 1000);
+
 // Also check shortly after startup, in case the server was down across the
 // moment it would have fired.
 setTimeout(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 1000);
+
+// --- Staying warm ----------------------------------------------------------
+// The free plan spins the service down after ~15 minutes without inbound
+// traffic, and waking it back up takes 30-60 seconds — a bad first impression
+// on a link posted to Instagram. Only a request from *outside* can wake a
+// sleeping instance (GitHub Actions, or the Supabase cron in
+// supabase/keepalive_cron.sql). This does something narrower but still worth
+// having: once the service is awake, it keeps itself awake, so one visit
+// doesn't lapse back to sleep ten minutes later while someone is still
+// reading the page. /api/health touches nothing external, so it spends no
+// provider quota.
+const SELF_PING_MS = 10 * 60 * 1000;
+const SELF_URL = (process.env.PUBLIC_BASE_URL || "https://vertex-9s4c.onrender.com").replace(/\/+$/, "");
+const SELF_PING_ENABLED = Boolean(process.env.RENDER) || process.env.PORT === "10000";
+if (SELF_PING_ENABLED) {
+  let selfPingFailing = false;
+  const selfPing = async () => {
+    try {
+      const r = await fetch(`${SELF_URL}/api/health`, { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (selfPingFailing) console.log("Keepalive: self-ping recovered.");
+      selfPingFailing = false;
+    } catch (err) {
+      if (!selfPingFailing) console.warn("Keepalive: self-ping failed:", err.message);
+      selfPingFailing = true;
+    }
+  };
+  setTimeout(selfPing, 2 * 60 * 1000).unref();
+  setInterval(selfPing, SELF_PING_MS).unref();
+  console.log(`Keepalive: self-ping ${SELF_URL}/api/health every 10 minutes`);
+}
 
 // --- Two-minute safe upgrade ----------------------------------------------
 // Compares the running commit with the tracked branch and asks Render to
