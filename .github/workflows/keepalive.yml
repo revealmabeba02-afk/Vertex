@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+  # Any edit to this file runs it once, so the setup can be verified by
+  # hand instead of waiting on the scheduler.
+  push:
+    paths:
+      - ".github/workflows/keepalive.yml"
 
 permissions: {}
 
