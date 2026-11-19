@@ -1,0 +1,31 @@
+name: Keep Vertex awake
+
+# The free Render instance sleeps after ~15 minutes without traffic, and a
+# cold start is 30-60 seconds. For a link posted on social media that delay is
+# the difference between a signup and a bounce, so ping the health endpoint
+# often enough that the instance never sleeps.
+#
+# Public repository: scheduled runs do not consume paid Actions minutes.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /api/health
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://vertex-9s4c.onrender.com/api/health)
+            echo "attempt ${attempt}: HTTP ${code}"
+            if [ "${code}" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Vertex did not answer after three attempts."
+          exit 1
