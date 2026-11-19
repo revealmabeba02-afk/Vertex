@@ -79,11 +79,10 @@ Rules you must follow:
       { "kind": "BOS" | "CHoCH", "direction": "bullish" | "bearish", "price": number, "note": string }
     ]
   },
-  "price_scale": {                      // calibration so the app can draw annotations at the right height: the highest and lowest PRICE LABELS visible on the chart's price axis, and where each sits vertically as a percent of image height (0 = very top of the image, 100 = very bottom). If the price axis is unreadable or cropped away, set this to null.
-    "top_price": number,
-    "top_pct": number,
-    "bottom_price": number,
-    "bottom_pct": number
+  "price_scale": {                      // calibration so the app can draw annotations at the right height. Read 3-5 PRICE LABELS that are printed on the chart's price axis, spread from the top of the axis to the bottom. For each, give the price exactly as printed and where that label sits vertically as a percent of the WHOLE image height (0 = very top of the image, 100 = very bottom). Use only labels you can literally read; positions must increase downward. If the price axis is unreadable or cropped away, set this to null.
+    "labels": [
+      { "price": number, "pct": number }
+    ]
   },
   "notes": string,                      // any caveats, e.g. low chart resolution, indicators not clear, conflicting signals
   "disclaimer": string                  // brief standard "not financial advice" disclaimer

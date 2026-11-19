@@ -116,6 +116,151 @@ function buildPlanLevels(payload) {
   return rows;
 }
 
+// Decimals to print a price with: follow whatever the model's entry used
+// ("2420.50" -> 2), otherwise pick something sensible for the instrument size.
+function decimalsOf(sample, fallbackPrice) {
+  const m = String(sample == null ? "" : sample).match(/\.(\d+)/);
+  if (m) return Math.min(5, m[1].length);
+  return fallbackPrice >= 100 ? 2 : fallbackPrice >= 10 ? 3 : 4;
+}
+
+// The visible price window from the model's axis calibration. Used to size a
+// sane stop buffer and to reject anchors that are clearly misreads.
+function visibleRange(scale) {
+  if (!scale || typeof scale !== "object") return null;
+  let prices = [];
+  if (Array.isArray(scale.labels)) {
+    for (const l of scale.labels) {
+      const p = Number(l?.price);
+      if (Number.isFinite(p) && p > 0) prices.push(p);
+    }
+  }
+  if (prices.length < 2) {
+    const tp = Number(scale.top_price);
+    const bp = Number(scale.bottom_price);
+    if (Number.isFinite(tp) && Number.isFinite(bp) && tp !== bp) prices.push(tp, bp);
+  }
+  if (prices.length < 2) return null;
+
+  // One misread label (a stray digit, a different instrument's scale) would
+  // inflate the range and blow out the stop buffer, so keep only labels that
+  // sit near the median price.
+  if (prices.length >= 3) {
+    const sorted = prices.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const keep = prices.filter((p) => Math.abs(p - median) / median < 0.2);
+    if (keep.length >= 2) prices = keep;
+  }
+
+  const hi = Math.max(...prices);
+  const lo = Math.min(...prices);
+  return hi > lo ? { hi, lo, span: hi - lo } : null;
+}
+
+// Where would a careful SMC trader actually put the stop? Behind the nearest
+// structure that would invalidate the idea — the order block / FVG / swept
+// level the entry is based on — plus a small buffer for wick noise and spread.
+// A stop that sits inside that zone gets picked off by normal market noise, so
+// when the model puts it tighter than the protecting structure we widen it to
+// just beyond that structure and recompute the R:R. Everything is skipped when
+// the axis or the entry isn't readable.
+function refineStopLoss(result) {
+  const first = Array.isArray(result.potential_entries) ? result.potential_entries[0] : null;
+  if (!first) return;
+
+  const isLong = String(first.type || "").toLowerCase() !== "short";
+  const entryPrice = parsePrice(first.entry_zone);
+  if (entryPrice == null) return;
+
+  const currentStop = parsePrice(result.stop_loss?.suggestion);
+  const currentValid = currentStop != null && (isLong ? currentStop < entryPrice : currentStop > entryPrice);
+  const range = visibleRange(result.concepts_scale);
+  const buffer = Math.max(entryPrice * 0.0008, range ? range.span * 0.03 : 0);
+
+  const anchors = [];
+  const add = (price, label) => {
+    const p = Number(price);
+    if (!Number.isFinite(p) || p <= 0) return;
+    if (isLong ? p >= entryPrice : p <= entryPrice) return;
+    if (Math.abs(p - entryPrice) > entryPrice * 0.25) return;
+    anchors.push({ price: p, label });
+  };
+
+  const concepts = result.concepts_data || {};
+  for (const ob of Array.isArray(concepts.order_blocks) ? concepts.order_blocks : []) {
+    add(isLong ? ob?.bottom_price : ob?.top_price,
+        ob?.bias === "bearish" ? "bearish order block" : "bullish order block");
+  }
+  for (const f of Array.isArray(concepts.fvgs) ? concepts.fvgs : []) {
+    add(isLong ? f?.bottom_price : f?.top_price, "fair value gap");
+  }
+  for (const s of Array.isArray(concepts.liquidity_sweeps) ? concepts.liquidity_sweeps : []) {
+    add(s?.price, s?.side === "buy-side" ? "buy-side sweep" : "sell-side sweep");
+  }
+  const keyLevels = result.market_structure?.key_levels;
+  for (const lvl of Array.isArray(keyLevels) ? keyLevels : []) {
+    add(parsePrice(lvl), "key level");
+  }
+
+  anchors.sort((a, b) => (isLong ? b.price - a.price : a.price - b.price));
+  const anchor = anchors[0] || null;
+
+  let nextStop = currentStop;
+  let moved = false;
+
+  if (anchor) {
+    const structural = isLong ? anchor.price - buffer : anchor.price + buffer;
+    const usable = isLong ? structural < entryPrice : structural > entryPrice;
+    if (usable) {
+      if (!currentValid) {
+        nextStop = structural;
+        moved = true;
+      } else if (isLong ? currentStop > structural : currentStop < structural) {
+        // The model's stop sits on the near side of the protecting structure.
+        nextStop = structural;
+        moved = true;
+      }
+    }
+  }
+
+  if (!moved || nextStop == null) return;
+
+  // Never let risk balloon relative to what's actually on screen.
+  if (range) {
+    const maxRisk = range.span * 0.6;
+    if (isLong && entryPrice - nextStop > maxRisk) nextStop = entryPrice - maxRisk;
+    if (!isLong && nextStop - entryPrice > maxRisk) nextStop = entryPrice + maxRisk;
+  }
+  if (isLong ? nextStop >= entryPrice : nextStop <= entryPrice) return;
+
+  const decimals = decimalsOf(first.entry_zone, entryPrice);
+  result.stop_loss = {
+    suggestion: nextStop.toFixed(decimals),
+    rationale: anchor
+      ? `Just beyond the nearest ${anchor.label} (${anchor.price.toFixed(decimals)}) with a small buffer, so normal wicks and spread don't take you out before the idea plays out.${result.stop_loss?.rationale ? " " + result.stop_loss.rationale : ""}`
+      : (result.stop_loss?.rationale || "")
+  };
+
+  // Keep the drawn stop line on the marked-up image in sync with the text.
+  const plan = Array.isArray(result.plan_levels) ? result.plan_levels : [];
+  const stopRow = plan.find((row) => row.kind === "stop");
+  if (stopRow) stopRow.price = nextStop;
+  else plan.push({ kind: "stop", price: nextStop, label: "Stop" });
+  result.plan_levels = plan;
+
+  // A moved stop changes the R:R, so recompute it against the furthest target.
+  const targets = (Array.isArray(result.take_profit) ? result.take_profit : [])
+    .map((t) => parsePrice(t?.target))
+    .filter((n) => n != null);
+  if (targets.length) {
+    const reward = isLong ? Math.max(...targets) - entryPrice : entryPrice - Math.min(...targets);
+    const risk = Math.abs(entryPrice - nextStop);
+    if (reward > 0 && risk > 0) {
+      result.risk_reward_estimate = `~1:${Math.round((reward / risk) * 10) / 10}`;
+    }
+  }
+}
+
 function mapImageAnalysis(payload, timeframe) {
   const bias = BIASES.includes(payload.market_bias) ? payload.market_bias : "Neutral / Ranging";
   const confidence = pickConfidence(payload.confidence);
@@ -187,7 +332,7 @@ function mapImageAnalysis(payload, timeframe) {
     if (lines.length) concepts[key] = lines;
   }
 
-  return {
+  const result = {
     pair_guess: payload.pair_guess ? String(payload.pair_guess).toUpperCase() : null,
     market_bias: bias,
     confidence: confidence.score,
@@ -223,6 +368,9 @@ function mapImageAnalysis(payload, timeframe) {
     source: "image",
     timeframe
   };
+
+  refineStopLoss(result);
+  return result;
 }
 
 // One place to turn a provider's HTTP failure into something a trader can act
