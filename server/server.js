@@ -750,6 +750,19 @@ app.post("/api/webhooks/whop", express.raw({ type: "application/json", limit: "1
 
 app.use(express.json({ limit: "1mb" }));
 
+// Baseline response hardening. Deliberately no Content-Security-Policy: every
+// page uses inline scripts, so a real policy needs a nonce pipeline first and
+// a half-done CSP would break the site. These four cost nothing and stop the
+// common classes of abuse (MIME sniffing, referrer leakage, framing, device
+// permissions this product never uses).
+app.use((req, res, next) => {
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.set("X-Frame-Options", "SAMEORIGIN");
+  res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
 // --- Pages ---------------------------------------------------------------
 // Supabase keeps the session in the browser, so /app checks for it on load
 // and sends logged out visitors to /login. That redirect is a convenience;
