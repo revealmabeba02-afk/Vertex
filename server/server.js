@@ -4190,12 +4190,15 @@ const SELF_URL = (process.env.PUBLIC_BASE_URL || "https://vertex-9s4c.onrender.c
 const SELF_PING_ENABLED = Boolean(process.env.RENDER) || process.env.PORT === "10000";
 if (SELF_PING_ENABLED) {
   let selfPingFailing = false;
+  let selfPingConfirmed = false;
   const selfPing = async () => {
     try {
       const r = await fetch(`${SELF_URL}/api/health`, { signal: AbortSignal.timeout(20000) });
       if (!r.ok) throw new Error("HTTP " + r.status);
       if (selfPingFailing) console.log("Keepalive: self-ping recovered.");
+      else if (!selfPingConfirmed) console.log("Keepalive: self-ping confirmed.");
       selfPingFailing = false;
+      selfPingConfirmed = true;
     } catch (err) {
       if (!selfPingFailing) console.warn("Keepalive: self-ping failed:", err.message);
       selfPingFailing = true;
