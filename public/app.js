@@ -1244,8 +1244,8 @@
         const side = (firstEntry?.type || "").toLowerCase();
         const isLong = side === "long";
         const signal = side === "long" ? "BUY" : side === "short" ? "SELL" : "NO TRADE";
-        const bullColor = "#39D98A";
-        const bearColor = "#FF5C7A";
+        const bullColor = "#2BE0A6";
+        const bearColor = "#FF5F7E";
         const signalColor = side === "long" ? bullColor : side === "short" ? bearColor : "#9BB0C9";
         const entryLine = firstEntry?.entry || firstEntry?.zone || "—";
         const sl = a.stop_loss?.suggestion || "—";
@@ -1260,13 +1260,29 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
 
-        // Brand
+        // Brand — same mark as the site header, drawn on the canvas.
+        ctx.strokeStyle = "#4C8DFF";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(90, 86, 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = "#BFD4FF";
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(80, 92);
+        ctx.lineTo(89, 81);
+        ctx.lineTo(96, 88);
+        ctx.lineTo(103, 78);
+        ctx.stroke();
+
         ctx.fillStyle = "#EDF3FA";
-        ctx.font = "800 44px 'Inter Tight', sans-serif";
-        ctx.fillText("VERTEX", 64, 100);
+        ctx.font = "800 40px 'Inter Tight', sans-serif";
+        ctx.fillText("VERTEX", 124, 96);
         ctx.fillStyle = "#6B8299";
-        ctx.font = "600 22px 'Inter', sans-serif";
-        ctx.fillText("AI chart analysis", 64, 132);
+        ctx.font = "600 19px 'Inter', sans-serif";
+        ctx.fillText("CHART SCANNER", 124, 122);
 
         // Pair + timeframe
         ctx.fillStyle = "#EDF3FA";
@@ -1318,7 +1334,7 @@
 
         ctx.fillStyle = "#9BB0C9";
         ctx.font = "600 24px 'Inter', sans-serif";
-        ctx.fillText("Scanned with Vertex AI", 64, H - 130);
+        ctx.fillText("Scanned with Vertex", 64, H - 130);
         ctx.fillStyle = "#4A5C70";
         ctx.font = "500 20px 'Inter', sans-serif";
         ctx.fillText("Not financial advice.", 64, H - 95);
