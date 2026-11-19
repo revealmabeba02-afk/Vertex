@@ -219,6 +219,20 @@ const LINK_ALERT_EMAIL = (process.env.LINK_ALERT_EMAIL || "revealmabeba02@icloud
 // shared onboarding@resend.dev address works for any destination.
 const LINK_ALERT_FROM = (process.env.LINK_ALERT_FROM || "Vertex Scanner <onboarding@resend.dev>").trim();
 
+// --- Safe self-upgrade -----------------------------------------------------
+// Render deploys on every push, but its GitHub webhook has silently missed a
+// commit before. This process therefore checks the tracked branch every two
+// minutes and asks Render to build the newer commit when the live instance is
+// behind. A deploy never interrupts the running instance: if the new build
+// fails, Render keeps this version serving, so an automatic upgrade can only
+// ever add code that builds. Needs a Render API key (Dashboard → Account
+// Settings → API Keys) in RENDER_API_KEY; without it the check is off.
+const RENDER_API_KEY = (process.env.RENDER_API_KEY || "").trim();
+const RENDER_SERVICE_ID = (process.env.RENDER_SERVICE_ID || "srv-das2umt9fdbs73bkmum0").trim();
+const UPGRADE_REPO = (process.env.UPGRADE_REPO || "revealmabeba02-afk/Vertex").trim();
+const RUNNING_COMMIT = (process.env.RENDER_GIT_COMMIT || "").trim();
+const UPGRADE_INTERVAL_MS = 2 * 60 * 1000;
+
 // --- Credits / Binance Pay ------------------------------------------------
 // Pay-per-scan credits. No Binance secret and no Supabase service_role key
 // ever sit in the browser: the API key below is a READ-ONLY personal
@@ -763,6 +777,7 @@ app.get("/terms", (req, res) => sendFreshPage(res, "terms.html"));
 app.get("/update-password", (req, res) => sendFreshPage(res, "update-password.html"));
 app.get("/app", (req, res) => sendFreshPage(res, "app.html"));
 app.get("/status", (req, res) => sendFreshPage(res, "status.html"));
+app.get("/mentorship", (req, res) => sendFreshPage(res, "mentorship.html"));
 app.get("/maintenance", (req, res) => sendFreshPage(res, "maintenance.html"));
 app.get("/admin", (req, res) => {
   if (!adminPinCookieIsValid(req.headers.cookie)) {
@@ -3640,6 +3655,97 @@ app.get("/api/feedback/mine", requireUser, async (req, res) => {
   }
 });
 
+// --- Mentorship applications ----------------------------------------------
+// Public form on /mentorship. Applications are delivered by email (Resend),
+// so this adds no new database table and no admin surface to keep clean. If
+// email isn't configured the endpoint says so instead of pretending the
+// application was received and losing it.
+const mentorshipLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many applications from this network. Please try again later." }
+});
+
+function cleanField(value, max) {
+  return String(value == null ? "" : value)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .trim()
+    .slice(0, max);
+}
+
+app.post("/api/mentorship/apply", mentorshipLimiter, async (req, res) => {
+  const body = req.body || {};
+  if (cleanField(body.website, 100)) return res.json({ ok: true }); // honeypot
+
+  const name = cleanField(body.name, 80);
+  const email = cleanField(body.email, 160);
+  const contact = cleanField(body.contact, 80);
+  const experience = cleanField(body.experience, 40);
+  const market = cleanField(body.market, 40);
+  const timezone = cleanField(body.timezone, 60);
+  const challenge = cleanField(body.challenge, 1200);
+  const goal = cleanField(body.goal, 600);
+
+  if (!name) return res.status(400).json({ error: "Enter your name." });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (!challenge) return res.status(400).json({ error: "Tell me the one thing you struggle with most." });
+
+  if (!RESEND_API_KEY || !LINK_ALERT_EMAIL) {
+    return res.status(503).json({
+      error: "Applications aren't being accepted online right now. Message @verte.x6 on Instagram and you'll get a reply.",
+      code: "mentorship_offline"
+    });
+  }
+
+  const lines = [
+    "New mentorship application",
+    "",
+    `Name: ${name}`,
+    `Email: ${email}`,
+    contact ? `Telegram / WhatsApp: ${contact}` : null,
+    experience ? `Experience: ${experience}` : null,
+    market ? `Market: ${market}` : null,
+    timezone ? `Time zone: ${timezone}` : null,
+    "",
+    "Biggest challenge:",
+    challenge,
+    goal ? "\nGoal for the next 3 months:" : null,
+    goal || null
+  ].filter(Boolean).join("\n");
+
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: LINK_ALERT_FROM,
+        to: [LINK_ALERT_EMAIL],
+        reply_to: email,
+        subject: `Mentorship application — ${name}`,
+        text: lines
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!r.ok) {
+      console.error("Mentorship email failed:", r.status, (await r.text().catch(() => "")).slice(0, 300));
+      return res.status(502).json({
+        error: "Could not send your application just now. Please try again, or message @verte.x6 on Instagram.",
+        code: "mentorship_send_failed"
+      });
+    }
+    console.log(`Mentorship application from ${email}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Mentorship submit error:", err.message);
+    res.status(502).json({ error: "Could not send your application just now. Please try again." });
+  }
+});
+
 app.get("/api/admin/feedback", requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
@@ -3969,6 +4075,11 @@ app.get("*", (req, res) => res.redirect("/"));
 // Last resort, so an unexpected error returns JSON rather than an HTML stack trace.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  // A malformed body is the client's mistake, not a server fault: report it as
+  // a 400 instead of a 500 so bad input doesn't look like an outage.
+  if (err && (err.type === "entity.parse.failed" || (err instanceof SyntaxError && err.status === 400))) {
+    return res.status(400).json({ error: "That request wasn't valid. Please try again." });
+  }
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Something went wrong. Please try again." });
 });
@@ -4000,3 +4111,69 @@ setInterval(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 60 * 1000);
 // Also check shortly after startup, in case the server was down across the
 // moment it would have fired.
 setTimeout(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 1000);
+
+// --- Two-minute safe upgrade ----------------------------------------------
+// Compares the running commit with the tracked branch and asks Render to
+// deploy when they differ. Failures are paced: a commit that failed to build
+// is retried at most three times, ten minutes apart, instead of every tick.
+// Renders with the same guarantee as push deploys — the old version keeps
+// serving while the new one builds, and stays if the build fails.
+const upgradeAttempts = new Map(); // sha -> { count, lastTry }
+
+async function autoUpgradeTick() {
+  if (!RENDER_API_KEY || !RENDER_SERVICE_ID || !RUNNING_COMMIT) return;
+  try {
+    const gh = await fetch(`https://api.github.com/repos/${UPGRADE_REPO}/commits/main`, {
+      headers: { "User-Agent": "vertex-auto-upgrade", Accept: "application/vnd.github+json" },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!gh.ok) return; // rate limited or GitHub hiccup — try again next tick
+    const head = String((await gh.json())?.sha || "");
+    if (!head || head === RUNNING_COMMIT) return;
+
+    const dep = await fetch(`https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=1`, {
+      headers: { Authorization: `Bearer ${RENDER_API_KEY}` },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!dep.ok) {
+      console.error("Auto-upgrade: could not read deploys:", dep.status);
+      return;
+    }
+    const latest = (await dep.json())?.[0]?.deploy || null;
+    const active = ["created", "queued", "build_in_progress", "update_in_progress", "pre_deploy_in_progress"];
+    if (latest && active.includes(latest.status)) return; // already building something
+
+    const attempt = upgradeAttempts.get(head) || { count: 0, lastTry: 0 };
+    const failedThisCommit = latest && latest.commit?.id === head &&
+      ["build_failed", "canceled", "deactivated"].includes(latest.status);
+    const count = failedThisCommit ? attempt.count + 1 : attempt.count;
+    if (count >= 3) return; // three bad builds is enough; wait for a human
+    if (attempt.lastTry && Date.now() - attempt.lastTry < 10 * 60 * 1000) return;
+
+    const res = await fetch(`https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RENDER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ commitId: head, clearCache: "do_not_clear" }),
+      signal: AbortSignal.timeout(10000)
+    });
+    upgradeAttempts.set(head, { count, lastTry: Date.now() });
+    if (res.ok) {
+      console.log(`Auto-upgrade: live ${RUNNING_COMMIT.slice(0, 7)} is behind ${head.slice(0, 7)} — deploy requested`);
+    } else {
+      console.error("Auto-upgrade: deploy request failed:", res.status, (await res.text().catch(() => "")).slice(0, 200));
+    }
+  } catch (err) {
+    console.error("Auto-upgrade check failed:", err.message);
+  }
+}
+
+if (RENDER_API_KEY) {
+  setTimeout(autoUpgradeTick, 60 * 1000).unref();
+  setInterval(autoUpgradeTick, UPGRADE_INTERVAL_MS).unref();
+  console.log(`Auto-upgrade: checking ${UPGRADE_REPO} every 2 minutes`);
+} else {
+  console.log("Auto-upgrade: off (no RENDER_API_KEY set)");
+}

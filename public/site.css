@@ -921,3 +921,207 @@
   .sample-read .keyline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sample-read .keyline__item:nth-child(5) { grid-column: 1 / -1; }
 }
+
+/* ===========================================================
+   Mentorship
+   =========================================================== */
+.lsection.mentor-hero {
+  max-width: 840px;
+  text-align: center;
+}
+
+.mentor-eyebrow {
+  margin: 0 0 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.mentor-title {
+  margin: 0 0 20px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(38px, 5.4vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.mentor-title em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.mentor-lede {
+  max-width: 60ch;
+  margin: 0 auto 32px;
+  font-size: clamp(16px, 1.5vw, 18px);
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+
+.mentor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.mentor-card {
+  padding: 24px 24px 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+}
+
+.mentor-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.mentor-card__title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.mentor-card__body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.mentor-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.mentor-step {
+  display: flex;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+
+.mentor-step__num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mentor-form-card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  box-shadow: 0 50px 120px -70px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.mentor-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mentor-textarea {
+  min-height: 118px;
+  resize: vertical;
+  padding-top: 12px;
+  line-height: 1.55;
+  font-family: var(--font-body, inherit);
+}
+
+.mentor-textarea--sm { min-height: 76px; }
+
+.mentor-form select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 20px) calc(50% + 1px), calc(100% - 15px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+
+.mentor-form__note {
+  margin: 4px 0 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
+
+.mentor-form__submit { width: 100%; }
+
+.mentor-form .auth-alert { margin: 14px 0 0; }
+
+.mentor-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.mentor-form-card .auth-done { padding: 12px 0; }
+.mentor-form-card .auth-done .btn { margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .mentor-grid { grid-template-columns: 1fr; max-width: 560px; }
+  .mentor-steps { grid-template-columns: 1fr; max-width: 560px; }
+}
+
+@media (max-width: 640px) {
+  .mentor-form__row { grid-template-columns: 1fr; gap: 0; }
+  .mentor-card { padding: 20px; }
+  .mentor-step { padding: 18px; }
+}
+
+/* Landing band that points at the mentorship page. */
+.mentor-band {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: clamp(30px, 5vw, 52px) clamp(20px, 4vw, 44px);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 24px;
+  text-align: center;
+  background:
+    radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    color-mix(in srgb, var(--panel) 78%, transparent);
+}
+.mentor-band .lsection__title { margin-bottom: 12px; }
+.mentor-band .lsection__lede { max-width: 56ch; margin-left: auto; margin-right: auto; }

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  try {
+    if (localStorage.getItem("vertex-theme") === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+    var savedAccent = localStorage.getItem("vertex-accent");
+    if (savedAccent) {
+      document.documentElement.setAttribute("data-accent", savedAccent);
+    }
+  } catch (e) {}
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#060B14" />
+<title>Mentorship · Vertex Chart Scanner</title>
+<meta name="description" content="1-on-1 mentorship with the trader behind Vertex: weekly calls, chart reviews, a personal risk plan, and direct access while you learn to read the market yourself." />
+<link rel="canonical" href="https://vertex-9s4c.onrender.com/mentorship" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Vertex Chart Scanner" />
+<meta property="og:url" content="https://vertex-9s4c.onrender.com/mentorship" />
+<meta property="og:title" content="Mentorship · Vertex Chart Scanner" />
+<meta property="og:description" content="1-on-1 mentorship: weekly calls, chart reviews, a personal risk plan, and direct access while you learn to read the market yourself." />
+<meta property="og:image" content="https://vertex-9s4c.onrender.com/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="stylesheet" href="/site.css" />
+</head>
+<body class="page-landing">
+
+<header class="topbar">
+  <div class="topbar__pill">
+    <a class="brand" href="/" aria-label="Vertex Chart Scanner home">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 200 200" width="20" height="20">
+          <defs>
+            <linearGradient id="vb-ring-mentor" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E8EFFF"/><stop offset="35%" stop-color="#4C8DFF"/><stop offset="70%" stop-color="#1E457F"/><stop offset="100%" stop-color="#4C8DFF"/></linearGradient>
+            <linearGradient id="vb-silver-mentor" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+            <linearGradient id="vb-blue-mentor" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#A9C8FF"/><stop offset="35%" stop-color="#4C8DFF"/><stop offset="75%" stop-color="#2F68C2"/><stop offset="100%" stop-color="#24518F"/></linearGradient>
+            <radialGradient id="vb-bg-mentor" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#0A1322"/><stop offset="100%" stop-color="#04070E"/></radialGradient>
+            <clipPath id="vb-clip-mentor"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
+          </defs>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-mentor)"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-mentor)" stroke-width="6"/>
+          <g clip-path="url(#vb-clip-mentor)">
+            <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-mentor)" stroke-width="24" stroke-linecap="round"/>
+            <path d="M100,152 L144,50" fill="none" stroke="url(#vb-blue-mentor)" stroke-width="24" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </span>
+      <span class="brand__name brand__name--hide-xs">Vertex</span>
+    </a>
+
+    <nav class="topbar__nav" aria-label="Page sections">
+      <a class="navpill" href="/">Home</a>
+      <a class="navpill" href="/#pricing">Pricing</a>
+      <a class="navpill" href="/mentorship" aria-current="page">Mentorship</a>
+    </nav>
+
+    <div class="topbar__actions" id="nav-guest">
+      <a class="btn btn--ghost" href="/login">Log in</a>
+      <a class="btn btn--primary" href="/signup">Sign up</a>
+    </div>
+    <div class="topbar__actions" id="nav-user" hidden>
+      <a class="btn btn--primary" href="/app">Open scanner</a>
+    </div>
+  </div>
+</header>
+
+<main class="landing">
+
+  <!-- ============ HERO ============ -->
+  <section class="lsection mentor-hero" aria-labelledby="mentor-title">
+    <p class="mentor-eyebrow">1-on-1 mentorship · limited spots</p>
+    <h1 class="mentor-title" id="mentor-title">Learn to read the market <em>yourself.</em></h1>
+    <p class="mentor-lede">The scanner shows you what a clean read looks like. Mentorship teaches you to find it on your own — your charts, your mistakes, your plan, with someone in your corner every week.</p>
+    <div class="lhero__cta">
+      <a class="btn btn--primary btn--lg" href="#apply">Apply for a spot</a>
+      <a class="btn btn--ghost btn--lg" href="#what">What's included</a>
+    </div>
+    <p class="lhero__small">Applications are reviewed personally. No bots, no autopilot.</p>
+  </section>
+
+  <!-- ============ WHAT YOU GET ============ -->
+  <section class="lsection" id="what" aria-labelledby="what-title">
+    <div class="lsection__head">
+      <h2 class="lsection__title" id="what-title">What you get</h2>
+      <p class="lsection__lede">Built around your charts and your habits — not a generic course.</p>
+    </div>
+
+    <ul class="mentor-grid">
+      <li class="mentor-card">
+        <span class="mentor-card__icon" aria-hidden="true">01</span>
+        <h3 class="mentor-card__title">Weekly 1-on-1 calls</h3>
+        <p class="mentor-card__body">A live session every week on your own trades: what you saw, what you missed, and the exact next step.</p>
+      </li>
+      <li class="mentor-card">
+        <span class="mentor-card__icon" aria-hidden="true">02</span>
+        <h3 class="mentor-card__title">Chart-by-chart reviews</h3>
+        <p class="mentor-card__body">Send your screenshots between calls. You get the read, the reasoning, and the levels marked up.</p>
+      </li>
+      <li class="mentor-card">
+        <span class="mentor-card__icon" aria-hidden="true">03</span>
+        <h3 class="mentor-card__title">Your own risk plan</h3>
+        <p class="mentor-card__body">Position size, stop placement and daily limits written for your account — so one bad trade can't end the journey.</p>
+      </li>
+      <li class="mentor-card">
+        <span class="mentor-card__icon" aria-hidden="true">04</span>
+        <h3 class="mentor-card__title">Direct access</h3>
+        <p class="mentor-card__body">A private chat with me while you're learning, for the questions that can't wait until the next call.</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="lsection" aria-labelledby="how-title">
+    <div class="lsection__head">
+      <h2 class="lsection__title" id="how-title">How it works</h2>
+      <p class="lsection__lede">Three steps, no pressure.</p>
+    </div>
+
+    <ol class="mentor-steps">
+      <li class="mentor-step">
+        <span class="mentor-step__num">1</span>
+        <div>
+          <h3 class="mentor-card__title">Apply</h3>
+          <p class="mentor-card__body">Fill in the form below. Be honest about where you're stuck — that's what the plan gets built around.</p>
+        </div>
+      </li>
+      <li class="mentor-step">
+        <span class="mentor-step__num">2</span>
+        <div>
+          <h3 class="mentor-card__title">Short call</h3>
+          <p class="mentor-card__body">If it's a fit, we talk for 15 minutes: your experience, your account, and what you want out of this.</p>
+        </div>
+      </li>
+      <li class="mentor-step">
+        <span class="mentor-step__num">3</span>
+        <div>
+          <h3 class="mentor-card__title">Start the work</h3>
+          <p class="mentor-card__body">Weekly calls, chart reviews and a written plan. You trade, we review, you improve — week by week.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ APPLY ============ -->
+  <section class="lsection" id="apply" aria-labelledby="apply-title">
+    <div class="lsection__head">
+      <h2 class="lsection__title" id="apply-title">Apply for mentorship</h2>
+      <p class="lsection__lede">Tell me where you are and where you want to be. I read every application myself.</p>
+    </div>
+
+    <div class="mentor-form-card">
+      <form id="mentor-form" class="mentor-form" novalidate>
+        <div class="mentor-form__row">
+          <div class="field">
+            <label class="field__label" for="m-name">Full name</label>
+            <input class="input" id="m-name" name="name" maxlength="80" autocomplete="name" required />
+          </div>
+          <div class="field">
+            <label class="field__label" for="m-email">Email</label>
+            <input class="input" id="m-email" name="email" type="email" maxlength="160" autocomplete="email" required />
+          </div>
+        </div>
+
+        <div class="mentor-form__row">
+          <div class="field">
+            <label class="field__label" for="m-contact">Telegram or WhatsApp <span class="field__hint">(optional)</span></label>
+            <input class="input" id="m-contact" name="contact" maxlength="80" autocomplete="off" placeholder="@username or number" />
+          </div>
+          <div class="field">
+            <label class="field__label" for="m-timezone">Time zone <span class="field__hint">(optional)</span></label>
+            <input class="input" id="m-timezone" name="timezone" maxlength="60" autocomplete="off" placeholder="e.g. GMT+2" />
+          </div>
+        </div>
+
+        <div class="mentor-form__row">
+          <div class="field">
+            <label class="field__label" for="m-experience">Trading experience</label>
+            <select class="input" id="m-experience" name="experience" required>
+              <option value="">Choose one</option>
+              <option>Brand new</option>
+              <option>Under 1 year</option>
+              <option>1–2 years</option>
+              <option>2+ years</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field__label" for="m-market">Main market</label>
+            <select class="input" id="m-market" name="market" required>
+              <option value="">Choose one</option>
+              <option>Forex</option>
+              <option>Gold</option>
+              <option>Indices</option>
+              <option>Crypto</option>
+              <option>A few of them</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="m-challenge">What's the one thing you struggle with most?</label>
+          <textarea class="input mentor-textarea" id="m-challenge" name="challenge" maxlength="1200" required placeholder="Example: I take trades before the retest, then move my stop when it goes against me."></textarea>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="m-goal">What would a win look like in 3 months? <span class="field__hint">(optional)</span></label>
+          <textarea class="input mentor-textarea mentor-textarea--sm" id="m-goal" name="goal" maxlength="600" placeholder="Example: Three clean trades a week with a written plan, no revenge trading."></textarea>
+        </div>
+
+        <div class="mentor-hp" aria-hidden="true">
+          <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+        </div>
+
+        <p class="mentor-form__note">Mentorship is educational. It is not financial advice and it does not guarantee profits. Trading carries a high risk of loss.</p>
+
+        <button type="submit" class="btn btn--primary btn--lg mentor-form__submit" id="mentor-submit">Send my application</button>
+        <p class="auth-alert" id="mentor-status" role="status" hidden></p>
+      </form>
+
+      <div class="auth-done" id="mentor-done" hidden>
+        <div class="auth-done__icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </div>
+        <h3 class="auth-card__title">Application received</h3>
+        <p class="auth-card__lede">Thanks — I'll read it personally and reply by email if it's a fit. If you don't hear back within a few days, message <a href="https://instagram.com/verte.x6" target="_blank" rel="noopener">@verte.x6</a> on Instagram.</p>
+        <a class="btn btn--ghost" href="/">Back to the scanner</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer__brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 200 200" width="20" height="20">
+          <defs>
+            <linearGradient id="vb-ring-mentorf" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E8EFFF"/><stop offset="35%" stop-color="#4C8DFF"/><stop offset="70%" stop-color="#1E457F"/><stop offset="100%" stop-color="#4C8DFF"/></linearGradient>
+            <linearGradient id="vb-silver-mentorf" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#D7DEE0"/><stop offset="60%" stop-color="#8E9A9D"/><stop offset="100%" stop-color="#C7D1D3"/></linearGradient>
+            <linearGradient id="vb-blue-mentorf" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#A9C8FF"/><stop offset="35%" stop-color="#4C8DFF"/><stop offset="75%" stop-color="#2F68C2"/><stop offset="100%" stop-color="#24518F"/></linearGradient>
+            <radialGradient id="vb-bg-mentorf" cx="50%" cy="35%" r="75%"><stop offset="0%" stop-color="#0A1322"/><stop offset="100%" stop-color="#04070E"/></radialGradient>
+            <clipPath id="vb-clip-mentorf"><rect x="6" y="6" width="188" height="188" rx="42"/></clipPath>
+          </defs>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="url(#vb-bg-mentorf)"/>
+          <rect x="6" y="6" width="188" height="188" rx="42" fill="none" stroke="url(#vb-ring-mentorf)" stroke-width="6"/>
+          <g clip-path="url(#vb-clip-mentorf)">
+            <path d="M56,50 L100,152" fill="none" stroke="url(#vb-silver-mentorf)" stroke-width="24" stroke-linecap="round"/>
+            <path d="M100,152 L144,50" fill="none" stroke="url(#vb-blue-mentorf)" stroke-width="24" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </span>
+      Vertex
+    </div>
+    <nav class="footer__links" aria-label="Footer">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/mentorship">Mentorship</a>
+      <a href="/login">Log in</a>
+      <a href="/signup">Sign up</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </nav>
+    <p class="footer__legal">Vertex Chart Scanner provides technical, AI generated analysis of chart images for educational purposes only. It is not financial advice, not a recommendation to buy or sell, and not a guarantee of any market outcome. Trading forex carries a high risk of loss. © <span id="year"></span> Vertex Chart Scanner.</p>
+  </footer>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
+<script src="/config.js"></script>
+<script src="/auth-client.js"></script>
+<script>
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  window.Auth.getSession().then((session) => {
+    if (!session) return;
+    document.getElementById("nav-guest").hidden = true;
+    document.getElementById("nav-user").hidden = false;
+  }).catch(() => {});
+
+  const form = document.getElementById("mentor-form");
+  const statusEl = document.getElementById("mentor-status");
+  const doneEl = document.getElementById("mentor-done");
+  const submitBtn = document.getElementById("mentor-submit");
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+
+    const payload = Object.fromEntries(new FormData(form).entries());
+    statusEl.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending…";
+
+    try {
+      const res = await fetch("/api/mentorship/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not send your application. Please try again.");
+
+      form.hidden = true;
+      doneEl.hidden = false;
+      doneEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (err) {
+      statusEl.textContent = err.message || "Could not send your application. Please try again.";
+      statusEl.className = "auth-alert auth-alert--error";
+      statusEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Send my application";
+    }
+  });
+</script>
+</body>
+</html>
