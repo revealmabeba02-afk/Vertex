@@ -647,6 +647,16 @@
 
 .auth-done { text-align: center; }
 
+.auth-done__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 20px;
+}
+.auth-done__actions .btn { width: 100%; }
+.auth-done .auth-alert { margin: 14px 0 0; }
+
 .auth-done__icon {
   width: 56px;
   height: 56px;
