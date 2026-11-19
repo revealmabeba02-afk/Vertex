@@ -3011,10 +3011,21 @@ async function checkPaymentsReachable() {
 
 // King specifically asked for the system to tell him plainly when the
 // Anthropic API runs out of credit, rather than him finding out by Q2 going
-// silent and him having to dig through logs. A tiny 1-token request is cheap
-// enough to run on every health check and surfaces billing problems here,
-// front and center, instead of buried in console.error calls.
-async function checkAiAssistant() {
+// silent and him having to dig through logs. A tiny 1-token request surfaces
+// billing problems here, front and center, instead of buried in console.error
+// calls.
+//
+// It is not free, though: the Gemini key is a free-tier key with a daily cap,
+// shared with chart-screenshot reading. Probing on every status poll (the
+// status page refreshes, and /api/status is public) can spend a meaningful
+// slice of that day's allowance on health checks alone, and a stranger
+// hitting the endpoint in a loop can spend all of it. So the probe result is
+// cached — including failures, so a 429 doesn't turn every poll into another
+// request. A reading a few minutes old is just as useful on a status page.
+const AI_CHECK_TTL_MS = 10 * 60 * 1000;
+let aiCheckCache = null; // { at, result }
+
+async function probeAiAssistant() {
   if (!hasProvider()) {
     return { ok: false, detail: "No AI key configured (GEMINI_API_KEY or ANTHROPIC_API_KEY) — Q2 can't talk at all." };
   }
@@ -3033,6 +3044,15 @@ async function checkAiAssistant() {
         : `AI is not answering: ${raw}`
     };
   }
+}
+
+async function checkAiAssistant({ force = false } = {}) {
+  if (!force && aiCheckCache && Date.now() - aiCheckCache.at < AI_CHECK_TTL_MS) {
+    return aiCheckCache.result;
+  }
+  const result = await probeAiAssistant();
+  aiCheckCache = { at: Date.now(), result };
+  return result;
 }
 
 // Public, unauthenticated status endpoint — same underlying checks as the
@@ -3105,22 +3125,46 @@ app.get("/api/admin/audit-log", requireUser, async (req, res) => {
   }
 });
 
+// The public status endpoint is unauthenticated, and every call makes real
+// outbound requests (database, scan provider, payments, AI). Cached for a
+// minute and shared between concurrent callers, so a status page that
+// refreshes — or a stranger — can't turn it into a load generator against
+// providers we depend on.
+const STATUS_CACHE_MS = 60 * 1000;
+let statusCache = null; // { at, body }
+let statusInFlight = null;
+
 app.get("/api/status", async (req, res) => {
+  if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) {
+    return res.json(statusCache.body);
+  }
   try {
-    const [database, scanProvider, paymentsReachable, aiAssistant] = await Promise.all([
-      checkDatabasePublic(),
-      checkScanProvider(),
-      checkPaymentsReachable(),
-      checkAiAssistant()
-    ]);
-    const checks = [
-      { name: "Vertex accounts", ok: database.ok },
-      { name: "Chart scanning", ok: scanProvider.ok },
-      { name: "Payments", ok: paymentsReachable.ok },
-      { name: "Q2 assistant", ok: aiAssistant.ok }
-    ];
-    const allOk = checks.every((c) => c.ok);
-    res.json({ allOk, checks, checkedAt: new Date().toISOString() });
+    if (!statusInFlight) {
+      statusInFlight = (async () => {
+        const [database, scanProvider, paymentsReachable, aiAssistant] = await Promise.all([
+          checkDatabasePublic(),
+          checkScanProvider(),
+          checkPaymentsReachable(),
+          checkAiAssistant()
+        ]);
+        const checks = [
+          { name: "Vertex accounts", ok: database.ok },
+          { name: "Chart scanning", ok: scanProvider.ok },
+          { name: "Payments", ok: paymentsReachable.ok },
+          { name: "Q2 assistant", ok: aiAssistant.ok }
+        ];
+        const body = {
+          allOk: checks.every((c) => c.ok),
+          checks,
+          checkedAt: new Date().toISOString()
+        };
+        statusCache = { at: Date.now(), body };
+        return body;
+      })().finally(() => {
+        statusInFlight = null;
+      });
+    }
+    res.json(await statusInFlight);
   } catch (err) {
     console.error("Public status error:", err.message);
     res.status(502).json({ error: "Could not check status right now." });
