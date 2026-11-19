@@ -1617,6 +1617,17 @@ body.scanning .scan-hud {
   line-height: 1.4;
 }
 
+/* The trader's own screenshot with the detected concepts drawn on it. */
+.result-marked-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
 .entry-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

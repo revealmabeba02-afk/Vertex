@@ -65,6 +65,26 @@ Rules you must follow:
   ],
   "risk_reward_estimate": string | null, // e.g. "~1:2" if it can be reasonably estimated, else null
   "invalidation": string,               // what would prove this whole read wrong
+  "concepts_detected": {                // smart-money concepts actually visible in the chart. ALL FOUR arrays must be present; use an empty array for any concept that isn't clearly visible — never invent one. Max 3 per array, the most recent/clear examples. Use prices read from the chart's own price axis.
+    "order_blocks": [                   // last up/down candle before a strong impulse move
+      { "bias": "bullish" | "bearish", "top_price": number, "bottom_price": number, "note": string }
+    ],
+    "liquidity_sweeps": [               // wicks that poked through a prior swing high/low and closed back inside
+      { "side": "buy-side" | "sell-side", "price": number, "note": string }
+    ],
+    "fvgs": [                           // three-candle imbalance gaps
+      { "top_price": number, "bottom_price": number, "filled": boolean, "note": string }
+    ],
+    "breaks": [                         // structural breaks of a swing high/low
+      { "kind": "BOS" | "CHoCH", "direction": "bullish" | "bearish", "price": number, "note": string }
+    ]
+  },
+  "price_scale": {                      // calibration so the app can draw annotations at the right height: the highest and lowest PRICE LABELS visible on the chart's price axis, and where each sits vertically as a percent of image height (0 = very top of the image, 100 = very bottom). If the price axis is unreadable or cropped away, set this to null.
+    "top_price": number,
+    "top_pct": number,
+    "bottom_price": number,
+    "bottom_pct": number
+  },
   "notes": string,                      // any caveats, e.g. low chart resolution, indicators not clear, conflicting signals
   "disclaimer": string                  // brief standard "not financial advice" disclaimer
 }

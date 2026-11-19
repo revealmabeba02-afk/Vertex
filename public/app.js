@@ -2470,8 +2470,7 @@
     // Smart-money concepts the engine detected on this scan (order blocks,
     // liquidity sweeps, FVGs, BOS/CHoCH, equal levels). Hidden entirely for
     // image scans and any analysis that didn't carry them.
-    const conceptsWrap = document.getElementById("res-concepts-wrap");
-    const conceptsEl = document.getElementById("res-concepts");
+    const conceptsWrap = document.getElementById("res-concepts-wrap");    const conceptsEl = document.getElementById("res-concepts");
     if (conceptsWrap && conceptsEl) {
       conceptsEl.innerHTML = "";
       const conceptGroups = a.concepts || {};
@@ -2486,6 +2485,21 @@
         conceptsWrap.hidden = false;
       } else {
         conceptsWrap.hidden = true;
+      }
+    }
+
+    // Chart-photo scans come back with the trader's own screenshot marked up:
+    // order-block / FVG zones shaded, sweeps and breaks labelled. Pair scans
+    // have no image, so this section stays hidden for them.
+    const markedWrap = document.getElementById("res-marked-wrap");
+    const markedImg = document.getElementById("res-marked-img");
+    if (markedWrap && markedImg) {
+      if (a.annotated_image) {
+        markedImg.src = `data:${a.annotated_mime || "image/png"};base64,${a.annotated_image}`;
+        markedWrap.hidden = false;
+      } else {
+        markedImg.removeAttribute("src");
+        markedWrap.hidden = true;
       }
     }
 

@@ -13,6 +13,7 @@
 // feature that needs a vision model; when neither key is present the route
 // answers 503 before spending anything, and the pair scanner is unaffected.
 
+const sharp = require("sharp");
 const { buildSystemPrompt, buildUserPrompt } = require("./analysisPrompt");
 
 const IMAGE_ANALYSIS_MODEL = (
@@ -81,6 +82,40 @@ function parseJsonObject(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function parsePrice(value) {
+  const m = String(value == null ? "" : value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Every image scan already returns entry / stop / targets / key levels as
+// text. Pull the numbers out so the annotator can draw the trade plan onto
+// the screenshot even when the model reports no smart-money concepts.
+function buildPlanLevels(payload) {
+  const rows = [];
+  const push = (kind, price, label) => {
+    if (price != null) rows.push({ kind, price, label });
+  };
+
+  const entry = Array.isArray(payload.potential_entries) ? payload.potential_entries[0] : null;
+  if (entry) {
+    const side = String(entry.type || "").toLowerCase() === "short" ? "SELL" : "BUY";
+    push("entry", parsePrice(entry.entry_zone), `Entry ${side}`);
+  }
+  push("stop", parsePrice(payload.stop_loss?.suggestion), "Stop");
+  (Array.isArray(payload.take_profit) ? payload.take_profit : []).slice(0, 3).forEach((t, i) => {
+    push("target", parsePrice(t?.target), `TP${i + 1}`);
+  });
+  const levels = payload.market_structure?.key_levels;
+  (Array.isArray(levels) ? levels : []).slice(0, 4).forEach((lvl) => {
+    const label = String(lvl).replace(/^\s*(immediate|major|minor)?\s*(resistance|support)?[:\-–]?\s*/i, "").slice(0, 18) || "Level";
+    push("level", parsePrice(lvl), label);
+  });
+
+  return rows;
+}
+
 function mapImageAnalysis(payload, timeframe) {
   const bias = BIASES.includes(payload.market_bias) ? payload.market_bias : "Neutral / Ranging";
   const confidence = pickConfidence(payload.confidence);
@@ -109,6 +144,48 @@ function mapImageAnalysis(payload, timeframe) {
   const notesParts = [];
   if (payload.notes) notesParts.push(String(payload.notes));
   notesParts.push("Read from a static screenshot, so levels may be approximate if the price axis was hard to read.");
+
+  // Smart-money concepts the model saw in the screenshot. `concepts_data`
+  // keeps the raw percent positions for the image annotator; `concepts`
+  // turns the same rows into the human lines the result card lists.
+  const detected = payload.concepts_detected || {};
+  const detectedScale = payload.price_scale && typeof payload.price_scale === "object" ? payload.price_scale : null;
+  const conceptsData = {};
+  const conceptLines = {};
+  const addLine = (key, line) => {
+    (conceptLines[key] = conceptLines[key] || []).push(line);
+  };
+  const cap = (key) => (conceptLines[key] || []).length < 3;
+
+  for (const ob of Array.isArray(detected.order_blocks) ? detected.order_blocks : []) {
+    if (!cap("order_blocks")) break;
+    conceptsData.order_blocks = conceptsData.order_blocks || [];
+    conceptsData.order_blocks.push(ob);
+    addLine("order_blocks", `${ob?.bias === "bearish" ? "Bearish" : "Bullish"} order block${ob?.note ? " — " + ob.note : ""}`);
+  }
+  for (const f of Array.isArray(detected.fvgs) ? detected.fvgs : []) {
+    if (!cap("fvgs")) break;
+    conceptsData.fvgs = conceptsData.fvgs || [];
+    conceptsData.fvgs.push(f);
+    addLine("fvgs", `${f?.filled ? "Filled" : "Open"} fair value gap${f?.note ? " — " + f.note : ""}`);
+  }
+  for (const s of Array.isArray(detected.liquidity_sweeps) ? detected.liquidity_sweeps : []) {
+    if (!cap("liquidity_sweeps")) break;
+    conceptsData.liquidity_sweeps = conceptsData.liquidity_sweeps || [];
+    conceptsData.liquidity_sweeps.push(s);
+    addLine("liquidity_sweeps", `${s?.side === "buy-side" ? "Buy-side" : "Sell-side"} liquidity sweep${s?.note ? " — " + s.note : ""}`);
+  }
+  for (const b of Array.isArray(detected.breaks) ? detected.breaks : []) {
+    if (!cap("breaks")) break;
+    conceptsData.breaks = conceptsData.breaks || [];
+    conceptsData.breaks.push(b);
+    addLine("breaks", `${String(b?.kind || "Break").toUpperCase()} ${b?.direction || ""}${b?.note ? " — " + b.note : ""}`.replace(/\s+/g, " "));
+  }
+
+  const concepts = {};
+  for (const [key, lines] of Object.entries(conceptLines)) {
+    if (lines.length) concepts[key] = lines;
+  }
 
   return {
     pair_guess: payload.pair_guess ? String(payload.pair_guess).toUpperCase() : null,
@@ -139,6 +216,10 @@ function mapImageAnalysis(payload, timeframe) {
       ? String(payload.disclaimer)
       : "Technical/educational analysis of a static screenshot, not financial advice. Confirm with your own analysis and risk management.",
     top_down: [],
+    concepts,
+    concepts_data: conceptsData,
+    concepts_scale: detectedScale,
+    plan_levels: buildPlanLevels(payload),
     source: "image",
     timeframe
   };
@@ -250,8 +331,14 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
 
   let lastFailure = null;
   const startedAt = Date.now();
+  // The app gives up on a scan after 75s. Google's free tier can answer a 503
+  // quickly but a busy model slowly, so cap the whole fallback walk well
+  // under that: better a clear "try again" than a request that dies client-
+  // side with no explanation.
+  const OVERALL_BUDGET_MS = 55000;
 
   for (const model of GEMINI_IMAGE_MODELS) {
+    if (Date.now() - startedAt > OVERALL_BUDGET_MS) break;
     const url =
       "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(model) +
@@ -304,6 +391,28 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   throw e;
 }
 
+// A chart screenshot straight off a phone can be 6-7 MB. Sending that to the
+// vision model is slow and, during a busy hour, is what pushes a scan past
+// the server's 60s request ceiling. 1400px is still plenty for reading
+// candles, axes and labels, and turns the request into a fraction of the
+// bytes — same analysis, far faster and far more reliable.
+const MODEL_IMAGE_MAX_WIDTH = 1400;
+async function shrinkForModel(buffer, mimeType) {
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (!meta.width || meta.width <= MODEL_IMAGE_MAX_WIDTH) return { buffer, mimeType };
+    const shrunk = await sharp(buffer)
+      .rotate()
+      .resize({ width: MODEL_IMAGE_MAX_WIDTH, withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    return { buffer: shrunk, mimeType: "image/jpeg" };
+  } catch (err) {
+    console.error("Could not shrink the chart image, sending it as-is:", err.message);
+    return { buffer, mimeType };
+  }
+}
+
 async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKey }) {
   const anthropicKey = String(apiKey || "").trim();
   const googleKey = String(geminiKey || "").trim();
@@ -319,9 +428,11 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
     throw err;
   }
 
+  const shrunk = await shrinkForModel(buffer, mimeType);
+
   const text = googleKey
-    ? await callGeminiVision({ buffer, mimeType, timeframe, apiKey: googleKey })
-    : await callAnthropicVision({ buffer, mimeType, timeframe, apiKey: anthropicKey });
+    ? await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey })
+    : await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
 
   let payload;
   try {

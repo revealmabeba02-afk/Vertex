@@ -1230,6 +1230,7 @@ app.post("/api/watch/tick", requireUser, async (req, res) => {
 // exact same mapping without pulling in the whole Express app.
 const { mapFxSynapseToAnalysis } = require("./analysisMapper");
 const { analyzeChartImage } = require("./imageAnalysis");
+const { annotateChartImage } = require("./imageAnnotate");
 
 // --- Market watcher ------------------------------------------------------
 // The loop that keeps looking between scans. It calls the provider through
@@ -3753,6 +3754,25 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
           error: "That doesn't look like a trading chart. Upload a screenshot of a price chart and try again.",
           code: "not_a_chart"
         });
+      }
+
+      // Mark the concepts onto the trader's own screenshot (order-block and
+      // FVG zones, sweep/BOS lines). Best-effort: if the annotator can't run,
+      // the scan still returns with the text concepts only.
+      let annotatedImage = null;
+      try {
+        annotatedImage = await annotateChartImage({
+          buffer: req.file.buffer,
+          concepts: analysis.concepts_data,
+          priceScale: analysis.concepts_scale,
+          planLevels: analysis.plan_levels
+        });
+      } catch (err) {
+        console.error("Annotate step failed:", err.message);
+      }
+      if (annotatedImage) {
+        analysis.annotated_image = annotatedImage.toString("base64");
+        analysis.annotated_mime = "image/png";
       }
 
       res.json({ analysis, timeframe });
