@@ -770,6 +770,40 @@ app.use((req, res, next) => {
 const PAGES = path.join(__dirname, "..", "pages");
 const page = (name) => path.join(PAGES, name);
 
+// The public origin is baked into the pages (canonical, og:url, og:image) and
+// into sitemap.xml / robots.txt. The moment a custom domain is attached, every
+// one of those should name the domain the visitor actually used: otherwise
+// Google indexes the onrender.com host and link previews advertise it too.
+// Rather than hand-editing thirty-odd hard-coded URLs — and doing it again the
+// next time the domain changes — swap the origin while serving.
+const CANONICAL_ORIGIN = "https://vertex-9s4c.onrender.com";
+// Outbound email and keepalive need one absolute base URL; PUBLIC_BASE_URL
+// overrides it once the custom domain is live.
+const SELF_URL = (process.env.PUBLIC_BASE_URL || CANONICAL_ORIGIN).replace(/\/+$/, "");
+const PUBLIC_HOSTS = new Set([
+  "vertex-9s4c.onrender.com",
+  "vertexchartscanner.us.kg",
+  "www.vertexchartscanner.us.kg",
+]);
+
+// Only hosts we own are honoured, so a forged Host header can never inject a
+// canonical URL into the page.
+function requestOrigin(req) {
+  if (!req || !req.headers) return CANONICAL_ORIGIN;
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+  if (!PUBLIC_HOSTS.has(host)) return CANONICAL_ORIGIN;
+  const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim() || "https";
+  return `${proto}://${host}`;
+}
+
+function rewriteOrigin(html, origin) {
+  return origin === CANONICAL_ORIGIN ? html : html.split(CANONICAL_ORIGIN).join(origin);
+}
+
 // These pages change often while the product is being iterated on, and
 // browsers — mobile Safari especially, via its back-forward cache — will
 // otherwise keep showing an old UI after a deploy until the person manually
@@ -777,8 +811,22 @@ const page = (name) => path.join(PAGES, name);
 // time, so a shipped change is what the next load actually shows.
 function sendFreshPage(res, name) {
   res.set("Cache-Control", "no-store");
-  res.sendFile(page(name));
+  const origin = requestOrigin(res.req);
+  // Fast path: on the canonical host nothing is rewritten, so keep serving
+  // straight off disk exactly as before.
+  if (origin === CANONICAL_ORIGIN) return res.sendFile(page(name));
+  res.type("html").send(rewriteOrigin(require("fs").readFileSync(page(name), "utf8"), origin));
 }
+
+// Same treatment for the crawler files. They live in public/ and would
+// otherwise be served by the static middleware with the old host baked in.
+function sendRewrittenStatic(res, relPath, type) {
+  res.set("Cache-Control", "public, max-age=3600");
+  res.type(type).send(rewriteOrigin(require("fs").readFileSync(path.join(__dirname, "..", relPath), "utf8"), requestOrigin(res.req)));
+}
+
+app.get("/sitemap.xml", (req, res) => sendRewrittenStatic(res, "public/sitemap.xml", "application/xml"));
+app.get("/robots.txt", (req, res) => sendRewrittenStatic(res, "public/robots.txt", "text/plain"));
 
 app.get("/", (req, res) => sendFreshPage(res, "landing.html"));
 app.get("/welcome", (req, res) => sendFreshPage(res, "splash.html"));
@@ -1462,7 +1510,7 @@ async function sendReceiptEmail(toEmail, bundle, scans, amountUsd) {
           `${label} bundle — ${scans} scans added to your account` +
           (amountUsd != null ? ` ($${Number(amountUsd).toFixed(2)})` : "") +
           `.\n\n` +
-          `Log in at https://vertex-9s4c.onrender.com/app to start scanning.\n\n` +
+          `Log in at ${SELF_URL}/app to start scanning.\n\n` +
           `— Vertex Chart Scanner`
       }),
       signal: AbortSignal.timeout(8000)
@@ -1490,7 +1538,7 @@ async function sendLowCreditAlertEmail(toEmail, balance) {
         subject: `Low on scans — ${balance} credit${balance === 1 ? "" : "s"} left`,
         text:
           `Heads up — you're down to ${balance} paid scan credit${balance === 1 ? "" : "s"}.\n\n` +
-          `Top up anytime at https://vertex-9s4c.onrender.com/app (Credits tab) so you don't run out mid-session.\n\n` +
+          `Top up anytime at ${SELF_URL}/app (Credits tab) so you don't run out mid-session.\n\n` +
           `— Vertex Chart Scanner`
       }),
       signal: AbortSignal.timeout(8000)
@@ -1524,7 +1572,7 @@ async function sendWeeklyRecapEmail(row) {
           `• ${winRateLine}\n` +
           (top_pair ? `• Most traded pair: ${top_pair}\n` : "") +
           `• ${scans_count} chart${scans_count === 1 ? "" : "s"} scanned\n\n` +
-          `Keep it up — log in at https://vertex-9s4c.onrender.com/app to scan more.\n\n` +
+          `Keep it up - log in at ${SELF_URL}/app to scan more.\n\n` +
           `— Vertex Chart Scanner`
       }),
       signal: AbortSignal.timeout(8000)
@@ -4186,7 +4234,6 @@ setTimeout(() => { runWeeklyRecap(false).catch(() => {}); }, 60 * 1000);
 // reading the page. /api/health touches nothing external, so it spends no
 // provider quota.
 const SELF_PING_MS = 10 * 60 * 1000;
-const SELF_URL = (process.env.PUBLIC_BASE_URL || "https://vertex-9s4c.onrender.com").replace(/\/+$/, "");
 const SELF_PING_ENABLED = Boolean(process.env.RENDER) || process.env.PORT === "10000";
 if (SELF_PING_ENABLED) {
   let selfPingFailing = false;

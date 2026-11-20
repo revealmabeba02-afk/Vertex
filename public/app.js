@@ -1341,9 +1341,15 @@
 
         try {
           const qr = qrcode(4, "M");
+          // Follow the host the app is actually served from, so a scan of this
+          // card keeps working when the custom domain replaces onrender.com.
+          const shareOrigin =
+            typeof location !== "undefined" && /^https?:$/.test(location.protocol)
+              ? location.origin
+              : "https://vertex-9s4c.onrender.com";
           const qrUrl = referralCode
-            ? `https://vertex-9s4c.onrender.com/signup?ref=${encodeURIComponent(referralCode)}`
-            : "https://vertex-9s4c.onrender.com/signup?ref=share";
+            ? `${shareOrigin}/signup?ref=${encodeURIComponent(referralCode)}`
+            : `${shareOrigin}/signup?ref=share`;
           qr.addData(qrUrl);
           qr.make();
           const qrSize = 140;
