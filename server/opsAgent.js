@@ -228,6 +228,7 @@ async function snapshot({ logMinutes = 30, inProcess = false } = {}) {
     result.logs = {
       total: entries.length,
       restarts: countRestarts(entries),
+      windowMinutes: logMinutes,
       signals: pickSignals(entries).map((e) => ({ at: e.at, message: e.message.slice(0, 220) }))
     };
   }
@@ -264,6 +265,7 @@ What you know about this system:
 - The Node process has a 384 MB heap limit. "JavaScript heap out of memory" means the process died and Render restarted it; the site is down for about 12 seconds each time.
 - Scanning needs an AI provider. Quota errors (429) are expected on a free plan and are not a crash.
 - A deploy to main goes live automatically in about two minutes. A bad deploy looks like a build that never reaches "live", or a live service that cannot answer /api/health.
+- A deploy to main goes live automatically in about two minutes, and it restarts the process. A restart that lines up with a deploy is normal and is never a reason to restart anything.
 - Restarts are cheap but not free: each one drops in-flight scans. Never restart a healthy service.
 
 Choose exactly one action:
@@ -295,7 +297,22 @@ function triage(snapshot) {
   }
 
   const restarts = snapshot?.logs?.restarts || 0;
-  if (restarts >= 2) reasons.push(`${restarts} restarts in the window`);
+
+  // A deploy restarts the process, so "2 restarts in 30 minutes" is the normal
+  // signature of shipping twice — not a symptom. Count only the restarts that
+  // no deploy explains, otherwise every burst of work looks like an outage and
+  // the agent either wastes a model call or, worse, restarts a service that was
+  // simply being updated.
+  const windowMinutes = snapshot?.logs?.windowMinutes || 30;
+  const since = Date.parse(snapshot?.at || new Date().toISOString()) - windowMinutes * 60 * 1000;
+  const deployBoots = (snapshot?.deploys || []).filter((d) => {
+    const at = Date.parse(d.createdAt || "");
+    return Number.isFinite(at) && at >= since;
+  }).length;
+  const unexplainedRestarts = Math.max(0, restarts - deployBoots);
+  if (unexplainedRestarts >= 2) {
+    reasons.push(`${unexplainedRestarts} restarts in the window that no deploy explains`);
+  }
 
   const signals = snapshot?.logs?.signals || [];
   const worrying = signals.filter((s) =>
@@ -324,6 +341,18 @@ function parseDecision(text) {
 
 async function think(snapshot, { command = "", timeoutMs = 25000 } = {}) {
   if (typeof generateText !== "function") throw new Error("No text model wired in.");
+
+  // Restarts and deploys are both in the facts, but a model reading raw lists
+  // will happily report "2 restarts" and miss that both were deploys. Do that
+  // arithmetic here and hand it over already reconciled.
+  const windowMinutes = snapshot?.logs?.windowMinutes || 30;
+  const since = Date.parse(snapshot?.at || new Date().toISOString()) - windowMinutes * 60 * 1000;
+  const deployBoots = (snapshot?.deploys || []).filter((d) => {
+    const at = Date.parse(d.createdAt || "");
+    return Number.isFinite(at) && at >= since;
+  }).length;
+  const restarts = snapshot?.logs?.restarts || 0;
+
   const prompt = [
     `Facts collected at ${snapshot?.at || new Date().toISOString()}:`,
     JSON.stringify(
@@ -332,6 +361,9 @@ async function think(snapshot, { command = "", timeoutMs = 25000 } = {}) {
         memory: snapshot?.memory,
         restartsLastHour: snapshot?.restartsLastHour,
         logs: snapshot?.logs,
+        deploysInWindow: deployBoots,
+        restartsExplainedByDeploys: Math.min(restarts, deployBoots),
+        unexplainedRestarts: Math.max(0, restarts - deployBoots),
         deploys: (snapshot?.deploys || []).slice(0, 3)
       },
       null,
