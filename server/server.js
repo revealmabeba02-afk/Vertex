@@ -1305,7 +1305,7 @@ app.post("/api/watch/tick", requireUser, async (req, res) => {
 // Moved to analysisMapper.js so the standalone auto-post job can reuse the
 // exact same mapping without pulling in the whole Express app.
 const { mapFxSynapseToAnalysis } = require("./analysisMapper");
-const { analyzeChartImage } = require("./imageAnalysis");
+const { analyzeChartImage, prepareImage } = require("./imageAnalysis");
 const { annotateChartImage } = require("./imageAnnotate");
 
 // --- Market watcher ------------------------------------------------------
@@ -3896,6 +3896,13 @@ app.post("/api/admin/feedback/:id/status", requireUser, async (req, res) => {
 // charged. Cleared in a `finally` below so it never gets stuck.
 const scansInFlight = new Set();
 
+// A 512 MB instance cannot hold several phone-sized screenshots at once. Two is
+// the ceiling: beyond that the next request is told to retry instead of being
+// charged and then killed halfway through. Per-user locking above already stops
+// one person doubling up; this stops three different people doing it together.
+let imageScansActive = 0;
+const MAX_CONCURRENT_IMAGE_SCANS = 2;
+
 // --- Image scanning --------------------------------------------------------
 // Upload a chart screenshot and have it read. FXSynapse only works from a
 // symbol, so this route uses Claude's vision model through
@@ -3921,9 +3928,20 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
   if (scansInFlight.has(req.user.id)) {
     return res.status(429).json({ error: "A scan is already running for your account. Please wait for it to finish." });
   }
+  if (imageScansActive >= MAX_CONCURRENT_IMAGE_SCANS) {
+    return res.status(429).json({
+      error: "The scanner is reading two other charts right now. Try again in a few seconds — you were not charged.",
+      code: "scanner_busy"
+    });
+  }
   scansInFlight.add(req.user.id);
+  imageScansActive += 1;
 
   try {
+    // Downscale once and reuse that copy everywhere below. Doing it before the
+    // credit is spent also means a giant upload can never fail after charging.
+    const prepared = await prepareImage(req.file.buffer, req.file.mimetype);
+
     let scanSource = null;
     if (CREDITS_READY) {
       try {
@@ -3957,8 +3975,8 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
 
     try {
       const { isChart, analysis } = await analyzeChartImage({
-        buffer: req.file.buffer,
-        mimeType: req.file.mimetype,
+        buffer: prepared.buffer,
+        mimeType: prepared.mimeType,
         timeframe,
         apiKey: ANTHROPIC_API_KEY,
         geminiKey: GEMINI_API_KEY
@@ -3978,7 +3996,7 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
       let annotatedImage = null;
       try {
         annotatedImage = await annotateChartImage({
-          buffer: req.file.buffer,
+          buffer: prepared.buffer,
           concepts: analysis.concepts_data,
           priceScale: analysis.concepts_scale,
           planLevels: analysis.plan_levels
@@ -4004,6 +4022,7 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
     }
   } finally {
     scansInFlight.delete(req.user.id);
+    imageScansActive = Math.max(0, imageScansActive - 1);
   }
 });
 
@@ -4321,3 +4340,35 @@ if (RENDER_API_KEY) {
 } else {
   console.log("Auto-upgrade: off (no RENDER_API_KEY set)");
 }
+
+// --- Memory ---------------------------------------------------------------
+// 512 MB instance, 384 MB V8 heap, and the process has died of "JavaScript
+// heap out of memory" three times in the last day — which, from the outside,
+// simply looks like the scanner stopped working. libvips keeps decoded images
+// in its own cache; on a box this small that is memory we cannot spare, so it
+// is turned off and the queued image scans are capped above. The five-minute
+// line makes the next crash diagnosable instead of a mystery, and the guard
+// restarts us at 92% instead of letting a scan die mid-response.
+try {
+  const sharp = require("sharp");
+  sharp.cache(false);
+  sharp.concurrency(1);
+} catch (err) {
+  console.error("Could not tune image memory use:", err.message);
+}
+
+let memoryGuardFired = false;
+setInterval(() => {
+  const m = process.memoryUsage();
+  const limit = require("v8").getHeapStatistics().heap_size_limit;
+  const mb = (n) => Math.round(n / 1048576);
+  const pct = limit ? Math.round((m.heapUsed / limit) * 100) : 0;
+  console.log(
+    `Memory: heap ${mb(m.heapUsed)}MB/${mb(limit)}MB (${pct}%) rss ${mb(m.rss)}MB external ${mb(m.external)}MB imageScans ${imageScansActive}`
+  );
+  if (pct >= 92 && !memoryGuardFired) {
+    memoryGuardFired = true;
+    console.error(`Memory guard: heap at ${pct}% - restarting before a scan dies mid-response.`);
+    setTimeout(() => process.exit(1), 1000);
+  }
+}, 5 * 60 * 1000).unref();

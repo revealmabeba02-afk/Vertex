@@ -595,4 +595,27 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
   return { isChart, analysis: mapImageAnalysis(payload, timeframe) };
 }
 
-module.exports = { analyzeChartImage, mapImageAnalysis };
+// One decode for the whole request. A phone screenshot can be 4000px wide, and
+// every separate sharp() call on the original decodes it again — roughly 48 MB
+// of raw pixels each time. Downscaling once here and handing the same buffer to
+// both the model and the annotator keeps a single scan from holding three
+// full-size bitmaps at the same moment, which is what pushes this 512 MB
+// instance into an out-of-memory restart.
+const PREPARE_MAX_WIDTH = 1800;
+async function prepareImage(buffer, mimeType) {
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (!meta.width || meta.width <= PREPARE_MAX_WIDTH) return { buffer, mimeType };
+    const out = await sharp(buffer)
+      .rotate()
+      .resize({ width: PREPARE_MAX_WIDTH, withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    return { buffer: out, mimeType: "image/jpeg" };
+  } catch (err) {
+    console.error("Could not prepare the chart image, using it as uploaded:", err.message);
+    return { buffer, mimeType };
+  }
+}
+
+module.exports = { analyzeChartImage, mapImageAnalysis, prepareImage };
