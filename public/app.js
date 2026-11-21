@@ -3412,6 +3412,11 @@
   const payAmount = document.getElementById("pay-amount");
   const payBinanceId = document.getElementById("pay-binance-id");
   const payCopyBtn = document.getElementById("pay-copy-btn");
+  const payPaypal = document.getElementById("pay-paypal");
+  const payPaypalLink = document.getElementById("pay-paypal-link");
+  const payPaypalSent = document.getElementById("pay-paypal-sent");
+  const payPaypalStatus = document.getElementById("pay-paypal-status");
+  let activePaypalOrder = null;
   const payCancelBtn = document.getElementById("pay-cancel-btn");
   const payWaiting = document.getElementById("pay-waiting");
   const payWaitingText = document.getElementById("pay-waiting-text");
@@ -4214,8 +4219,32 @@
 
   function openPayPanel(data) {
     activeOrderId = data.order.id;
+    activePaypalOrder = data.order;
     payAmount.textContent = `$${Number(data.order.amount_usd).toFixed(2)}`;
     payBinanceId.textContent = data.payTo.binancePayId;
+
+    // PayPal is optional and off unless the server has a handle configured, so
+    // the panel never shows a dead button.
+    if (payPaypal) {
+      if (data.paypal && data.paypal.meUrl) {
+        payPaypal.hidden = false;
+        if (payPaypalLink) {
+          payPaypalLink.href = data.paypal.meUrl;
+          payPaypalLink.textContent = `Pay $${Number(data.order.amount_usd).toFixed(2)} with PayPal`;
+        }
+        if (payPaypalStatus) {
+          payPaypalStatus.hidden = true;
+          payPaypalStatus.textContent = "";
+        }
+        if (payPaypalSent) {
+          payPaypalSent.disabled = false;
+          payPaypalSent.textContent = "I've paid";
+        }
+      } else {
+        payPaypal.hidden = true;
+      }
+    }
+
     payDone.hidden = true;
     payWaiting.hidden = false;
     payWaitingText.textContent = "Waiting for payment — this updates automatically once it's detected.";
@@ -4241,6 +4270,42 @@
       } catch {
         // Clipboard permission denied or unavailable — the ID is still
         // visible on screen for the user to select manually.
+      }
+    });
+  }
+
+  if (payPaypalSent) {
+    payPaypalSent.addEventListener("click", async () => {
+      payPaypalSent.disabled = true;
+      payPaypalSent.textContent = "Telling the owner…";
+      try {
+        const session = await Auth.getSession();
+        const res = await fetch("/api/credits/paypal-claim", {
+          method: "POST",
+          headers: {
+            ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            orderId: activePaypalOrder ? activePaypalOrder.id : "",
+            amount: activePaypalOrder ? Number(activePaypalOrder.amount_usd) : null
+          })
+        });
+        const out = await res.json().catch(() => null);
+        if (payPaypalStatus) {
+          payPaypalStatus.hidden = false;
+          payPaypalStatus.textContent = res.ok
+            ? (out && out.message) || "The owner has been told."
+            : (out && out.error) || "Could not send that just now.";
+        }
+        payPaypalSent.textContent = "Sent";
+      } catch {
+        if (payPaypalStatus) {
+          payPaypalStatus.hidden = false;
+          payPaypalStatus.textContent = "Could not reach the server. Your payment is still recorded on PayPal's side.";
+        }
+        payPaypalSent.disabled = false;
+        payPaypalSent.textContent = "I've paid";
       }
     });
   }

@@ -739,6 +739,19 @@
         <button type="button" class="ghost-btn pay-panel__copy" id="pay-copy-btn">Copy ID</button>
       </div>
       <p class="pay-panel__hint">In the Binance app: Pay → Send → Pay/Transfer to User → paste this Binance ID → enter the exact amount above.</p>
+
+      <!-- PayPal.Me: no webhook, no API key, no store review — the buyer pays,
+           taps "I've paid", and the owner confirms it in /admin. Shown only when
+           PAYPAL_ME_HANDLE is set on the server. -->
+      <div id="pay-paypal" hidden>
+        <p class="pay-panel__desc" style="margin-top:16px;">Or pay with <strong>PayPal</strong>:</p>
+        <p class="pay-panel__hint" id="pay-paypal-hint">Open the link, send the exact amount, and put your Vertex login email in the PayPal note.</p>
+        <a class="btn btn--primary" id="pay-paypal-link" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:8px;">Pay with PayPal</a>
+        <div style="margin-top:10px;">
+          <button type="button" class="ghost-btn" id="pay-paypal-sent">I've paid</button>
+        </div>
+        <p class="pay-panel__hint" id="pay-paypal-status" hidden></p>
+      </div>
       <div class="pay-panel__waiting" id="pay-waiting">
         <svg class="pay-panel__brainmark" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="pay-brainmark__ring" cx="50" cy="50" r="22" fill="none" stroke-width="1.4"/>

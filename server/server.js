@@ -244,6 +244,12 @@ const UPGRADE_INTERVAL_MS = 2 * 60 * 1000;
 const BINANCE_API_KEY = (process.env.BINANCE_API_KEY || "").trim();
 const BINANCE_API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
 const BINANCE_PAY_ID = (process.env.BINANCE_PAY_ID || "1283803211").trim();
+// PayPal.Me is the one payment route that needs no integration, no webhook and
+// no API key: the buyer pays to a public link, and the order sits pending until
+// King confirms it in /admin. It exists because Binance Pay is blocked in some
+// countries and Whop needs a store review — a payment method that can't be
+// switched on is not a payment method.
+const PAYPAL_ME_HANDLE = (process.env.PAYPAL_ME_HANDLE || "").trim().replace(/^@/, "");
 const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
@@ -1748,11 +1754,19 @@ app.post("/api/credits/order", requireUser, async (req, res) => {
 
   try {
     const order = await supabaseRpc("create_credit_order", { p_bundle: bundle }, req.user.token);
+    const amount = Number(order.amount_usd);
     res.json({
       order,
       payTo: { binancePayId: BINANCE_PAY_ID },
+      paypal: PAYPAL_ME_HANDLE
+        ? {
+            handle: PAYPAL_ME_HANDLE,
+            meUrl: `https://paypal.me/${encodeURIComponent(PAYPAL_ME_HANDLE)}/${amount.toFixed(2)}`,
+            email: ADMIN_EMAIL
+          }
+        : null,
       instructions:
-        `Send exactly $${Number(order.amount_usd).toFixed(2)} (USDT or equivalent) via Binance Pay to Binance ID ${BINANCE_PAY_ID}. ` +
+        `Send exactly $${amount.toFixed(2)} (USDT or equivalent) via Binance Pay to Binance ID ${BINANCE_PAY_ID}. ` +
         "Your credits are added automatically once the payment is detected — usually within a minute."
     });
   } catch (err) {
@@ -1761,8 +1775,47 @@ app.post("/api/credits/order", requireUser, async (req, res) => {
   }
 });
 
-app.post("/api/credits/custom-checkout", requireUser, async (req, res) => {
-  if (!WHOP_CUSTOM_READY) {
+// "I've paid" on the PayPal path. PayPal.Me has no webhook we can trust without
+// a business account, so the buyer tells us and the admin confirms. This does
+// not credit anything — it only rings the bell, loudly enough that the buyer
+// isn't left waiting. Crediting still happens by a human in /admin.
+app.post("/api/credits/paypal-claim", requireUser, async (req, res) => {
+  if (!PAYPAL_ME_HANDLE) {
+    return res.status(503).json({ error: "PayPal isn't switched on yet — use Binance Pay for now." });
+  }
+  const orderId = String(req.body?.orderId || "").trim();
+  const note = String(req.body?.note || "").trim().slice(0, 300);
+  // The amount is what the buyer was shown on their own screen. It is a hint
+  // for King to check against PayPal, never a source of truth — nothing is
+  // credited from this request.
+  const shownAmount = Number(req.body?.amount);
+  try {
+    notify({
+      title: "Vertex: PayPal payment claimed",
+      text: [
+        "Someone says they paid with PayPal.",
+        "",
+        `Account: ${req.user.email}`,
+        orderId ? `Order: ${orderId}` : "Order: not specified",
+        Number.isFinite(shownAmount) && shownAmount > 0 ? `They say they sent: $${shownAmount.toFixed(2)}` : "",
+        note ? `Their note: ${note}` : "",
+        "",
+        "Check PayPal, then confirm the order in /admin so the credits are added.",
+        SELF_URL + "/admin"
+      ].filter(Boolean).join("\n")
+    }).catch((err) => console.error("PayPal claim notice failed:", err.message));
+
+    res.json({
+      ok: true,
+      message: "Thanks — the owner has been told. Credits are usually added within a few hours once the payment is checked."
+    });
+  } catch (err) {
+    console.error("PayPal claim error:", err.message);
+    res.status(502).json({ error: "Could not send that just now. If you already paid, it will still be credited." });
+  }
+});
+
+app.post("/api/credits/custom-checkout", requireUser, async (req, res) => {  if (!WHOP_CUSTOM_READY) {
     return res.status(503).json({ error: "Custom amounts aren't turned on yet — grab one of the bundles below for now." });
   }
 
@@ -4238,6 +4291,25 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
   try {
     const record = await opsAgent.runCycle({ inProcess: true, allowRestart: true, command });
     res.json(record);
+
+    // A command that ends in a restart or an escalation is worth a message,
+    // because King asked from a browser he may well close before the answer
+    // arrives. Best-effort: the response has already gone.
+    const action = record.decision?.action || "none";
+    if (action !== "none") {
+      notify({
+        title: `Vertex: ${record.decision?.verdict || "unknown"}`,
+        text: [
+          `You asked: ${command}`,
+          "",
+          record.decision?.assessment || "",
+          "",
+          `Action: ${record.acted ? (record.acted.ok ? "restarted the service" : `refused — ${record.acted.reason || record.acted.error}`) : action}`,
+          record.decision?.why ? `Why: ${record.decision.why}` : "",
+          record.decision?.fix ? `Suggested fix: ${record.decision.fix}` : ""
+        ].filter(Boolean).join("\n")
+      }).catch((err) => console.error("Ops command notice failed:", err.message));
+    }
   } catch (err) {
     console.error("Ops agent command failed:", err.message);
     res.status(500).json({ error: err.message });
@@ -4247,16 +4319,155 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
 // The unattended half. Fifteen minutes is a compromise: often enough to catch a
 // heap that is climbing, rare enough that a free Gemini key survives. Most runs
 // stop at the reflex layer and never call a model at all.
+// --- Notifications --------------------------------------------------------
+// The agents can reach King now. One pipe is already live (email via Resend);
+// Telegram, Discord and ntfy switch on purely by setting env vars, no code
+// change. Nothing here can send user emails or secrets — notify.js redacts on
+// the way out.
+const { notify, channels: notifyChannels } = require("./notify");
+const { collectMoney, analyse: analyseMoney, renderMoneyBrief } = require("./moneyBrief");
+
+app.get("/api/admin/notify/channels", requireUser, (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  res.json({ configured: notifyChannels() });
+});
+
+// Proof that the pipe works end to end. Sent through the same redaction and the
+// same senders as a real alert, so a pass here means the real thing will land.
+app.post("/api/admin/notify/test", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  try {
+    const result = await notify({
+      title: "Vertex: test message",
+      text: [
+        "If you are reading this, the agents can reach you.",
+        "",
+        `Time: ${new Date().toUTCString()}`,
+        `This message was requested from /admin.`
+      ].join("\n")
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The money brief. Arithmetic first, advice second, and the advice is optional
+// — if the model is out of quota the numbers still arrive.
+app.get("/api/admin/money/brief", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const data = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) });
+    const analysis = analyseMoney(data);
+    let advice = null;
+    if ((process.env.MONEY_BRIEF_AI || "true") !== "false") {
+      try {
+        const { generateText, hasProvider } = require("./aiText");
+        if (hasProvider()) {
+          const out = await generateText({
+            system:
+              "You advise the owner of Vertex Chart Scanner, a forex chart-analysis web app that sells scan credits. " +
+              "You are given real numbers. Reply with at most three short bullets, each a concrete action he can take this week with no money to spend. " +
+              "Never promise profit, never predict revenue, never use hype. Refer to the actual numbers you were given.",
+            prompt: JSON.stringify({ numbers: data, analysis: analysis.findings.map((f) => f.text) }, null, 2),
+            maxTokens: 320,
+            temperature: 0.3,
+            timeoutMs: 20000
+          });
+          advice = (out?.text || "").trim() || null;
+        }
+      } catch (err) {
+        console.error("Money brief advice failed:", err.message);
+      }
+    }
+    res.json({ data, analysis, advice, text: renderMoneyBrief(data, analysis, advice) });
+  } catch (err) {
+    console.error("Money brief failed:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/money/brief/send", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  try {
+    const text = String(req.body?.text || "").slice(0, 8000);
+    if (!text) return res.status(400).json({ error: "There is nothing to send yet." });
+    const result = await notify({ title: "Vertex: money brief", text });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderReady()) {
   const OPS_INTERVAL_MS = Number(process.env.OPS_INTERVAL_MS) || 15 * 60 * 1000;
   let opsRunning = false;
+
+  // An agent that messages on every cycle is an agent people mute, and a muted
+  // agent is the same as no agent. Only real findings go out, and the same
+  // finding is not repeated more than once every two hours.
+  let lastOpsNotice = { key: "", at: 0 };
+  const OPS_NOTICE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+  const opsCycleText = (record) => {
+    const d = record?.decision || {};
+    const snap = record?.snapshot || {};
+    const health = snap.health || {};
+    const memory = snap.memory || {};
+    const lines = [
+      `Verdict: ${d.verdict || "unknown"}`,
+      d.assessment ? `${d.assessment}` : "",
+      "",
+      `Action: ${record?.acted ? (record.acted.ok ? "restarted the service" : `restart refused — ${record.acted.reason || record.acted.error}`) : d.action || "none"}`,
+      d.why ? `Why: ${d.why}` : "",
+      d.fix ? `Suggested fix: ${d.fix}` : "",
+      "",
+      `Health: ${health.reachable ? `${health.status} in ${health.latencyMs}ms` : "unreachable"}`,
+      memory.available ? `Heap: ${memory.heapPercent}% of ${memory.heapLimitMb}MB` : "",
+      `Restarts in window: ${snap?.logs?.restarts ?? "—"}`,
+      `Live commit: ${(snap.deploys || []).find((x) => x.status === "live")?.commit || "—"}`,
+      "",
+      SELF_URL + "/admin"
+    ];
+    return lines.filter(Boolean).join("\n");
+  };
+
   const opsTick = async () => {
     if (opsRunning) return;
     opsRunning = true;
     try {
       const record = await opsAgent.runCycle({ inProcess: true });
-      if (record.reflex.suspicious || record.decision?.action !== "none") {
-        console.log(`Ops agent: ${record.decision?.verdict} - ${record.decision?.action} (${record.decision?.why})`);
+      const verdict = record.decision?.verdict || "unknown";
+      const action = record.decision?.action || "none";
+      const interesting = action !== "none" || verdict === "degraded" || verdict === "down";
+      if (record.reflex.suspicious || action !== "none") {
+        console.log(`Ops agent: ${verdict} - ${action} (${record.decision?.why})`);
+      }
+      if (interesting) {
+        const key = `${verdict}:${action}`;
+        const stale = Date.now() - lastOpsNotice.at > OPS_NOTICE_COOLDOWN_MS;
+        if (lastOpsNotice.key !== key || stale) {
+          lastOpsNotice = { key, at: Date.now() };
+          notify({ title: `Vertex: ${verdict}`, text: opsCycleText(record) })
+            .then((r) => {
+              if (r.failed?.length) console.error("Ops notice failed:", JSON.stringify(r.failed));
+            })
+            .catch((err) => console.error("Ops notice error:", err.message));
+        }
       }
     } catch (err) {
       console.error("Ops agent cycle failed:", err.message);

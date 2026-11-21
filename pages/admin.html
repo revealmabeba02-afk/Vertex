@@ -1338,6 +1338,8 @@
       <button type="button" data-ops-cmd="Is memory climbing? Should we restart?">Memory</button>
       <button type="button" data-ops-cmd="Why did the service restart recently?">Why did it restart?</button>
       <button type="button" data-ops-cmd="Is the site slow for users right now?">Is it slow?</button>
+      <button type="button" id="ops-money-btn">Money brief</button>
+      <button type="button" id="ops-test-btn">Send test message</button>
     </div>
 
     <div class="q2-chat-log" id="ops-log">
@@ -3816,10 +3818,126 @@
       if (window.__adminAuthHeader) {
         clearInterval(boot);
         loadState();
+        loadChannels();
       } else if (attempts > 60) {
         clearInterval(boot);
       }
     }, 500);
+
+    // Which pipe the agents actually have. A money brief nobody can receive is
+    // worth knowing about before you click Send.
+    async function loadChannels() {
+      const auth = window.__adminAuthHeader;
+      if (!auth) return;
+      try {
+        const res = await fetch("/api/admin/notify/channels", { headers: auth });
+        const data = await res.json().catch(() => null);
+        const list = (data && data.configured) || [];
+        const label = list.length ? list.join(", ") : "none configured";
+        const tile = document.createElement("div");
+        tile.className = "ops-fact" + (list.length ? " ops-fact--ok" : " ops-fact--warn");
+        tile.innerHTML = `<div class="ops-fact__label">Reach</div><div class="ops-fact__value">${esc(label)}</div>`;
+        factsEl.appendChild(tile);
+      } catch {
+        /* the facts row already shows enough to diagnose this */
+      }
+    }
+
+    const moneyBtn = document.getElementById("ops-money-btn");
+    if (moneyBtn) {
+      moneyBtn.addEventListener("click", async () => {
+        const auth = window.__adminAuthHeader;
+        if (!auth) return;
+        moneyBtn.disabled = true;
+        const pending = addMsg("Pulling the money numbers…", "pending");
+        try {
+          const res = await fetch("/api/admin/money/brief", { headers: auth });
+          const data = await res.json().catch(() => null);
+          pending.remove();
+          if (!res.ok) {
+            addMsg((data && data.error) || "Could not build the brief.", "");
+            return;
+          }
+          const msg = addMsg(data.text || "(empty brief)", "");
+          msg.style.maxWidth = "100%";
+          msg.style.fontFamily = "var(--font-mono)";
+          msg.style.fontSize = "12px";
+
+          const row = document.createElement("div");
+          row.style.display = "flex";
+          row.style.gap = "8px";
+          row.style.marginTop = "10px";
+
+          const send = document.createElement("button");
+          send.type = "button";
+          send.className = "btn btn--primary";
+          send.textContent = "Send this to me";
+          send.addEventListener("click", async () => {
+            send.disabled = true;
+            send.textContent = "Sending…";
+            try {
+              const r = await fetch("/api/admin/money/brief/send", {
+                method: "POST",
+                headers: { ...auth, "Content-Type": "application/json" },
+                body: JSON.stringify({ text: data.text || "" })
+              });
+              const out = await r.json().catch(() => null);
+              if (!r.ok) {
+                addMsg((out && out.error) || "Could not send.", "");
+              } else if (out.delivered && out.delivered.length) {
+                addMsg(`Sent via ${out.delivered.join(", ")}.`, "");
+              } else {
+                addMsg((out && out.skipped) || "No channel is configured yet.", "");
+              }
+              loadChannels();
+            } catch {
+              addMsg("Could not reach the server.", "");
+            } finally {
+              send.disabled = false;
+              send.textContent = "Send this to me";
+            }
+          });
+          row.appendChild(send);
+          msg.appendChild(row);
+        } catch {
+          pending.remove();
+          addMsg("Could not reach the server.", "");
+        } finally {
+          moneyBtn.disabled = false;
+        }
+      });
+    }
+
+    const testBtn = document.getElementById("ops-test-btn");
+    if (testBtn) {
+      testBtn.addEventListener("click", async () => {
+        const auth = window.__adminAuthHeader;
+        if (!auth) return;
+        testBtn.disabled = true;
+        const pending = addMsg("Sending a test message…", "pending");
+        try {
+          const res = await fetch("/api/admin/notify/test", { method: "POST", headers: auth });
+          const data = await res.json().catch(() => null);
+          pending.remove();
+          if (!res.ok) {
+            addMsg((data && data.error) || "Could not send.", "");
+          } else if (data.delivered && data.delivered.length) {
+            addMsg(`Delivered via ${data.delivered.join(", ")}. Check your inbox.`, "");
+          } else {
+            addMsg((data && data.skipped) || "No channel is configured yet.", "");
+          }
+          if (data && data.failed && data.failed.length) {
+            addMsg("Failed: " + data.failed.map((f) => `${f.channel} (${f.error})`).join("; "), "");
+          }
+          loadChannels();
+        } catch {
+          pending.remove();
+          addMsg("Could not reach the server.", "");
+        } finally {
+          testBtn.disabled = false;
+        }
+      });
+    }
   })();
 </script>
 </body>
