@@ -4197,6 +4197,80 @@ async function autoPostScanVideo(user, analysis) {
 // separate, standalone script: video/autoPostJob.js, scheduled on its own
 // as a Render Cron Job. See that file for the actual logic.
 
+// --- Ops agent ------------------------------------------------------------
+// The operator, wired in: it can be asked things from /admin and it can check
+// on its own. Two routes and one timer, and that is deliberate — every extra
+// piece of surface here is something that can act on production.
+const opsAgent = require("./opsAgent");
+
+app.get("/api/admin/ops/state", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  try {
+    const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 });
+    res.json({
+      snapshot: snap,
+      reflex: opsAgent.triage(snap),
+      decisions: opsAgent.decisions.slice(0, 10),
+      restartsLastHour: opsAgent.restartHistory.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// "What's wrong?" / "restart it" / "why did we crash at 3am" all land here. The
+// model reads the command, but the action still has to be on the allowlist and
+// a restart is still capped — being asked does not widen what it can do.
+app.post("/api/admin/ops/command", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  // Same rule as every other route that can change the service: the admin PIN
+  // must have been unlocked in this browser. Being signed in is not enough for
+  // something that can restart production.
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  const command = String(req.body?.command || "").trim().slice(0, 500);
+  if (!command) return res.status(400).json({ error: "Type what you want it to look at." });
+  try {
+    const record = await opsAgent.runCycle({ inProcess: true, allowRestart: true, command });
+    res.json(record);
+  } catch (err) {
+    console.error("Ops agent command failed:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The unattended half. Fifteen minutes is a compromise: often enough to catch a
+// heap that is climbing, rare enough that a free Gemini key survives. Most runs
+// stop at the reflex layer and never call a model at all.
+if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderReady()) {
+  const OPS_INTERVAL_MS = Number(process.env.OPS_INTERVAL_MS) || 15 * 60 * 1000;
+  let opsRunning = false;
+  const opsTick = async () => {
+    if (opsRunning) return;
+    opsRunning = true;
+    try {
+      const record = await opsAgent.runCycle({ inProcess: true });
+      if (record.reflex.suspicious || record.decision?.action !== "none") {
+        console.log(`Ops agent: ${record.decision?.verdict} - ${record.decision?.action} (${record.decision?.why})`);
+      }
+    } catch (err) {
+      console.error("Ops agent cycle failed:", err.message);
+    } finally {
+      opsRunning = false;
+    }
+  };
+  setTimeout(opsTick, 2 * 60 * 1000).unref();
+  setInterval(opsTick, OPS_INTERVAL_MS).unref();
+  console.log(`Ops agent: on, checking every ${Math.round(OPS_INTERVAL_MS / 60000)} minutes`);
+} else {
+  console.log("Ops agent: off (no RENDER_API_KEY or OPS_AGENT_ENABLED=false)");
+}
+
 // Unknown API routes get JSON; unknown pages go back to the landing page.
 app.use("/api", (req, res) => res.status(404).json({ error: "Not found." }));
 app.get("*", (req, res) => res.redirect("/"));
@@ -4372,76 +4446,3 @@ setInterval(() => {  const m = process.memoryUsage();
   }
 }, 5 * 60 * 1000).unref();
 
-// --- Ops agent ------------------------------------------------------------
-// The operator, wired in: it can be asked things from /admin and it can check
-// on its own. Two routes and one timer, and that is deliberate — every extra
-// piece of surface here is something that can act on production.
-const opsAgent = require("./opsAgent");
-
-app.get("/api/admin/ops/state", requireUser, async (req, res) => {
-  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Not authorized." });
-  }
-  try {
-    const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 });
-    res.json({
-      snapshot: snap,
-      reflex: opsAgent.triage(snap),
-      decisions: opsAgent.decisions.slice(0, 10),
-      restartsLastHour: opsAgent.restartHistory.length
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// "What's wrong?" / "restart it" / "why did we crash at 3am" all land here. The
-// model reads the command, but the action still has to be on the allowlist and
-// a restart is still capped — being asked does not widen what it can do.
-app.post("/api/admin/ops/command", requireUser, async (req, res) => {
-  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Not authorized." });
-  }
-  // Same rule as every other route that can change the service: the admin PIN
-  // must have been unlocked in this browser. Being signed in is not enough for
-  // something that can restart production.
-  if (!adminPinCookieIsValid(req.headers.cookie)) {
-    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
-  }
-  const command = String(req.body?.command || "").trim().slice(0, 500);
-  if (!command) return res.status(400).json({ error: "Type what you want it to look at." });
-  try {
-    const record = await opsAgent.runCycle({ inProcess: true, allowRestart: true, command });
-    res.json(record);
-  } catch (err) {
-    console.error("Ops agent command failed:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// The unattended half. Fifteen minutes is a compromise: often enough to catch a
-// heap that is climbing, rare enough that a free Gemini key survives. Most runs
-// stop at the reflex layer and never call a model at all.
-if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderReady()) {
-  const OPS_INTERVAL_MS = Number(process.env.OPS_INTERVAL_MS) || 15 * 60 * 1000;
-  let opsRunning = false;
-  const opsTick = async () => {
-    if (opsRunning) return;
-    opsRunning = true;
-    try {
-      const record = await opsAgent.runCycle({ inProcess: true });
-      if (record.reflex.suspicious || record.decision?.action !== "none") {
-        console.log(`Ops agent: ${record.decision?.verdict} - ${record.decision?.action} (${record.decision?.why})`);
-      }
-    } catch (err) {
-      console.error("Ops agent cycle failed:", err.message);
-    } finally {
-      opsRunning = false;
-    }
-  };
-  setTimeout(opsTick, 2 * 60 * 1000).unref();
-  setInterval(opsTick, OPS_INTERVAL_MS).unref();
-  console.log(`Ops agent: on, checking every ${Math.round(OPS_INTERVAL_MS / 60000)} minutes`);
-} else {
-  console.log("Ops agent: off (no RENDER_API_KEY or OPS_AGENT_ENABLED=false)");
-}
