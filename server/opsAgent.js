@@ -418,7 +418,10 @@ async function runCycle({ inProcess = false, allowRestart = true, command = "", 
 
   decisions.unshift(record);
   if (decisions.length > DECISION_LIMIT) decisions.length = DECISION_LIMIT;
-  return record;
+  // The snapshot is returned to the caller but not stored: forty full
+  // snapshots of log lines is memory this box cannot spare, and the panel only
+  // ever shows the newest one.
+  return { ...record, snapshot: snap };
 }
 
 module.exports = {

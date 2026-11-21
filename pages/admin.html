@@ -821,6 +821,68 @@
     letter-spacing: 0.04em;
   }
 
+  /* --- Ops agent -------------------------------------------------------- */
+  .ops-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin: 4px 0 4px;
+  }
+  .ops-fact {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--border);
+    padding: 10px 12px;
+  }
+  .ops-fact__label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .ops-fact__value {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 4px;
+    color: var(--text);
+  }
+  .ops-fact--ok { border-left-color: #35C48F; }
+  .ops-fact--warn { border-left-color: #E5B93C; }
+  .ops-fact--bad { border-left-color: #FF6B6B; }
+  .ops-verdict {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+  }
+  .ops-verdict--healthy { color: #35C48F; border-color: #35C48F; }
+  .ops-verdict--degraded { color: #E5B93C; border-color: #E5B93C; }
+  .ops-verdict--down { color: #FF6B6B; border-color: #FF6B6B; }
+  .ops-quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .ops-quick button {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 7px 11px;
+    cursor: pointer;
+  }
+  .ops-quick button:hover { border-color: var(--q2-blue); color: var(--q2-blue); }
+
   /* King doesn't like rounded corners on this page — flatten everything. */
   .command-shell,
   .command-rail,
@@ -970,6 +1032,7 @@
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
   <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
+  <a href="#ops" data-panel-link="ops" title="Ops agent">Ops</a>
   <a href="#money" data-panel-link="money" title="Revenue">Money</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
@@ -1256,6 +1319,35 @@
     </div>
     <input type="text" id="maintenance-message-input" class="input" placeholder="Message shown to visitors (optional)" style="margin-top: 12px; width: 100%;">
     <p class="admin-status" id="maintenance-status" hidden></p>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="ops">
+  <div class="q2-chat-card" id="sec-ops">
+    <div class="q2-chat-card__head">
+      <div class="q2-chat-card__title">Ops</div>
+      <div class="q2-chat-card__desc">The operator. It reads the live service — health, memory, restarts, logs, deploys — and tells you what it sees. Ask it something, or let the 15-minute check run on its own. It can restart the service (twice an hour at most) and it cannot change code.</div>
+    </div>
+
+    <div class="ops-facts" id="ops-facts">
+      <div class="ops-fact"><div class="ops-fact__label">Status</div><div class="ops-fact__value">—</div></div>
+    </div>
+
+    <div class="ops-quick">
+      <button type="button" data-ops-cmd="Is anything wrong right now?">Is anything wrong?</button>
+      <button type="button" data-ops-cmd="Is memory climbing? Should we restart?">Memory</button>
+      <button type="button" data-ops-cmd="Why did the service restart recently?">Why did it restart?</button>
+      <button type="button" data-ops-cmd="Is the site slow for users right now?">Is it slow?</button>
+    </div>
+
+    <div class="q2-chat-log" id="ops-log">
+      <div class="q2-chat-msg">Standing by. Reading the service…</div>
+    </div>
+
+    <form class="q2-chat-form" id="ops-form">
+      <input type="text" id="ops-input" placeholder="Ask the operator — e.g. why did we crash last night?" autocomplete="off" />
+      <button type="submit" class="btn btn--primary" id="ops-send">Ask</button>
+    </form>
   </div>
 </div>
 
@@ -3549,6 +3641,185 @@
         emptyEl.textContent = "Could not reach the server.";
       }
     }
+  })();
+
+  // --- Ops agent panel ----------------------------------------------------
+  // Kept in its own scope and gated on the admin header the main script
+  // publishes, so it can never fetch before there is a session. Nothing here
+  // widens what the agent may do: the caps live on the server.
+  (function () {
+    const card = document.getElementById("sec-ops");
+    if (!card) return;
+
+    const factsEl = document.getElementById("ops-facts");
+    const logEl = document.getElementById("ops-log");
+    const form = document.getElementById("ops-form");
+    const input = document.getElementById("ops-input");
+    const sendBtn = document.getElementById("ops-send");
+
+    const esc = (s) =>
+      String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function addMsg(text, kind) {
+      const div = document.createElement("div");
+      div.className = "q2-chat-msg" + (kind === "user" ? " q2-chat-msg--user" : "");
+      if (kind === "pending") div.classList.add("q2-chat-msg--pending");
+      div.textContent = text;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+      return div;
+    }
+
+    function toneForPercent(pct) {
+      if (pct == null) return "";
+      if (pct >= 90) return " ops-fact--bad";
+      if (pct >= 75) return " ops-fact--warn";
+      return " ops-fact--ok";
+    }
+
+    function renderFacts(snap) {
+      const health = (snap && snap.health) || {};
+      const memory = (snap && snap.memory) || {};
+      const logs = (snap && snap.logs) || {};
+      const deploys = (snap && snap.deploys) || [];
+      const live = deploys.find((d) => d.status === "live") || deploys[0] || null;
+
+      const healthTone = health.reachable ? " ops-fact--ok" : " ops-fact--bad";
+      const healthText = health.reachable ? `${health.status} · ${health.latencyMs}ms` : "unreachable";
+
+      const facts = [
+        { label: "Health", value: healthText, tone: healthTone },
+        {
+          label: "Heap",
+          value: memory.available ? `${memory.heapPercent}% · ${memory.heapUsedMb}MB` : "—",
+          tone: memory.available ? toneForPercent(memory.heapPercent) : ""
+        },
+        {
+          label: "Restarts (window)",
+          value: String(logs.restarts == null ? "—" : logs.restarts),
+          tone: (logs.restarts || 0) >= 2 ? " ops-fact--warn" : " ops-fact--ok"
+        },
+        {
+          label: "Live commit",
+          value: live ? `${live.commit || "—"}` : "—",
+          tone: live && live.status === "live" ? " ops-fact--ok" : " ops-fact--warn"
+        }
+      ];
+
+      factsEl.innerHTML = facts
+        .map(
+          (f) =>
+            `<div class="ops-fact${f.tone || ""}"><div class="ops-fact__label">${esc(f.label)}</div><div class="ops-fact__value">${esc(f.value)}</div></div>`
+        )
+        .join("");
+    }
+
+    function renderDecision(record) {
+      const d = (record && record.decision) || {};
+      const verdict = (d.verdict || "unknown").toLowerCase();
+      const lines = [];
+      lines.push(`Assessment: ${d.assessment || "—"}`);
+      if (d.action && d.action !== "none") lines.push(`Action taken: ${d.action}`);
+      if (d.why) lines.push(`Why: ${d.why}`);
+      if (d.fix) lines.push(`Suggested fix: ${d.fix}`);
+      const acted = record && record.acted;
+      if (acted) {
+        lines.push(acted.ok ? "The service was restarted." : `Restart refused: ${acted.reason || acted.error || "no reason given"}`);
+      }
+      const reflex = (record && record.reflex) || {};
+      if (Array.isArray(reflex.reasons) && reflex.reasons.length) {
+        lines.push(`Reflex flagged: ${reflex.reasons.join("; ")}`);
+      }
+
+      const div = addMsg("", "");
+      div.innerHTML = `<span class="ops-verdict ops-verdict--${esc(verdict)}">${esc(verdict)}</span>\n\n${esc(lines.join("\n"))}`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function loadState() {
+      const auth = window.__adminAuthHeader;
+      if (!auth) return false;
+      try {
+        const res = await fetch("/api/admin/ops/state", { headers: auth });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          factsEl.innerHTML = `<div class="ops-fact ops-fact--warn"><div class="ops-fact__label">Ops</div><div class="ops-fact__value">${esc(
+            (data && data.error) || "Could not read state."
+          )}</div></div>`;
+          return true;
+        }
+        renderFacts(data.snapshot || {});
+        const recent = Array.isArray(data.decisions) ? data.decisions[0] : null;
+        if (recent) {
+          logEl.innerHTML = "";
+          renderDecision(recent);
+        }
+        return true;
+      } catch {
+        factsEl.innerHTML = `<div class="ops-fact ops-fact--bad"><div class="ops-fact__label">Ops</div><div class="ops-fact__value">Could not reach the server.</div></div>`;
+        return true;
+      }
+    }
+
+    async function ask(command) {
+      const auth = window.__adminAuthHeader;
+      if (!auth) return;
+      const text = String(command || "").trim();
+      if (!text) return;
+
+      addMsg(text, "user");
+      const pending = addMsg("Reading the service…", "pending");
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/admin/ops/command", {
+          method: "POST",
+          headers: { ...auth, "Content-Type": "application/json" },
+          body: JSON.stringify({ command: text })
+        });
+        const data = await res.json().catch(() => null);
+        pending.remove();
+        if (!res.ok) {
+          addMsg((data && data.error) || "The operator could not answer.", "");
+          return;
+        }
+        renderDecision(data);
+        if (data && data.snapshot) renderFacts(data.snapshot);
+        else loadState();
+      } catch {
+        pending.remove();
+        addMsg("Could not reach the server.", "");
+      } finally {
+        sendBtn.disabled = false;
+        input.value = "";
+        input.focus();
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      ask(input.value);
+    });
+
+    document.querySelectorAll("[data-ops-cmd]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        input.value = btn.getAttribute("data-ops-cmd") || "";
+        ask(input.value);
+      });
+    });
+
+    // The main script publishes the header after its own awaits; wait for it
+    // rather than fetching unauthenticated and showing a 401 as "broken".
+    let attempts = 0;
+    const boot = setInterval(() => {
+      attempts += 1;
+      if (window.__adminAuthHeader) {
+        clearInterval(boot);
+        loadState();
+      } else if (attempts > 60) {
+        clearInterval(boot);
+      }
+    }, 500);
   })();
 </script>
 </body>

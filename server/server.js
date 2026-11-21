@@ -4402,6 +4402,12 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
   }
+  // Same rule as every other route that can change the service: the admin PIN
+  // must have been unlocked in this browser. Being signed in is not enough for
+  // something that can restart production.
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
   const command = String(req.body?.command || "").trim().slice(0, 500);
   if (!command) return res.status(400).json({ error: "Type what you want it to look at." });
   try {
