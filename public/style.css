@@ -3210,6 +3210,75 @@ html.lightbox-open body { overflow: hidden; }
   width: 100%;
 }
 
+.bundle-card__paypal {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bundle-card__paypal:hover {
+  color: var(--accent);
+}
+
+.paypal-panel {
+  margin-top: 20px;
+  padding: 22px 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 75%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.paypal-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.paypal-panel__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.paypal-panel__amount {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.paypal-panel__hint {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.paypal-panel__actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paypal-panel__actions .ghost-btn {
+  margin-top: 0;
+}
+
 .custom-amount-card {
   position: relative;
   margin-top: 16px;

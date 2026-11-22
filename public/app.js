@@ -3535,6 +3535,26 @@
   const payWaitingText = document.getElementById("pay-waiting-text");
   const payDone = document.getElementById("pay-done");
 
+  const PAYPAL_HANDLE = (window.APP_CONFIG && window.APP_CONFIG.paypalHandle) || "";
+  const PAYPAL_BUNDLES = {
+    quick: { amount: 4.99, label: "Quick · 10 scans" },
+    starter: { amount: 8.99, label: "Starter · 20 scans" },
+    trader: { amount: 12.99, label: "Trader · 60 scans" },
+    pro: { amount: 19.99, label: "Pro · 150 scans" }
+  };
+  const paypalPanel = document.getElementById("paypal-panel");
+  const paypalPanelAmount = document.getElementById("paypal-panel-amount");
+  const paypalPanelHandle = document.getElementById("paypal-panel-handle");
+  const paypalPanelEmail = document.getElementById("paypal-panel-email");
+  const paypalPanelLink = document.getElementById("paypal-panel-link");
+  const paypalPanelPaid = document.getElementById("paypal-panel-paid");
+  const paypalPanelCancel = document.getElementById("paypal-panel-cancel");
+  const paypalPanelStatus = document.getElementById("paypal-panel-status");
+
+  if (PAYPAL_HANDLE) {
+    document.querySelectorAll(".bundle-card__paypal").forEach((btn) => { btn.hidden = false; });
+  }
+
   let currentBalance = null;
   let orderPollTimer = null;
   let activeOrderId = null;
@@ -3634,8 +3654,85 @@
     pro: "https://whop.com/shadowfx-1eca/pro-150-scans"
   };
 
+  async function openPaypalPanel(bundle) {
+    const info = PAYPAL_BUNDLES[bundle];
+    if (!info || !PAYPAL_HANDLE || !paypalPanel) return;
+    const session = await Auth.getSession();
+    if (!session) {
+      showCreditsStatus("Please log in first.", true);
+      return;
+    }
+    const amount = info.amount.toFixed(2);
+    paypalPanel.dataset.bundle = bundle;
+    paypalPanel.dataset.amount = amount;
+    paypalPanelAmount.textContent = `$${amount}`;
+    paypalPanelHandle.textContent = `paypal.me/${PAYPAL_HANDLE}`;
+    paypalPanelEmail.textContent = session.user?.email || "your Vertex email";
+    paypalPanelLink.href = `https://paypal.me/${encodeURIComponent(PAYPAL_HANDLE)}/${amount}`;
+    paypalPanelStatus.hidden = true;
+    paypalPanelStatus.textContent = "";
+    paypalPanelStatus.classList.remove("credits-status--error");
+    paypalPanelPaid.disabled = false;
+    paypalPanelPaid.textContent = "I've paid";
+    paypalPanel.hidden = false;
+    paypalPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  if (paypalPanelCancel) {
+    paypalPanelCancel.addEventListener("click", () => {
+      paypalPanel.hidden = true;
+    });
+  }
+
+  if (paypalPanelPaid) {
+    paypalPanelPaid.addEventListener("click", async () => {
+      const amount = Number(paypalPanel.dataset.amount);
+      const bundle = paypalPanel.dataset.bundle || "bundle";
+      const session = await Auth.getSession();
+      if (!session) {
+        paypalPanelStatus.hidden = false;
+        paypalPanelStatus.textContent = "Please log in first.";
+        paypalPanelStatus.classList.add("credits-status--error");
+        return;
+      }
+      paypalPanelPaid.disabled = true;
+      paypalPanelPaid.textContent = "Sending…";
+      paypalPanelStatus.hidden = true;
+      try {
+        const res = await fetch("/api/credits/paypal-claim", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            amount,
+            note: `PayPal ${PAYPAL_BUNDLES[bundle]?.label || bundle} · $${amount.toFixed(2)}`
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Could not send that just now.");
+        paypalPanelStatus.hidden = false;
+        paypalPanelStatus.textContent = data.message || "Owner has been told. Credits are added after the payment is checked.";
+        paypalPanelStatus.classList.remove("credits-status--error");
+        paypalPanelPaid.textContent = "Claim sent";
+      } catch (err) {
+        paypalPanelStatus.hidden = false;
+        paypalPanelStatus.textContent = err.message || "Could not send that just now.";
+        paypalPanelStatus.classList.add("credits-status--error");
+        paypalPanelPaid.disabled = false;
+        paypalPanelPaid.textContent = "I've paid";
+      }
+    });
+  }
+
   if (bundleGrid) {
     bundleGrid.addEventListener("click", (e) => {
+      const paypalBtn = e.target.closest(".bundle-card__paypal");
+      if (paypalBtn) {
+        openPaypalPanel(paypalBtn.dataset.paypalBundle);
+        return;
+      }
       const btn = e.target.closest(".bundle-card__btn");
       if (!btn) return;
       const bundle = btn.dataset.bundle;

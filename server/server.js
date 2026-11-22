@@ -1179,7 +1179,9 @@ app.get("/config.js", (req, res) => {
         ready: SUPABASE_READY,
         // Chart-photo scanning needs a vision model, so the app can hide /
         // explain the Upload tab instead of offering a button that 503s.
-        imageScan: !!(GEMINI_API_KEY || ANTHROPIC_API_KEY)
+        imageScan: !!(GEMINI_API_KEY || ANTHROPIC_API_KEY),
+        // Public PayPal.Me handle. It is a pay link, not a secret.
+        paypalHandle: PAYPAL_ME_HANDLE || ""
       }) +
       ";"
   );
@@ -1809,6 +1811,22 @@ app.post("/api/credits/paypal-claim", requireUser, async (req, res) => {
         SELF_URL + "/admin"
       ].filter(Boolean).join("\n")
     }).catch((err) => console.error("PayPal claim notice failed:", err.message));
+
+    // Also leave a ticket in the admin inbox, so a missed push notification
+    // can never lose a real PayPal payment.
+    supabaseRpc(
+      "create_support_message",
+      {
+        p_message:
+          "PAYPAL PAYMENT CLAIM\n" +
+          `Account: ${req.user.email}\n` +
+          (orderId ? `Order: ${orderId}\n` : "") +
+          (Number.isFinite(shownAmount) && shownAmount > 0 ? `Amount shown: $${shownAmount.toFixed(2)}\n` : "") +
+          (note ? `Buyer note: ${note}\n` : "") +
+          "Check PayPal, then add the credits from /admin."
+      },
+      req.user.token
+    ).catch((err) => console.error("PayPal claim ticket failed:", err.message));
 
     res.json({
       ok: true,

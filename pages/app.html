@@ -717,6 +717,7 @@
         <p class="bundle-card__price">$4.99</p>
         <p class="bundle-card__scans">10 scans · $0.50 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="quick">Buy Quick</button>
+        <button type="button" class="bundle-card__paypal" data-paypal-bundle="quick" hidden>or pay with PayPal</button>
       </div>
       <div class="bundle-card" data-bundle="starter">
         <p class="bundle-card__name">Starter</p>
@@ -724,6 +725,7 @@
         <p class="bundle-card__price">$8.99</p>
         <p class="bundle-card__scans">20 scans · $0.45 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="starter">Buy Starter</button>
+        <button type="button" class="bundle-card__paypal" data-paypal-bundle="starter" hidden>or pay with PayPal</button>
       </div>
       <div class="bundle-card bundle-card--popular" data-bundle="trader">
         <span class="bundle-card__badge">Most popular</span>
@@ -732,6 +734,7 @@
         <p class="bundle-card__price">$12.99</p>
         <p class="bundle-card__scans">60 scans · $0.22 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="trader">Buy Trader</button>
+        <button type="button" class="bundle-card__paypal" data-paypal-bundle="trader" hidden>or pay with PayPal</button>
       </div>
       <div class="bundle-card" data-bundle="pro">
         <p class="bundle-card__name">Pro</p>
@@ -739,7 +742,25 @@
         <p class="bundle-card__price">$19.99</p>
         <p class="bundle-card__scans">150 scans · $0.13 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="pro">Buy Pro</button>
+        <button type="button" class="bundle-card__paypal" data-paypal-bundle="pro" hidden>or pay with PayPal</button>
       </div>
+    </div>
+
+    <div class="paypal-panel" id="paypal-panel" hidden>
+      <div class="paypal-panel__head">
+        <p class="paypal-panel__title">Pay with PayPal</p>
+        <p class="paypal-panel__amount" id="paypal-panel-amount">$0.00</p>
+      </div>
+      <p class="paypal-panel__hint">
+        Send the exact amount to <strong id="paypal-panel-handle">—</strong>. Put your Vertex email in the PayPal note:
+        <strong id="paypal-panel-email">—</strong>.
+      </p>
+      <div class="paypal-panel__actions">
+        <a class="btn btn--primary" id="paypal-panel-link" href="#" target="_blank" rel="noopener noreferrer">Open PayPal</a>
+        <button type="button" class="btn btn--ghost" id="paypal-panel-paid">I've paid</button>
+        <button type="button" class="ghost-btn" id="paypal-panel-cancel">Cancel</button>
+      </div>
+      <p class="credits-status" id="paypal-panel-status" hidden></p>
     </div>
 
     <div class="custom-amount-card is-retired" id="custom-amount-card">
