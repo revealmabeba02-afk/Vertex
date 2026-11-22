@@ -4403,6 +4403,28 @@ app.get("/api/admin/money/brief", requireUser, async (req, res) => {
 // options with cost and reversibility, one recommendation, one next step, and
 // what it does not know. Read-only by construction: there is no action to take
 // from here, so a persuasive answer can never move production.
+// The tried-method memory. A bounced path must never be proposed again, and
+// the only way to know it bounced is to write it down. Process memory is
+// enough here: deploys are rare and a fresh list just means 001 re-derives what
+// is obvious. The cap keeps it from growing without bound.
+const strategyLog = [];
+const STRATEGY_LOG_LIMIT = 60;
+function rememberStrategies(strategies) {
+  for (const s of strategies || []) {
+    if (!s || !s.method || s.status === "untried") continue;
+    const key = s.method.toLowerCase().slice(0, 120);
+    const existing = strategyLog.find((x) => x.key === key);
+    if (existing) {
+      existing.status = s.status;
+      existing.why = s.why || existing.why;
+      existing.at = new Date().toISOString();
+    } else {
+      strategyLog.push({ key, method: s.method, status: s.status, why: s.why || "", at: new Date().toISOString() });
+    }
+  }
+  while (strategyLog.length > STRATEGY_LOG_LIMIT) strategyLog.shift();
+}
+
 app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
@@ -4443,11 +4465,12 @@ app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
       }
     };
 
-    const result = await advise({ question, facts, generateText });
+    const result = await advise({ question, facts, triedStrategies: strategyLog.slice(-25), generateText });
     if (!result.ok) {
       return res.status(502).json({ error: result.error, raw: result.raw });
     }
-    res.json({ ...result.advice, question });
+    rememberStrategies(result.advice.strategies);
+    res.json({ ...result.advice, question, triedCount: strategyLog.length });
   } catch (err) {
     console.error("Agent advice failed:", err.message);
     res.status(502).json({ error: `Could not think that through: ${err.message}` });

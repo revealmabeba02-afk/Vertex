@@ -39,6 +39,19 @@ function extractJson(text) {
 
 function normalise(parsed) {
   const asArray = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+  const STATUSES = ["hit", "bounced", "missed", "untried"];
+  const strategies = Array.isArray(parsed.strategies)
+    ? parsed.strategies
+        .filter((s) => s && s.method)
+        .map((s) => ({
+          method: String(s.method).slice(0, 240),
+          status: STATUSES.includes(String(s.status || "").toLowerCase())
+            ? String(s.status).toLowerCase()
+            : "untried",
+          why: s.why ? String(s.why).slice(0, 240) : ""
+        }))
+        .slice(0, 8)
+    : [];
   const options = Array.isArray(parsed.options)
     ? parsed.options
         .filter((o) => o && o.action)
@@ -49,8 +62,11 @@ function normalise(parsed) {
         }))
     : [];
   return {
+    goal: parsed.goal ? String(parsed.goal).slice(0, 200) : "",
+    obstacle: parsed.obstacle ? String(parsed.obstacle).slice(0, 300) : "",
     answer: String(parsed.answer || "").slice(0, 1200) || "No answer was produced.",
     findings: asArray(parsed.findings).slice(0, 8),
+    strategies,
     options: options.slice(0, 5),
     recommendation: String(parsed.recommendation || "none").slice(0, 400),
     nextStep: String(parsed.nextStep || "").slice(0, 400),
@@ -58,11 +74,19 @@ function normalise(parsed) {
   };
 }
 
-async function advise({ question, facts, generateText, timeoutMs = 30000 }) {
+async function advise({ question, facts, triedStrategies = [], generateText, timeoutMs = 30000 }) {
   if (typeof generateText !== "function") throw new Error("No text model wired in.");
   const factsBlock = JSON.stringify(facts, null, 2).slice(0, 12000);
+  const triedBlock = triedStrategies.length
+    ? [
+        "",
+        "Methods already tried. Do not propose these again unless you are explicitly changing the variable that made them bounce:",
+        ...triedStrategies.slice(-25).map((s) => `- [${s.status}] ${s.method}${s.why ? ` — ${s.why}` : ""}`)
+      ].join("\n")
+    : "";
   const basePrompt = [
     `Question: ${String(question || "").trim() || "What should I do next?"}`,
+    triedBlock,
     "",
     "Live facts (everything you are allowed to treat as true):",
     factsBlock

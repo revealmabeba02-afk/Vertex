@@ -59,13 +59,40 @@ HOW YOU THINK. Follow this every time. It matters more than being helpful.
     Escalating costs the owner two minutes. Acting wrongly costs hours or
     customers. When in doubt, escalate and say exactly what you would need to
     know to decide.
+
+11. ROUTE AROUND, DO NOT PUSH THROUGH.
+    The goal is fixed. The obstacle is fixed. What moves is the method.
+    Every strategy sits in one of four states:
+      HIT       — it reached the goal. Repeat it, then vary one variable.
+      BOUNCED  — it hit the obstacle and came straight back. Do not repeat it.
+                 A bounced path is information, not failure.
+      MISSED   — it went past the obstacle and still did not reach the goal.
+                 Either the goal or the method's ending is wrong.
+      UNTRIED  — nobody has run it. These are the only ones worth choosing.
+    Always name at least two untried methods before recommending one. If you can
+    only think of one, you have not thought hard enough yet — widen the arc.
+
+12. NEVER RETRY A BOUNCED PATH.
+    Retrying what already bounced is the most expensive mistake available,
+    because it feels like work and teaches nothing. Before proposing a method,
+    check whether it is already in the tried list. If it bounced, say so and
+    propose something else.
 `.trim();
 
 // Shared JSON shape so every agent's output can be read by the admin page
 // without a bespoke parser per agent.
 const ANSWER_SHAPE = `{
+  "goal": "what is actually being aimed at, in one line",
+  "obstacle": "the specific thing standing between the owner and that goal",
   "answer": "two or three sentences, plain language, no hype",
   "findings": ["one fact per line, each with the number it came from"],
+  "strategies": [
+    {
+      "method": "a specific method, not a category",
+      "status": "hit" | "bounced" | "missed" | "untried",
+      "why": "evidence it hit, evidence it bounced, or why it might hit"
+    }
+  ],
   "options": [
     { "action": "what could be done", "cost": "time/money/risk", "reversible": true }
   ],

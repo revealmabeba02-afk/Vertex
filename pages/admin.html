@@ -3940,10 +3940,21 @@
           }
 
           const parts = [];
+          if (data.goal) parts.push(`GOAL: ${data.goal}`);
+          if (data.obstacle) parts.push(`OBSTACLE: ${data.obstacle}`);
+          if (data.goal || data.obstacle) parts.push("");
           parts.push(data.answer || "");
           if (data.findings && data.findings.length) {
             parts.push("", "FACTS");
             data.findings.forEach((f) => parts.push(`- ${f}`));
+          }
+          if (data.strategies && data.strategies.length) {
+            parts.push("", "PATHS");
+            const marks = { hit: "[HIT]", bounced: "[BOUNCED]", missed: "[MISSED]", untried: "[UNTRIED]" };
+            data.strategies.forEach((s) => {
+              parts.push(`${marks[s.status] || "[UNTRIED]"} ${s.method}`);
+              if (s.why) parts.push(`          ${s.why}`);
+            });
           }
           if (data.options && data.options.length) {
             parts.push("", "OPTIONS");
