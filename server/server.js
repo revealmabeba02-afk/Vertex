@@ -4634,28 +4634,51 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
   // messages, so the same page is a place to ask. His own messages carry the
   // `robot` tag and are skipped, so he cannot answer himself forever.
   //
-  // The clock starts at boot: messages sent while he was down are not replayed.
-  // Answering an old question hours late is worse than not answering it, and it
-  // would spend model quota on a conversation that already moved on.
-  let inboxSince = Math.floor(Date.now() / 1000);
+  // The clock and the queue. Tracking "since" alone silently loses questions:
+  // two typed within one poll window and only the newer one survived, which is
+  // how the most important question of the night ("how can we make money") went
+  // unanswered while "hi" twice got replies. So messages are deduplicated by
+  // ntfy's own id and queued, and every one of them is answered in order.
+  const inboxSince = Math.floor(Date.now() / 1000) - 60;
+  const inboxSeen = new Set();
+  const inboxQueue = [];
+  let inboxPrimed = false;
   let inboxBusy = false;
   let lastAnswerAt = 0;
-  const INBOX_MIN_GAP_MS = 20 * 1000;
+  const INBOX_MIN_GAP_MS = 5 * 1000;
 
   const inboxTick = async () => {
-    if (inboxBusy || Date.now() - lastAnswerAt < INBOX_MIN_GAP_MS) return;
+    if (inboxBusy) return;
     inboxBusy = true;
     try {
-      const messages = await readTopic({ since: inboxSince });
-      if (!messages.length) return;
-      inboxSince = Math.max(...messages.map((m) => Number(m.time) || 0)) + 1;
-      const question = messages
-        .filter((m) => !(m.tags || []).includes("robot"))
-        .map((m) => String(m.message || "").trim())
-        .filter((text) => text.length > 1)
-        .pop();
-      if (!question) return;
+      const messages = await readTopic({ since: inboxSince, limit: 50 });
+      const fresh = [];
+      for (const m of messages) {
+        const id = m.id || `${m.time}`;
+        if (inboxSeen.has(id)) continue;
+        inboxSeen.add(id);
+        if ((m.tags || []).includes("robot")) continue;
+        const text = String(m.message || "").trim();
+        if (text.length > 1) fresh.push(text);
+      }
+      while (inboxSeen.size > 300) {
+        const oldest = inboxSeen.values().next().value;
+        inboxSeen.delete(oldest);
+      }
 
+      // The first look after a restart only learns what is already there. Old
+      // questions are not replayed: a reply hours late is worse than none.
+      if (!inboxPrimed) {
+        inboxPrimed = true;
+      } else if (fresh.length) {
+        inboxQueue.push(...fresh.slice(-3));
+        while (inboxQueue.length > 6) inboxQueue.shift();
+      }
+
+      if (!inboxQueue.length) return;
+      if (Date.now() - lastAnswerAt < INBOX_MIN_GAP_MS) return;
+
+      const question = inboxQueue.shift();
       console.log(`001 inbox: "${question.slice(0, 80)}"`);
       lastAnswerAt = Date.now();
       const money = await readMoneyUnattended();
@@ -4669,14 +4692,16 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
         generateText
       });
       if (!result.ok) {
-        await notify({
+        const sent = await notify({
           title: "001: could not answer",
           text: `${result.error}\n\nHe is not ignoring you — the model is out of quota or unreachable. The full panel still works.`
         });
+        if (sent.failed?.length) console.error("Inbox notice failed:", JSON.stringify(sent.failed));
         return;
       }
       rememberStrategies(result.advice.strategies);
-      await notify({ title: "001: answer", text: renderAdvice(result.advice) });
+      const sent = await notify({ title: "001: answer", text: renderAdvice(result.advice) });
+      if (sent.failed?.length) console.error("Inbox answer delivery failed:", JSON.stringify(sent.failed));
     } catch (err) {
       console.error("001 inbox failed:", err.message);
     } finally {
@@ -4723,7 +4748,7 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
   // The inbox is polled far more often than the health cycle, because waiting
   // fifteen minutes for an answer feels like being ignored. Polling costs one
   // HTTP request and no model call unless something was actually typed.
-  const INBOX_POLL_MS = Number(process.env.INBOX_POLL_MS) || 90 * 1000;
+  const INBOX_POLL_MS = Number(process.env.INBOX_POLL_MS) || 30 * 1000;
   setTimeout(inboxTick, 45 * 1000).unref();
   setInterval(inboxTick, INBOX_POLL_MS).unref();
   if (process.env.NTFY_TOPIC) {
