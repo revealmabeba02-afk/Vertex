@@ -74,6 +74,60 @@ function normalise(parsed) {
   };
 }
 
+// The chat voice. Same brain, different mouth: when 001 is talking to King in a
+// message thread he is a second-in-command giving an order, not a report. Short,
+// human, first line is the decision. The structured shape above still exists for
+// the panel, where depth is the point — but a wall of GOAL/OBSTACLE/FACTS in a
+// phone message reads like a machine, and a machine does not get followed.
+const CHAT_PROMPT = `You are 001 — the owner's second-in-command at Vertex Chart Scanner, a forex chart-analysis app that sells scan credits.
+
+He calls you 001. You are not an assistant and you are not a chatbot. You are the one who takes command when he asks something.
+
+HOW YOU SPEAK — these are hard rules:
+- Two to four sentences. Forty words is plenty. Never a list, never headings, never JSON.
+- Open with the order, not the analysis: "Do this first." Then one sentence of why. Then one action.
+- Like a person texting their boss at night. Contractions. Plain words. No corporate filler.
+- Sign nothing; your name is already on the message.
+- One number at most, and only a number that appears in the facts. Never invent, never estimate, never promise money or predict revenue.
+- If something you need is missing, say it in one short sentence and name what it blocks.
+- Always finish your last sentence. A cut-off sentence reads like a broken machine.
+- If he greets you, answer like a person would — one line — then give him the one thing you would do next anyway.
+
+The doctrine below is how you THINK. It is not how you write. Ignore anything in it about output shape, lists, or stages.
+
+${DOCTRINE}`;
+
+function tidyShort(text) {
+  let out = String(text || "")
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/```$/g, "")
+    .replace(/^\s*(001|Answer|ANSWER)\s*[:\-]\s*/i, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  // Models like to end with a menu of options. Cut it: a commander gives one.
+  out = out.split(/\n\s*(?:-|\*|\d+\.)\s+/)[0].trim();
+  if (out.length > 600) out = out.slice(0, 600).replace(/\s+\S*$/, "") + "…";
+  return out;
+}
+
+// The short form. No JSON, no retry ladder: a plain reply either arrives or it
+// does not, and a second attempt at "say it like a person" rarely helps.
+async function adviseChat({ question, facts, generateText, timeoutMs = 25000 }) {
+  if (typeof generateText !== "function") throw new Error("No text model wired in.");
+  const factsBlock = JSON.stringify(facts, null, 1).slice(0, 9000);
+  const out = await generateText({
+    system: CHAT_PROMPT,
+    prompt: `He just said: "${String(question || "").trim() || "well?"}"\n\nWhat you know right now (only these are true):\n${factsBlock}`,
+    maxTokens: 1400,
+    temperature: 0.4,
+    timeoutMs
+  });
+  const text = tidyShort(out?.text);
+  if (!text) return { ok: false, error: "The model returned nothing." };
+  return { ok: true, text };
+}
+
 async function advise({ question, facts, triedStrategies = [], generateText, timeoutMs = 30000 }) {
   if (typeof generateText !== "function") throw new Error("No text model wired in.");
   const factsBlock = JSON.stringify(facts, null, 2).slice(0, 12000);
@@ -174,6 +228,5 @@ function renderAdvice(a) {
   return lines.join("\n");
 }
 
-module.exports = { advise, renderAdvice };
 
-module.exports = { advise, renderAdvice };
+module.exports = { advise, adviseChat, renderAdvice };

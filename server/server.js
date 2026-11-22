@@ -4646,6 +4646,8 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
   let inboxBusy = false;
   let lastAnswerAt = 0;
   const INBOX_MIN_GAP_MS = 5 * 1000;
+  const INBOX_MAX_PER_HOUR = Number(process.env.INBOX_MAX_PER_HOUR) || 10;
+  const answerTimes = [];
 
   const inboxTick = async () => {
     if (inboxBusy) return;
@@ -4681,26 +4683,35 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
       const question = inboxQueue.shift();
       console.log(`001 inbox: "${question.slice(0, 80)}"`);
       lastAnswerAt = Date.now();
+
+      // Free model quota is a hard wall, not a nuisance: hit it and every
+      // feature that thinks goes quiet, including the product's own assistant.
+      // So the chat has a budget, and it says so instead of failing silently.
+      answerTimes.push(Date.now());
+      while (answerTimes.length && Date.now() - answerTimes[0] > 60 * 60 * 1000) answerTimes.shift();
+      if (answerTimes.length > INBOX_MAX_PER_HOUR) {
+        const sent = await notify({
+          title: "001: quota",
+          text: `I am at ${INBOX_MAX_PER_HOUR} answers this hour — the free model quota is nearly gone and I am keeping the rest for your app's own AI, which customers pay for. Ask again in an hour, or open /admin for the full panel.`
+        });
+        if (sent.failed?.length) console.error("Quota notice failed:", JSON.stringify(sent.failed));
+        return;
+      }
+
       const money = await readMoneyUnattended();
       const facts = await buildAgentFacts({ money });
-      const { advise, renderAdvice } = require("./agentAdvice");
+      const { adviseChat } = require("./agentAdvice");
       const { generateText } = require("./aiText");
-      const result = await advise({
-        question: question.slice(0, 800),
-        facts,
-        triedStrategies: strategyLog.slice(-25),
-        generateText
-      });
+      const result = await adviseChat({ question: question.slice(0, 800), facts, generateText });
       if (!result.ok) {
         const sent = await notify({
-          title: "001: could not answer",
-          text: `${result.error}\n\nHe is not ignoring you — the model is out of quota or unreachable. The full panel still works.`
+          title: "001: quiet",
+          text: `${result.error} The model is out of quota or unreachable — not ignoring you. Open /admin for the full panel.`
         });
         if (sent.failed?.length) console.error("Inbox notice failed:", JSON.stringify(sent.failed));
         return;
       }
-      rememberStrategies(result.advice.strategies);
-      const sent = await notify({ title: "001: answer", text: renderAdvice(result.advice) });
+      const sent = await notify({ title: "001", text: result.text });
       if (sent.failed?.length) console.error("Inbox answer delivery failed:", JSON.stringify(sent.failed));
     } catch (err) {
       console.error("001 inbox failed:", err.message);
