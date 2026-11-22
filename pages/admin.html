@@ -1032,7 +1032,7 @@
   <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
   <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
   <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
-  <a href="#ops" data-panel-link="ops" title="Ops agent">Ops</a>
+  <a href="#ops" data-panel-link="ops" title="001 — the operator">001</a>
   <a href="#money" data-panel-link="money" title="Revenue">Money</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
@@ -1325,8 +1325,8 @@
 <div class="command-panel" data-panel="ops">
   <div class="q2-chat-card" id="sec-ops">
     <div class="q2-chat-card__head">
-      <div class="q2-chat-card__title">Ops</div>
-      <div class="q2-chat-card__desc">The operator. It reads the live service — health, memory, restarts, logs, deploys — and tells you what it sees. Ask it something, or let the 15-minute check run on its own. It can restart the service (twice an hour at most) and it cannot change code.</div>
+      <div class="q2-chat-card__title">001</div>
+      <div class="q2-chat-card__desc">001 is your operator. He reads the live service — health, memory, restarts, logs, deploys — and your money numbers, then tells you what he sees and what to do next. Ask him anything; he answers with facts, options and one next step. He can restart the service (twice an hour at most) and he cannot change code.</div>
     </div>
 
     <div class="ops-facts" id="ops-facts">
@@ -1339,6 +1339,7 @@
       <button type="button" data-ops-cmd="Why did the service restart recently?">Why did it restart?</button>
       <button type="button" data-ops-cmd="Is the site slow for users right now?">Is it slow?</button>
       <button type="button" id="ops-money-btn">Money brief</button>
+      <button type="button" id="ops-think-btn">Think with me</button>
       <button type="button" id="ops-test-btn">Send test message</button>
     </div>
 
@@ -3908,8 +3909,71 @@
       });
     }
 
-    const testBtn = document.getElementById("ops-test-btn");
-    if (testBtn) {
+    // "Think with me" — reasoning, not action. The answer is rendered with the
+    // options and their cost visible, because an option without its price is a
+    // sales pitch rather than advice.
+    const thinkBtn = document.getElementById("ops-think-btn");
+    if (thinkBtn) {
+      thinkBtn.addEventListener("click", async () => {
+        const auth = window.__adminAuthHeader;
+        if (!auth) return;
+        const question = String(input.value || "").trim();
+        if (!question) {
+          addMsg("Type your question in the box below first — then press Think.", "");
+          input.focus();
+          return;
+        }
+        addMsg(question, "user");
+        const pending = addMsg("Thinking…", "pending");
+        thinkBtn.disabled = true;
+        try {
+          const res = await fetch("/api/admin/agent/advice", {
+            method: "POST",
+            headers: { ...auth, "Content-Type": "application/json" },
+            body: JSON.stringify({ question })
+          });
+          const data = await res.json().catch(() => null);
+          pending.remove();
+          if (!res.ok) {
+            addMsg((data && data.error) || "Could not think that through.", "");
+            return;
+          }
+
+          const parts = [];
+          parts.push(data.answer || "");
+          if (data.findings && data.findings.length) {
+            parts.push("", "FACTS");
+            data.findings.forEach((f) => parts.push(`- ${f}`));
+          }
+          if (data.options && data.options.length) {
+            parts.push("", "OPTIONS");
+            data.options.forEach((o, i) => {
+              parts.push(`${i + 1}. ${o.action}`);
+              parts.push(`   cost: ${o.cost}${o.reversible ? " · reversible" : " · not reversible"}`);
+            });
+          }
+          if (data.recommendation) parts.push("", `RECOMMENDED: ${data.recommendation}`);
+          if (data.nextStep) parts.push("", `DO THIS: ${data.nextStep}`);
+          if (data.unknowns && data.unknowns.length) {
+            parts.push("", "NOT KNOWN");
+            data.unknowns.forEach((u) => parts.push(`? ${u}`));
+          }
+
+          const msg = addMsg(parts.join("\n"), "");
+          msg.style.maxWidth = "100%";
+          msg.style.fontFamily = "var(--font-mono)";
+          msg.style.fontSize = "12px";
+          input.value = "";
+        } catch {
+          pending.remove();
+          addMsg("Could not reach the server.", "");
+        } finally {
+          thinkBtn.disabled = false;
+        }
+      });
+    }
+
+    const testBtn = document.getElementById("ops-test-btn");    if (testBtn) {
       testBtn.addEventListener("click", async () => {
         const auth = window.__adminAuthHeader;
         if (!auth) return;

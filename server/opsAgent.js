@@ -252,6 +252,7 @@ async function snapshot({ logMinutes = 30, inProcess = false } = {}) {
 // like "change the code" comes back as a written suggestion for a human.
 
 const { generateText } = require("./aiText");
+const { DOCTRINE } = require("./agentDoctrine");
 
 const ALLOWED_ACTIONS = ["none", "restart", "escalate"];
 const DECISION_LIMIT = 40;
@@ -267,6 +268,8 @@ What you know about this system:
 - A deploy to main goes live automatically in about two minutes. A bad deploy looks like a build that never reaches "live", or a live service that cannot answer /api/health.
 - A deploy to main goes live automatically in about two minutes, and it restarts the process. A restart that lines up with a deploy is normal and is never a reason to restart anything.
 - Restarts are cheap but not free: each one drops in-flight scans. Never restart a healthy service.
+
+${DOCTRINE}
 
 Choose exactly one action:
 - "none"     — the service is healthy, or the symptom is expected and needs no intervention.

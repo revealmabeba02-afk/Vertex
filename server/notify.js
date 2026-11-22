@@ -97,7 +97,7 @@ async function sendNtfy(text, title) {
     method: "POST",
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      Title: (title || "Vertex").slice(0, 120)
+      Title: (title || "001").slice(0, 120)
     },
     body: clamp(text, NTFY_MAX),
     signal: AbortSignal.timeout(12000)
@@ -125,7 +125,7 @@ async function sendEmail(text, title) {
     {
       from,
       to: [to],
-      subject: (title || "Vertex update").slice(0, 120),
+      subject: (title || "001").slice(0, 120),
       text
     },
     { Authorization: `Bearer ${apiKey}` }
@@ -143,7 +143,7 @@ const SENDERS = {
 
 // Deliver to every configured pipe. One broken pipe must not stop the others —
 // if Telegram's API is down, the email still goes.
-async function notify({ title = "Vertex", text = "", only = null } = {}) {
+async function notify({ title = "001", text = "", only = null } = {}) {
   const configured = channels().filter((c) => !only || only.includes(c));
   const body = redact(text);
   const safeTitle = redact(title);

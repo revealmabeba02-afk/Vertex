@@ -1791,7 +1791,7 @@ app.post("/api/credits/paypal-claim", requireUser, async (req, res) => {
   const shownAmount = Number(req.body?.amount);
   try {
     notify({
-      title: "Vertex: PayPal payment claimed",
+      title: "001: PayPal payment claimed",
       text: [
         "Someone says they paid with PayPal.",
         "",
@@ -4298,7 +4298,7 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
     const action = record.decision?.action || "none";
     if (action !== "none") {
       notify({
-        title: `Vertex: ${record.decision?.verdict || "unknown"}`,
+        title: `001: ${record.decision?.verdict || "unknown"}`,
         text: [
           `You asked: ${command}`,
           "",
@@ -4326,6 +4326,7 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
 // the way out.
 const { notify, channels: notifyChannels } = require("./notify");
 const { collectMoney, analyse: analyseMoney, renderMoneyBrief } = require("./moneyBrief");
+const { DOCTRINE } = require("./agentDoctrine");
 
 app.get("/api/admin/notify/channels", requireUser, (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
@@ -4345,7 +4346,7 @@ app.post("/api/admin/notify/test", requireUser, async (req, res) => {
   }
   try {
     const result = await notify({
-      title: "Vertex: test message",
+      title: "001: test message",
       text: [
         "If you are reading this, the agents can reach you.",
         "",
@@ -4377,7 +4378,8 @@ app.get("/api/admin/money/brief", requireUser, async (req, res) => {
             system:
               "You advise the owner of Vertex Chart Scanner, a forex chart-analysis web app that sells scan credits. " +
               "You are given real numbers. Reply with at most three short bullets, each a concrete action he can take this week with no money to spend. " +
-              "Never promise profit, never predict revenue, never use hype. Refer to the actual numbers you were given.",
+              "Never promise profit, never predict revenue, never use hype. Refer to the actual numbers you were given.\n\n" +
+              DOCTRINE,
             prompt: JSON.stringify({ numbers: data, analysis: analysis.findings.map((f) => f.text) }, null, 2),
             maxTokens: 320,
             temperature: 0.3,
@@ -4396,8 +4398,63 @@ app.get("/api/admin/money/brief", requireUser, async (req, res) => {
   }
 });
 
-app.post("/api/admin/money/brief/send", requireUser, async (req, res) => {
+// "Think with me" — the reasoning seat. It gets the same live facts the other
+// agents get, plus the money numbers, and answers in a fixed shape: facts,
+// options with cost and reversibility, one recommendation, one next step, and
+// what it does not know. Read-only by construction: there is no action to take
+// from here, so a persuasive answer can never move production.
+app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const question = String(req.body?.question || "").trim().slice(0, 1000);
+  if (!question) return res.status(400).json({ error: "Ask something first." });
+
+  try {
+    const { advise } = require("./agentAdvice");
+    const { generateText } = require("./aiText");
+
+    const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 }).catch(() => null);
+    const money = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
+
+    const facts = {
+      service: snap
+        ? {
+            health: snap.health,
+            memory: snap.memory,
+            restartsInWindow: snap.logs?.restarts ?? null,
+            liveCommit: (snap.deploys || []).find((d) => d.status === "live")?.commit || null,
+            crashSignals: (snap.logs?.signals || []).slice(-5)
+          }
+        : "unavailable",
+      money,
+      recentOpsDecisions: opsAgent.decisions.slice(0, 5).map((d) => ({
+        at: d.at,
+        verdict: d.decision?.verdict,
+        action: d.decision?.action,
+        why: d.decision?.why
+      })),
+      product: {
+        url: SELF_URL,
+        freeTrialScans: 1,
+        bundles: Object.entries(CREDIT_BUNDLES).map(([key, b]) => ({ key, scans: b.scans, usd: b.amount })),
+        paypalEnabled: Boolean(PAYPAL_ME_HANDLE),
+        mentorshipPageLive: true
+      }
+    };
+
+    const result = await advise({ question, facts, generateText });
+    if (!result.ok) {
+      return res.status(502).json({ error: result.error, raw: result.raw });
+    }
+    res.json({ ...result.advice, question });
+  } catch (err) {
+    console.error("Agent advice failed:", err.message);
+    res.status(502).json({ error: `Could not think that through: ${err.message}` });
+  }
+});
+
+app.post("/api/admin/money/brief/send", requireUser, async (req, res) => {  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
   }
   if (!adminPinCookieIsValid(req.headers.cookie)) {
@@ -4406,7 +4463,7 @@ app.post("/api/admin/money/brief/send", requireUser, async (req, res) => {
   try {
     const text = String(req.body?.text || "").slice(0, 8000);
     if (!text) return res.status(400).json({ error: "There is nothing to send yet." });
-    const result = await notify({ title: "Vertex: money brief", text });
+    const result = await notify({ title: "001: money brief", text });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -4462,7 +4519,7 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
         const stale = Date.now() - lastOpsNotice.at > OPS_NOTICE_COOLDOWN_MS;
         if (lastOpsNotice.key !== key || stale) {
           lastOpsNotice = { key, at: Date.now() };
-          notify({ title: `Vertex: ${verdict}`, text: opsCycleText(record) })
+          notify({ title: `001: ${verdict}`, text: opsCycleText(record) })
             .then((r) => {
               if (r.failed?.length) console.error("Ops notice failed:", JSON.stringify(r.failed));
             })

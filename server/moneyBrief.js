@@ -151,7 +151,7 @@ function analyse(m) {
 
 function renderMoneyBrief(m, analysis, advice) {
   const lines = [];
-  lines.push(`VERTEX — MONEY BRIEF`);
+  lines.push(`001 — MONEY BRIEF`);
   lines.push(new Date(m.at).toUTCString());
   lines.push("");
   lines.push(`Revenue all-time: $${m.revenueUsd.toFixed(2)}`);
