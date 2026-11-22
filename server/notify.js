@@ -93,12 +93,18 @@ async function sendDiscord(text, title) {
 async function sendNtfy(text, title) {
   const base = env("NTFY_URL") || "https://ntfy.sh";
   const topic = env("NTFY_TOPIC");
+  const token = env("NTFY_TOKEN");
+  const headers = {
+    "Content-Type": "text/plain; charset=utf-8",
+    Title: (title || "001").slice(0, 120),
+    Tags: "robot"
+  };
+  // The token is not needed while the topic is open, but sending authenticated
+  // from day one means locking the topic later does not silently break delivery.
+  if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(`${base.replace(/\/+$/, "")}/${encodeURIComponent(topic)}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      Title: (title || "001").slice(0, 120)
-    },
+    headers,
     body: clamp(text, NTFY_MAX),
     signal: AbortSignal.timeout(12000)
   });
