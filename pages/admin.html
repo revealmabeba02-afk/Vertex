@@ -821,6 +821,48 @@
     letter-spacing: 0.04em;
   }
 
+  /* --- 001 marker ------------------------------------------------------- */
+  /* His own strip above the panel. King asked to "make space for 001" — a
+     person, not another settings section, so he gets a name, a role and a
+     one-line state instead of being buried in a card description. */
+  .ops-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--q2-blue);
+    background: linear-gradient(100deg, color-mix(in srgb, var(--q2-blue) 9%, transparent), transparent 65%);
+  }
+  .ops-hero__id { flex-shrink: 0; }
+  .ops-hero__role {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+  .ops-hero__state {
+    flex: 1 1 240px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-faint);
+  }
+  .ops-hero__link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--q2-blue);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 7px 11px;
+    white-space: nowrap;
+  }
+  .ops-hero__link:hover { border-color: var(--q2-blue); }
+
   /* --- Ops agent -------------------------------------------------------- */
   .ops-facts {
     display: grid;
@@ -1324,9 +1366,13 @@
 
 <div class="command-panel" data-panel="ops">
   <div class="q2-chat-card" id="sec-ops">
-    <div class="q2-chat-card__head">
-      <div class="q2-chat-card__title">001</div>
-      <div class="q2-chat-card__desc">001 is your operator. He reads the live service — health, memory, restarts, logs, deploys — and your money numbers, then tells you what he sees and what to do next. Ask him anything; he answers with facts, options and one next step. He can restart the service (twice an hour at most) and he cannot change code.</div>
+    <div class="ops-hero">
+      <div class="ops-hero__id">
+        <div class="q2-chat-card__title">001</div>
+        <div class="ops-hero__role">operator</div>
+      </div>
+      <div class="ops-hero__state" id="ops-hero-state">Watching the server and the money. He speaks when a number moves.</div>
+      <a class="ops-hero__link" href="https://ntfy.sh/vertex-001-9k4p2x" target="_blank" rel="noopener">Talk on ntfy ↗</a>
     </div>
 
     <div class="ops-facts" id="ops-facts">
@@ -1679,7 +1725,7 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
-    const initial = (location.hash || "#overview").slice(1);
+    const initial = (location.hash || "#ops").slice(1);
     showPanel(initial);
   })();
 </script>
@@ -3771,14 +3817,17 @@
       if (!text) return;
 
       addMsg(text, "user");
-      const pending = addMsg("Reading the service…", "pending");
+      const pending = addMsg("…", "pending");
       sendBtn.disabled = true;
 
+      // Short form on purpose. The structured answer still exists behind
+      // "Think with me"; a person talking to his operator wants a decision, not
+      // a report, and the same short voice is what he hears on ntfy.
       try {
-        const res = await fetch("/api/admin/ops/command", {
+        const res = await fetch("/api/admin/agent/chat", {
           method: "POST",
           headers: { ...auth, "Content-Type": "application/json" },
-          body: JSON.stringify({ command: text })
+          body: JSON.stringify({ question: text })
         });
         const data = await res.json().catch(() => null);
         pending.remove();
@@ -3786,9 +3835,12 @@
           addMsg((data && data.error) || "The operator could not answer.", "");
           return;
         }
-        renderDecision(data);
-        if (data && data.snapshot) renderFacts(data.snapshot);
-        else loadState();
+        addMsg((data && data.text) || "…", "");
+        const hero = document.getElementById("ops-hero-state");
+        if (hero) {
+          hero.textContent = `Answered at ${new Date().toLocaleTimeString()}. Still watching the server and the money.`;
+        }
+        loadState();
       } catch {
         pending.remove();
         addMsg("Could not reach the server.", "");

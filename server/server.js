@@ -4519,6 +4519,33 @@ app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
   }
 });
 
+// The short voice, for the panel's chat box and the ntfy thread. Same facts,
+// same doctrine, no report: an order in two or three sentences. Kept as its own
+// route so the structured answer ("Think with me") stays available without
+// forcing every hello through a four-section template.
+app.post("/api/admin/agent/chat", requireUser, async (req, res) => {
+  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const question = String(req.body?.question || "").trim().slice(0, 1000);
+  if (!question) return res.status(400).json({ error: "Ask something first." });
+
+  try {
+    const { adviseChat } = require("./agentAdvice");
+    const { generateText } = require("./aiText");
+    const sessionMoney = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
+    const money =
+      sessionMoney && sessionMoney.users !== null ? sessionMoney : (await readMoneyUnattended()) || sessionMoney;
+    const facts = await buildAgentFacts({ money });
+    const result = await adviseChat({ question, facts, generateText });
+    if (!result.ok) return res.status(502).json({ error: result.error });
+    res.json({ text: result.text, question });
+  } catch (err) {
+    console.error("Agent chat failed:", err.message);
+    res.status(502).json({ error: `Could not answer: ${err.message}` });
+  }
+});
+
 app.post("/api/admin/money/brief/send", requireUser, async (req, res) => {  if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Not authorized." });
   }
