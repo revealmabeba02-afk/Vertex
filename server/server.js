@@ -4329,7 +4329,7 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
 // Telegram, Discord and ntfy switch on purely by setting env vars, no code
 // change. Nothing here can send user emails or secrets — notify.js redacts on
 // the way out.
-const { notify, channels: notifyChannels } = require("./notify");
+const { notify, channels: notifyChannels, readTopic } = require("./notify");
 const { collectMoney, collectMoneyViaAgent, analyse: analyseMoney, renderMoneyBrief } = require("./moneyBrief");
 const { DOCTRINE } = require("./agentDoctrine");
 
@@ -4354,6 +4354,39 @@ async function readMoneyUnattended() {
     }
     return null;
   }
+}
+
+// Everything 001 is allowed to treat as true when he answers. Shared by the
+// panel and the inbox so an answer typed at him and an answer read on screen
+// start from the same picture — otherwise he would be two different agents
+// depending on which door you came through.
+async function buildAgentFacts({ money }) {
+  const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 }).catch(() => null);
+  return {
+    service: snap
+      ? {
+          health: snap.health,
+          memory: snap.memory,
+          restartsInWindow: snap.logs?.restarts ?? null,
+          liveCommit: (snap.deploys || []).find((d) => d.status === "live")?.commit || null,
+          crashSignals: (snap.logs?.signals || []).slice(-5)
+        }
+      : "unavailable",
+    money,
+    recentOpsDecisions: opsAgent.decisions.slice(0, 5).map((d) => ({
+      at: d.at,
+      verdict: d.decision?.verdict,
+      action: d.decision?.action,
+      why: d.decision?.why
+    })),
+    product: {
+      url: SELF_URL,
+      freeTrialScans: 1,
+      bundles: Object.entries(CREDIT_BUNDLES).map(([key, b]) => ({ key, scans: b.scans, usd: b.amount })),
+      paypalEnabled: Boolean(PAYPAL_ME_HANDLE),
+      mentorshipPageLive: true
+    }
+  };
 }
 
 app.get("/api/admin/notify/channels", requireUser, (req, res) => {
@@ -4468,36 +4501,11 @@ app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
     const { advise } = require("./agentAdvice");
     const { generateText } = require("./aiText");
 
-    const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 }).catch(() => null);
     const sessionMoney = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
     const money =
       sessionMoney && sessionMoney.users !== null ? sessionMoney : (await readMoneyUnattended()) || sessionMoney;
 
-    const facts = {
-      service: snap
-        ? {
-            health: snap.health,
-            memory: snap.memory,
-            restartsInWindow: snap.logs?.restarts ?? null,
-            liveCommit: (snap.deploys || []).find((d) => d.status === "live")?.commit || null,
-            crashSignals: (snap.logs?.signals || []).slice(-5)
-          }
-        : "unavailable",
-      money,
-      recentOpsDecisions: opsAgent.decisions.slice(0, 5).map((d) => ({
-        at: d.at,
-        verdict: d.decision?.verdict,
-        action: d.decision?.action,
-        why: d.decision?.why
-      })),
-      product: {
-        url: SELF_URL,
-        freeTrialScans: 1,
-        bundles: Object.entries(CREDIT_BUNDLES).map(([key, b]) => ({ key, scans: b.scans, usd: b.amount })),
-        paypalEnabled: Boolean(PAYPAL_ME_HANDLE),
-        mentorshipPageLive: true
-      }
-    };
+    const facts = await buildAgentFacts({ money });
 
     const result = await advise({ question, facts, triedStrategies: strategyLog.slice(-25), generateText });
     if (!result.ok) {
@@ -4621,6 +4629,61 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
     }
   };
 
+  // ---- Inbox: you can type at him ---------------------------------------
+  // ntfy was one-way until now: 001 talked, King read. But a topic accepts
+  // messages, so the same page is a place to ask. His own messages carry the
+  // `robot` tag and are skipped, so he cannot answer himself forever.
+  //
+  // The clock starts at boot: messages sent while he was down are not replayed.
+  // Answering an old question hours late is worse than not answering it, and it
+  // would spend model quota on a conversation that already moved on.
+  let inboxSince = Math.floor(Date.now() / 1000);
+  let inboxBusy = false;
+  let lastAnswerAt = 0;
+  const INBOX_MIN_GAP_MS = 20 * 1000;
+
+  const inboxTick = async () => {
+    if (inboxBusy || Date.now() - lastAnswerAt < INBOX_MIN_GAP_MS) return;
+    inboxBusy = true;
+    try {
+      const messages = await readTopic({ since: inboxSince });
+      if (!messages.length) return;
+      inboxSince = Math.max(...messages.map((m) => Number(m.time) || 0)) + 1;
+      const question = messages
+        .filter((m) => !(m.tags || []).includes("robot"))
+        .map((m) => String(m.message || "").trim())
+        .filter((text) => text.length > 1)
+        .pop();
+      if (!question) return;
+
+      console.log(`001 inbox: "${question.slice(0, 80)}"`);
+      lastAnswerAt = Date.now();
+      const money = await readMoneyUnattended();
+      const facts = await buildAgentFacts({ money });
+      const { advise, renderAdvice } = require("./agentAdvice");
+      const { generateText } = require("./aiText");
+      const result = await advise({
+        question: question.slice(0, 800),
+        facts,
+        triedStrategies: strategyLog.slice(-25),
+        generateText
+      });
+      if (!result.ok) {
+        await notify({
+          title: "001: could not answer",
+          text: `${result.error}\n\nHe is not ignoring you — the model is out of quota or unreachable. The full panel still works.`
+        });
+        return;
+      }
+      rememberStrategies(result.advice.strategies);
+      await notify({ title: "001: answer", text: renderAdvice(result.advice) });
+    } catch (err) {
+      console.error("001 inbox failed:", err.message);
+    } finally {
+      inboxBusy = false;
+    }
+  };
+
   const opsTick = async () => {
     if (opsRunning) return;
     opsRunning = true;
@@ -4656,6 +4719,16 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
   setTimeout(opsTick, 2 * 60 * 1000).unref();
   setInterval(opsTick, OPS_INTERVAL_MS).unref();
   console.log(`Ops agent: on, checking every ${Math.round(OPS_INTERVAL_MS / 60000)} minutes`);
+
+  // The inbox is polled far more often than the health cycle, because waiting
+  // fifteen minutes for an answer feels like being ignored. Polling costs one
+  // HTTP request and no model call unless something was actually typed.
+  const INBOX_POLL_MS = Number(process.env.INBOX_POLL_MS) || 90 * 1000;
+  setTimeout(inboxTick, 45 * 1000).unref();
+  setInterval(inboxTick, INBOX_POLL_MS).unref();
+  if (process.env.NTFY_TOPIC) {
+    console.log(`001 inbox: listening on ntfy every ${Math.round(INBOX_POLL_MS / 1000)}s`);
+  }
 } else {
   console.log("Ops agent: off (no RENDER_API_KEY or OPS_AGENT_ENABLED=false)");
 }

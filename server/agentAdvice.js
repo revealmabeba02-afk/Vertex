@@ -137,4 +137,43 @@ async function advise({ question, facts, triedStrategies = [], generateText, tim
   return { ok: true, advice: normalise(parsed) };
 }
 
-module.exports = { advise };
+// One plain-text rendering, used when the answer travels to a notification
+// instead of the admin panel. Same order as the panel so a message and a screen
+// never contradict each other.
+function renderAdvice(a) {
+  const lines = [];
+  if (a.goal) lines.push(`GOAL: ${a.goal}`);
+  if (a.obstacle) lines.push(`OBSTACLE: ${a.obstacle}`);
+  if (a.goal || a.obstacle) lines.push("");
+  if (a.answer) lines.push(a.answer);
+  if (Array.isArray(a.findings) && a.findings.length) {
+    lines.push("", "FACTS");
+    a.findings.forEach((f) => lines.push(`- ${f}`));
+  }
+  if (Array.isArray(a.strategies) && a.strategies.length) {
+    const marks = { hit: "[HIT]", bounced: "[BOUNCED]", missed: "[MISSED]", untried: "[UNTRIED]" };
+    lines.push("", "PATHS");
+    a.strategies.forEach((s) => {
+      lines.push(`${marks[s.status] || "[UNTRIED]"} ${s.method}`);
+      if (s.why) lines.push(`   ${s.why}`);
+    });
+  }
+  if (Array.isArray(a.options) && a.options.length) {
+    lines.push("", "OPTIONS");
+    a.options.forEach((o, i) => {
+      lines.push(`${i + 1}. ${o.action}`);
+      lines.push(`   cost: ${o.cost}${o.reversible ? " · reversible" : " · not reversible"}`);
+    });
+  }
+  if (a.recommendation) lines.push("", `RECOMMENDED: ${a.recommendation}`);
+  if (a.nextStep) lines.push("", `DO THIS: ${a.nextStep}`);
+  if (Array.isArray(a.unknowns) && a.unknowns.length) {
+    lines.push("", "NOT KNOWN");
+    a.unknowns.forEach((u) => lines.push(`? ${u}`));
+  }
+  return lines.join("\n");
+}
+
+module.exports = { advise, renderAdvice };
+
+module.exports = { advise, renderAdvice };

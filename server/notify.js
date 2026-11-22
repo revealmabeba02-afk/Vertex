@@ -179,4 +179,35 @@ async function notify({ title = "001", text = "", only = null } = {}) {
   return { delivered, failed, available: configured };
 }
 
-module.exports = { notify, channels, redact };
+// Reading the other direction. ntfy is not a chat protocol, but a topic accepts
+// messages from anyone allowed to publish, so the same page that carries 001's
+// words is also where King can type at him. His own messages carry the `robot`
+// tag; the caller filters those out so he cannot answer himself in a loop.
+async function readTopic({ since, limit = 20, timeoutMs = 12000 } = {}) {
+  const base = env("NTFY_URL") || "https://ntfy.sh";
+  const topic = env("NTFY_TOPIC");
+  if (!topic) return [];
+  const token = env("NTFY_TOKEN");
+  const url =
+    `${base.replace(/\/+$/, "")}/${encodeURIComponent(topic)}/json` +
+    `?poll=1&since=${encodeURIComponent(String(since ?? "10m"))}`;
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!res.ok) throw new Error(`ntfy read ${res.status}`);
+  const text = await res.text().catch(() => "");
+  const out = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const m = JSON.parse(line);
+      if (m && m.event === "message") out.push(m);
+    } catch {
+      // keepalives and open events are not messages; ignore them quietly
+    }
+  }
+  return out.slice(-limit);
+}
+
+module.exports = { notify, channels, redact, readTopic, sendNtfy };
