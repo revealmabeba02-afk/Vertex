@@ -433,7 +433,7 @@ async function callAnthropicVision({ buffer, mimeType, timeframe, apiKey }) {
           }
         ]
       }),
-      signal: AbortSignal.timeout(52000)
+      signal: AbortSignal.timeout(20000)
     });
   } catch (err) {
     const e = new Error("The image reader took too long or could not be reached. Please try again.");
@@ -472,21 +472,27 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 2048,
+      // Output tokens are time: every extra field the model writes is latency
+      // the trader watches. 2048 was sized for "be thorough"; 1600 is enough
+      // for the full shape and measurably faster.
+      maxOutputTokens: 1600,
       responseMimeType: "application/json"
     }
   });
 
   let lastFailure = null;
   const startedAt = Date.now();
-  // The app gives up on a scan after 75s. Google's free tier can answer a 503
-  // quickly but a busy model slowly, so cap the whole fallback walk well
-  // under that: better a clear "try again" than a request that dies client-
-  // side with no explanation.
-  const OVERALL_BUDGET_MS = 55000;
+  // A scan has to feel instant, not thorough. King's rule: around ten seconds,
+  // never past twenty. So the whole model walk gets a hard 20s budget and each
+  // attempt a smaller slice of it — a fast "try again" beats a spinner that
+  // makes the product look broken. A 1400px chart answers in 3-8s when the model
+  // is healthy, so this only bites when something is actually wrong.
+  const OVERALL_BUDGET_MS = 20000;
+  const ATTEMPT_TIMEOUT_MS = 11000;
 
   for (const model of GEMINI_IMAGE_MODELS) {
-    if (Date.now() - startedAt > OVERALL_BUDGET_MS) break;
+    const remaining = OVERALL_BUDGET_MS - (Date.now() - startedAt);
+    if (remaining < 1500) break;
     const url =
       "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(model) +
@@ -501,7 +507,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
           "Content-Type": "application/json"
         },
         body,
-        signal: AbortSignal.timeout(52000)
+        signal: AbortSignal.timeout(Math.min(ATTEMPT_TIMEOUT_MS, remaining))
       });
     } catch (err) {
       lastFailure = { kind: "network", err };

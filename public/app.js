@@ -1468,11 +1468,9 @@
   }
 
   // Hard ceiling on how long a scan is allowed to sit on the loading screen.
-  // The backend call is a single request/response (no streaming progress),
-  // so without this a stalled network or a backend that never replies would
-  // leave the HUD spinning forever. 75s comfortably covers a slow vision-model
-  // response and a sleepy Render instance waking from idle.
-  const SCAN_TIMEOUT_MS = 75000;
+  // The backend now budgets itself to 20s, so 25s here means the user hears
+  // "that took too long, try again" instead of watching a spinner with no end.
+  const SCAN_TIMEOUT_MS = 25000;
 
   const LAST_SCAN_KEY = "vertex_last_scan";
   function saveLastScan(symbol, timeframe) {
