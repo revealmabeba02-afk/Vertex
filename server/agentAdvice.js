@@ -111,6 +111,106 @@ function tidyShort(text) {
   return out;
 }
 
+// 001 without a model. The free model quota is shared with the product's own
+// assistant and runs dry most days; a chat box that shows "…" for a minute is
+// worse than one that answers in half a second from numbers it already has.
+// These intents cover what King actually asks, and every sentence is read from
+// `facts` — no estimates, no promises, no invented prices.
+function quickAnswer({ question, facts }) {
+  const q = String(question || "").toLowerCase().trim();
+  if (!q) return null;
+
+  const service = (facts && facts.service) || {};
+  const health = service.health || {};
+  const memory = service.memory || {};
+  const money = facts && facts.money;
+
+  const up = health.reachable === true;
+  const statusLine = up
+    ? `The site is up — ${health.status || 200} in ${health.latencyMs || "?"}ms, heap ${memory.heapPercent ?? "?"}%.`
+    : "The site is not answering right now.";
+
+  const moneyLine = () => {
+    if (!money || money.users == null) {
+      return "I still can't see the money — the Supabase reader isn't installed, so any revenue number I gave you would be invented.";
+    }
+    if (!money.payingUsers) {
+      const accounts = Number(money.users) || 0;
+      const pending = Number(money.pendingOrders) || 0;
+      return `No paying customer yet: ${accounts} account${accounts === 1 ? "" : "s"}, $0 taken${pending ? `, ${pending} order${pending === 1 ? "" : "s"} pending` : ""}.`;
+    }
+    const paid = Number(money.revenueUsd) || 0;
+    const pending = Number(money.pendingOrders) || 0;
+    return `$${paid.toFixed(2)} all-time from ${money.payingUsers} paying customer${money.payingUsers === 1 ? "" : "s"}${pending ? `, ${pending} pending` : ""}.`;
+  };
+
+  const has = (re) => re.test(q);
+
+  if (has(/\b(hi|hello|hey|yo|sup|morning|evening)\b/) && q.length <= 24) {
+    return `I'm here. ${statusLine} ${moneyLine()}`;
+  }
+
+  if (has(/\b(how much|revenue|sales|earned|earning|income|balance|made)\b/) ||
+      (has(/\b(money|paid|paying|customer|buyer|sold)\b/) && q.length <= 40)) {
+    const next =
+      !money || money.users == null
+        ? "Until that reader exists I'm working blind, so the honest move is to chase the people who already asked about scans."
+        : "The next dollar comes from the people who already have an account — ask one of them to buy a bundle today.";
+    return `${moneyLine()} ${next}`;
+  }
+
+  if (has(/\b(restart|restarted|crash|crashed|down|offline|dead)\b/)) {
+    const restarts = service.restartsInWindow;
+    if (restarts == null) return `${statusLine} I can't read the restart count right now, so I won't guess.`;
+    if (!restarts) return `${statusLine} No restarts in the last hour — nothing crashed.`;
+    return `${statusLine} ${restarts} restart${restarts === 1 ? "" : "s"} in the last hour. That's normal when I ship code; if one happens with no deploy behind it, I restart it once and watch.`;
+  }
+
+  if (has(/\b(slow|latency|speed|fast|lag|laggy)\b/)) {
+    return up ? `${statusLine} That's normal — nothing is slow.` : "The site isn't answering, so it's slow for everyone. I'd restart it once.";
+  }
+
+  if (has(/\b(wrong|broken|error|errors|problem|health|status)\b/)) {
+    return `${statusLine} Nothing in the snapshot looks wrong.`;
+  }
+
+  if (has(/\b(next|today|tomorrow|start|first|step)\b/)) {
+    const step =
+      !money || money.users == null
+        ? "Install the money reader in Supabase — one paste — so I stop guessing about revenue."
+        : money.payingUsers
+          ? "Message one past buyer and ask what stopped them buying again."
+          : "Send the scanner to three traders you actually know and ask for one honest reaction each.";
+    return `${step} ${statusLine}`;
+  }
+
+  return null;
+}
+
+// Last resort when the model is unreachable: still an answer, still honest
+// about what this reply is. Never a 502 — a person waiting on his operator
+// should get a sentence, even if it is a small one.
+function fallbackAnswer({ facts }) {
+  const service = (facts && facts.service) || {};
+  const health = service.health || {};
+  const money = facts && facts.money;
+  const up = health.reachable === true;
+  const statusLine = up
+    ? `The site is up — ${health.status || 200} in ${health.latencyMs || "?"}ms.`
+    : "The site is not answering right now.";
+
+  let moneyLine = " I still can't see the money — the Supabase reader isn't installed.";
+  if (money && money.users != null) {
+    const paid = Number(money.revenueUsd) || 0;
+    const payers = Number(money.payingUsers) || 0;
+    moneyLine = payers
+      ? ` Money: $${paid.toFixed(2)} all-time from ${payers} paying customer${payers === 1 ? "" : "s"}.`
+      : ` Money: no paying customer yet, ${Number(money.users) || 0} account${Number(money.users) === 1 ? "" : "s"}.`;
+  }
+
+  return `${statusLine}${moneyLine} My thinking model is out of quota, so I can't reason further right now — ask me again in a minute, or open the Money brief.`;
+}
+
 // The short form. No JSON, no retry ladder: a plain reply either arrives or it
 // does not, and a second attempt at "say it like a person" rarely helps.
 async function adviseChat({ question, facts, generateText, timeoutMs = 25000 }) {
@@ -229,4 +329,4 @@ function renderAdvice(a) {
 }
 
 
-module.exports = { advise, adviseChat, renderAdvice };
+module.exports = { advise, adviseChat, quickAnswer, fallbackAnswer, renderAdvice };

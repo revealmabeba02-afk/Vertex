@@ -477,10 +477,34 @@
       </div>
 
       <div class="result__grid">
-        <section class="result-section result-section--wide" id="res-marked-wrap" hidden>
-          <h2 class="result-section__title">Your chart, marked up</h2>
-          <p class="result-section__body" id="res-marked-caption">Order blocks and FVGs are shaded zones; sweeps, breaks, and your entry, stop and targets are the labelled lines.</p>
-          <img id="res-marked-img" alt="Your uploaded chart with the detected concepts marked on it" class="result-marked-img" />
+        <section class="result-section result-section--wide marked-section" id="res-marked-wrap" hidden>
+          <div class="marked-head">
+            <div>
+              <h2 class="result-section__title">Your chart, marked up</h2>
+              <p class="result-section__body" id="res-marked-caption">Shaded zones are order blocks and fair value gaps. Every line is named in the panel on the right, with the price it sits at.</p>
+            </div>
+            <button type="button" class="marked-expand" id="res-marked-zoom-btn">Expand</button>
+          </div>
+          <figure class="marked-figure">
+            <img
+              id="res-marked-img"
+              alt="Your uploaded chart with the detected concepts marked on it"
+              class="result-marked-img"
+              role="button"
+              tabindex="0"
+              aria-label="Open the marked chart full screen"
+            />
+            <figcaption class="marked-figure__hint">Tap the chart to open it full screen</figcaption>
+          </figure>
+          <ul class="marked-legend" aria-label="What the colours on the chart mean">
+            <li><i class="marked-legend__dot" style="--dot:#b388ff"></i>Order block</li>
+            <li><i class="marked-legend__dot" style="--dot:#ffc46b"></i>Fair value gap</li>
+            <li><i class="marked-legend__dot" style="--dot:#ff8a9b"></i>Liquidity sweep</li>
+            <li><i class="marked-legend__dot" style="--dot:#4dd4c1"></i>Break of structure</li>
+            <li><i class="marked-legend__dot" style="--dot:#5ee6a8"></i>Entry</li>
+            <li><i class="marked-legend__dot" style="--dot:#ff6b81"></i>Stop</li>
+            <li><i class="marked-legend__dot" style="--dot:#6cb8ff"></i>Target</li>
+          </ul>
         </section>
 
         <section class="result-section result-section--wide">
@@ -1221,6 +1245,25 @@
   </section>
 
 </main>
+</div>
+
+<!-- Full-screen viewer for the marked-up chart. The labels live in a rail on
+     the right of the image, which is unreadable when the image is squeezed to
+     phone width — so the result card opens it here at fit-to-screen and lets
+     the trader zoom in on the rail without losing the chart. -->
+<div class="chart-lightbox" id="chart-lightbox" hidden>
+  <div class="chart-lightbox__bar">
+    <span class="chart-lightbox__title">Your chart, marked up</span>
+    <div class="chart-lightbox__actions">
+      <button type="button" id="chart-lightbox-out" aria-label="Zoom out">−</button>
+      <button type="button" id="chart-lightbox-fit" aria-label="Fit to screen">Fit</button>
+      <button type="button" id="chart-lightbox-in" aria-label="Zoom in">+</button>
+      <button type="button" id="chart-lightbox-close" aria-label="Close viewer">✕</button>
+    </div>
+  </div>
+  <div class="chart-lightbox__stage" id="chart-lightbox-stage">
+    <img id="chart-lightbox-img" alt="Your chart, marked up, enlarged" />
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>

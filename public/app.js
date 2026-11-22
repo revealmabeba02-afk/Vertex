@@ -1170,6 +1170,120 @@
     });
   }
 
+  // --- Marked-chart viewer ------------------------------------------------
+  // The scan result embeds the trader's screenshot with a label rail on the
+  // right. At phone width that rail is unreadable, so the image opens in a
+  // full-screen viewer that fits to the screen and zooms from there. One
+  // delegated listener, because the image element survives across scans.
+  (function () {
+    const overlay = document.getElementById("chart-lightbox");
+    const stage = document.getElementById("chart-lightbox-stage");
+    const view = document.getElementById("chart-lightbox-img");
+    if (!overlay || !stage || !view) return;
+
+    const btnIn = document.getElementById("chart-lightbox-in");
+    const btnOut = document.getElementById("chart-lightbox-out");
+    const btnFit = document.getElementById("chart-lightbox-fit");
+    const btnClose = document.getElementById("chart-lightbox-close");
+
+    let scale = 1;
+    let naturalW = 0;
+    let fittedW = 0;
+
+    function fitWidth() {
+      return Math.max(160, stage.clientWidth - 28);
+    }
+
+    function render() {
+      const base = Math.min(fitWidth(), naturalW || fitWidth());
+      fittedW = base;
+      view.style.width = Math.round(base * scale) + "px";
+    }
+
+    function setScale(next) {
+      const maxScale = naturalW ? Math.max(1, (naturalW / Math.max(1, fittedW)) * 4) : 4;
+      const beforeWidth = fittedW * scale;
+      scale = Math.max(1, Math.min(next, maxScale));
+      render();
+      const afterWidth = fittedW * scale;
+      if (beforeWidth > 0) {
+        const anchor = (stage.scrollLeft + stage.clientWidth / 2) / beforeWidth;
+        const vAnchor = (stage.scrollTop + stage.clientHeight / 2) / beforeWidth;
+        stage.scrollLeft = anchor * afterWidth - stage.clientWidth / 2;
+        stage.scrollTop = Math.max(0, vAnchor * afterWidth - stage.clientHeight / 2);
+      }
+    }
+
+    function openViewer(src) {
+      if (!src) return;
+      view.src = src;
+      view.removeAttribute("style");
+      naturalW = 0;
+      scale = 1;
+      overlay.hidden = false;
+      document.documentElement.classList.add("lightbox-open");
+      const ready = () => {
+        naturalW = view.naturalWidth || 0;
+        render();
+        stage.scrollLeft = Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2);
+        stage.scrollTop = 0;
+      };
+      if (view.complete && view.naturalWidth) ready();
+      else view.addEventListener("load", ready, { once: true });
+      if (btnClose) btnClose.focus();
+    }
+
+    function closeViewer() {
+      overlay.hidden = true;
+      document.documentElement.classList.remove("lightbox-open");
+    }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const img = target.closest("#res-marked-img");
+      if (img) {
+        event.preventDefault();
+        openViewer(img.getAttribute("src"));
+        return;
+      }
+      if (target.closest("#res-marked-zoom-btn")) {
+        const marked = document.getElementById("res-marked-img");
+        if (marked) openViewer(marked.getAttribute("src"));
+        return;
+      }
+      if (target.closest("#chart-lightbox-close")) { closeViewer(); return; }
+      if (target.closest("#chart-lightbox-in")) { setScale(scale * 1.6); return; }
+      if (target.closest("#chart-lightbox-out")) { setScale(scale / 1.6); return; }
+      if (target.closest("#chart-lightbox-fit")) {
+        scale = 1;
+        render();
+        stage.scrollLeft = 0;
+        stage.scrollTop = 0;
+        return;
+      }
+      if (target === overlay || target === stage) closeViewer();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const marked = document.getElementById("res-marked-img");
+      if (overlay.hidden) {
+        // The image is a button for keyboard and screen-reader users, and a
+        // div is not clickable by Enter on its own.
+        if (marked && document.activeElement === marked && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          openViewer(marked.getAttribute("src"));
+        }
+        return;
+      }
+      if (event.key === "Escape") { closeViewer(); return; }
+      if (event.key === "+" || event.key === "=") { event.preventDefault(); setScale(scale * 1.6); return; }
+      if (event.key === "-") { event.preventDefault(); setScale(scale / 1.6); }
+    });
+
+    window.addEventListener("resize", () => { if (!overlay.hidden) render(); });
+  })();
+
   // One-tap "share as image": renders the current plan as a branded card
   // (canvas, drawn client-side — no server round trip) with a QR code back
   // to Vertex, ready to post or share. Uses the Web Share API on mobile

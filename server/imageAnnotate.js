@@ -6,12 +6,19 @@
 //
 // The model reports the concepts as PRICES plus a calibration of the chart's
 // visible price axis (highest/lowest axis label and where each sits
-// vertically). Mapping price -> height here is far more reliable than asking
-// a vision model for pixel positions directly. Zones span most of the chart
+// vertically). Mapping price -> height here is far more reliable than asking a
+// vision model for pixel positions directly. Zones span most of the chart
 // width, which is how SMC traders draw them anyway.
 //
-// Purely additive: every call is best-effort and returns the original buffer
-// unchanged if anything is missing or malformed.
+// Labels live in a rail added to the right edge of the image, never on top of
+// the candles. The first version printed white-on-dark text plates over the
+// chart itself: at phone width they collided with candles, covered the price
+// axis and had to be truncated ("zone near swing h…"). A dedicated rail keeps
+// the chart clean, gives every label a full line with its price, and stays
+// legible when the image is zoomed or shared.
+//
+// Purely additive: every call is best-effort and returns null if anything is
+// missing or malformed, and the caller falls back to the unmarked image.
 
 const sharp = require("sharp");
 
@@ -28,15 +35,37 @@ const PALETTE = {
 
 const PLAN_DASH = { entry: "", stop: "6 4", target: "4 5", level: "2 5" };
 
-const MAX_PER_TYPE = 3;
-
 // A marked-up copy is sent back to the browser as base64, so a 4000px phone
 // screenshot would bloat the response. 1800px keeps labels and candles crisp
 // while keeping the payload small enough to load quickly on mobile data.
 const MAX_ANNOTATE_WIDTH = 1800;
 
+// The label rail. Proportional so it scales with the screenshot, clamped so it
+// never eats the chart on a small image or becomes a billboard on a huge one.
+const RAIL_FRAC = 0.24;
+const RAIL_MIN = 230;
+const RAIL_MAX = 520;
+
+// More than this and the rail turns into a wall of text; the unmarked lists
+// below the image still carry every concept the model found.
+const MAX_LABELS = 14;
+
+const RAIL_BG = "#070a10";
+const RAIL_EDGE = "rgba(255,255,255,0.10)";
+const TEXT_DIM = "#8b98ad";
+
 function esc(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function fmtPrice(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  const abs = Math.abs(n);
+  const decimals = abs >= 100 ? 2 : abs >= 10 ? 3 : abs >= 1 ? 4 : 5;
+  const [whole, frac] = n.toFixed(decimals).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return frac ? `${grouped}.${frac}` : grouped;
 }
 
 // Calibration points from the vision model: ideally 3-5 price labels read off
@@ -124,7 +153,6 @@ function fitScale(points) {
   return { ...f, points: pts };
 }
 
-// Rows of { kind, y1, y2, label } — y1/y2 are percent of height.
 // Positions come from mapping the concept's price through the chart's own
 // price-axis calibration (price_scale), which is far more reliable than
 // asking the model for pixel positions directly. A concept whose price can't
@@ -163,159 +191,209 @@ function makePriceToPct(scale) {
   };
 }
 
-function collectRows(concepts, priceScale) {
-  const rows = [];
+// One entry per drawn thing: where it sits on the chart (y1/y2 in percent) and
+// how it should be labelled in the rail. `priority` decides what survives when
+// the rail is full — the trade plan always outranks a passing concept.
+function collectItems(concepts, priceScale, planLevels) {
   const toPct = makePriceToPct(priceScale);
-  const cap = (kind) => rows.filter((r) => r.kind === kind).length < MAX_PER_TYPE;
+  if (!toPct) return [];
 
-  for (const ob of Array.isArray(concepts.order_blocks) ? concepts.order_blocks : []) {
-    if (!cap("order_block")) break;
-    const top = toPct && toPct(ob?.top_price);
-    const bottom = toPct && toPct(ob?.bottom_price);
-    if (top == null || bottom == null) continue;
-    rows.push({
-      kind: "order_block",
-      y1: Math.min(top, bottom),
-      y2: Math.max(top, bottom),
-      label: `OB ${ob.bias === "bearish" ? "▼" : "▲"}${ob?.note ? " · " + esc(ob.note) : ""}`
+  const items = [];
+  const add = (item) => {
+    if (!item || item.pct == null || !Number.isFinite(item.pct)) return;
+    items.push(item);
+  };
+
+  const addZone = (kind, topPrice, bottomPrice, title, priority) => {
+    const a = toPct(topPrice);
+    const b = toPct(bottomPrice);
+    if (a == null || b == null) return;
+    const mid = (Number(topPrice) + Number(bottomPrice)) / 2;
+    add({
+      kind,
+      y1: Math.min(a, b),
+      y2: Math.max(a, b),
+      pct: (a + b) / 2,
+      title,
+      price: fmtPrice(mid),
+      priority
     });
+  };
+
+  const orderBlocks = Array.isArray(concepts.order_blocks) ? concepts.order_blocks : [];
+  for (const ob of orderBlocks.slice(0, 2)) {
+    addZone("order_block", ob?.top_price, ob?.bottom_price, `Order block ${ob?.bias === "bearish" ? "▼" : "▲"}`, 4);
   }
 
-  for (const f of Array.isArray(concepts.fvgs) ? concepts.fvgs : []) {
-    if (!cap("fvg")) break;
-    const top = toPct && toPct(f?.top_price);
-    const bottom = toPct && toPct(f?.bottom_price);
-    if (top == null || bottom == null) continue;
-    rows.push({
-      kind: "fvg",
-      y1: Math.min(top, bottom),
-      y2: Math.max(top, bottom),
-      label: `FVG${f?.filled ? " (filled)" : ""}${f?.note ? " · " + esc(f.note) : ""}`
-    });
+  const fvgs = Array.isArray(concepts.fvgs) ? concepts.fvgs : [];
+  for (const f of fvgs.slice(0, 2)) {
+    addZone("fvg", f?.top_price, f?.bottom_price, `FVG${f?.filled ? " (filled)" : ""}`, 5);
   }
 
-  for (const s of Array.isArray(concepts.liquidity_sweeps) ? concepts.liquidity_sweeps : []) {
-    if (!cap("sweep")) break;
-    const y = toPct && toPct(s?.price);
-    if (y == null) continue;
-    rows.push({
+  const sweeps = Array.isArray(concepts.liquidity_sweeps) ? concepts.liquidity_sweeps : [];
+  for (const s of sweeps.slice(0, 2)) {
+    const y = toPct(s?.price);
+    add({
       kind: "sweep",
       y1: y,
       y2: y,
-      label: `SWEEP ${s?.side === "buy-side" ? "▲" : "▼"}${s?.note ? " · " + esc(s.note) : ""}`
+      pct: y,
+      title: `Sweep ${s?.side === "buy-side" ? "▲" : "▼"}`,
+      price: fmtPrice(s?.price),
+      priority: 7
     });
   }
 
-  for (const b of Array.isArray(concepts.breaks) ? concepts.breaks : []) {
-    if (!cap("break")) break;
-    const y = toPct && toPct(b?.price);
-    if (y == null) continue;
-    rows.push({
+  const breaks = Array.isArray(concepts.breaks) ? concepts.breaks : [];
+  for (const b of breaks.slice(0, 2)) {
+    const y = toPct(b?.price);
+    add({
       kind: "break",
       y1: y,
       y2: y,
-      label: `${String(b?.kind || "BREAK").toUpperCase()} ${b?.direction === "bearish" ? "▼" : "▲"}${b?.note ? " · " + esc(b.note) : ""}`
+      pct: y,
+      title: `${String(b?.kind || "Break").toUpperCase()} ${b?.direction === "bearish" ? "▼" : "▲"}`,
+      price: fmtPrice(b?.price),
+      priority: 6
     });
   }
 
-  return rows;
+  const plan = Array.isArray(planLevels) ? planLevels : [];
+  for (const lvl of plan) {
+    const y = toPct(lvl?.price);
+    if (y == null) continue;
+    const kind = PALETTE[lvl.kind] ? lvl.kind : "level";
+    const priority = kind === "entry" ? 1 : kind === "stop" ? 2 : kind === "target" ? 3 : 8;
+    add({
+      kind,
+      y1: y,
+      y2: y,
+      pct: y,
+      title: String(lvl.label || kind).slice(0, 22),
+      price: fmtPrice(lvl.price),
+      priority
+    });
+  }
+
+  return items;
 }
 
-function buildOverlaySvg(width, height, concepts, priceScale, planLevels) {
-  const rows = collectRows(concepts, priceScale);
-  const toPct = makePriceToPct(priceScale);
-  const planRows = (Array.isArray(planLevels) ? planLevels : [])
-    .map((lvl) => ({ ...lvl, pct: toPct && toPct(lvl.price) }))
-    .filter((lvl) => lvl.pct != null);
-  if (!rows.length && !planRows.length) return null;
+function buildOverlaySvg(width, height, railWidth, concepts, priceScale, planLevels) {
+  const all = collectItems(concepts, priceScale, planLevels);
+  if (!all.length) return null;
 
-  const left = width * 0.04;
-  const right = width * 0.96;
-  const zoneW = right - left;
-  const fontSize = Math.max(12, Math.round(height * 0.022));
-  const pad = Math.round(fontSize * 0.5);
+  // Keep the most important labels when there are too many to read.
+  all.sort((a, b) => a.priority - b.priority);
+  const kept = all.slice(0, MAX_LABELS).sort((a, b) => a.pct - b.pct);
+
+  const totalWidth = width + railWidth;
+  const railX = width;
+  const chartLeft = Math.round(width * 0.04);
+  const chartRight = width - 2;
+  const pad = 12;
+
+  const maxChars = kept.reduce((m, it) => Math.max(m, it.title.length), 6);
+  const priceChars = kept.reduce((m, it) => Math.max(m, it.price.length), 4);
+
+  // Font size is whatever fits both the available height and the rail width,
+  // so 3 labels breathe and 12 still fit instead of overlapping.
+  const byHeight = Math.floor((height - pad * 2) / (kept.length * 1.85));
+  let fontSize = Math.min(22, Math.max(10, byHeight));
+  const byWidth = Math.floor((railWidth - pad * 2 - priceChars * fontSize * 0.58) / (maxChars * 0.57));
+  if (byWidth > 0) fontSize = Math.max(9, Math.min(fontSize, byWidth));
+  const rowH = Math.max(fontSize + 8, Math.round(fontSize * 1.85));
+  const labelH = rowH - 6;
 
   const parts = [];
-  // Zones first (behind), lines on top.
-  const order = { fvg: 0, order_block: 1, sweep: 2, break: 3 };
-  rows.sort((a, b) => order[a.kind] - order[b.kind]);
 
-  // Labels are placed inside their zone/on their line and nudged downward
-  // when they would collide with one already placed, so a cluster of
-  // concepts near one price stays readable instead of stacking into a blob.
-  const placed = [];
-  const overlaps = (top, bottom) => placed.some((p) => top < p.bottom && bottom > p.top);
-  const labelH = fontSize + pad * 2;
+  // --- rail background ---------------------------------------------------
+  parts.push(
+    `<rect x="${railX}" y="0" width="${railWidth}" height="${height}" fill="${RAIL_BG}"/>`,
+    `<line x1="${railX + 0.5}" y1="0" x2="${railX + 0.5}" y2="${height}" stroke="${RAIL_EDGE}" stroke-width="1"/>`
+  );
 
-  for (const row of rows) {
-    const c = PALETTE[row.kind];
-    const y1 = (row.y1 / 100) * height;
-    const y2 = (row.y2 / 100) * height;
-    const isZone = row.kind === "order_block" || row.kind === "fvg";
+  // --- chart markings (no text on the chart itself) ----------------------
+  for (const item of kept) {
+    const c = PALETTE[item.kind] || PALETTE.level;
+    const y1 = (item.y1 / 100) * height;
+    const y2 = (item.y2 / 100) * height;
+    const isZone = item.kind === "order_block" || item.kind === "fvg";
 
     if (isZone && y2 - y1 >= 2) {
       parts.push(
-        `<rect x="${left}" y="${y1}" width="${zoneW}" height="${Math.max(2, y2 - y1)}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" stroke-dasharray="7 5" rx="3"/>`
+        `<rect x="${chartLeft}" y="${y1}" width="${chartRight - chartLeft}" height="${Math.max(2, y2 - y1)}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" stroke-dasharray="7 5" rx="3"/>`
       );
     } else {
-      // Zones too thin to fill, and sweeps/breaks: a single line.
       const y = isZone ? (y1 + y2) / 2 : y1;
       parts.push(
-        `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="${c.stroke}" stroke-width="2" stroke-dasharray="${row.kind === "sweep" ? "10 6" : ""}"/>`
+        `<line x1="${chartLeft}" y1="${y}" x2="${chartRight}" y2="${y}" stroke="${c.stroke}" stroke-width="1.6" stroke-dasharray="${PLAN_DASH[item.kind] || (item.kind === "sweep" ? "10 6" : "")}" opacity="0.9"/>`
       );
     }
+  }
 
-    // Start the label at the middle of the zone/on the line, keep it fully
-    // inside the image, then push it down while it collides.
-    let labelTop = Math.max(2, Math.min(height - labelH - 2, (y1 + y2) / 2 - labelH / 2));
-    let guard = 0;
-    while (overlaps(labelTop, labelTop + labelH) && guard < 12) {
-      labelTop += labelH + 2;
-      if (labelTop + labelH > height - 2) {
-        labelTop = Math.max(2, labelTop - (placed.length + 1) * (labelH + 2));
-        break;
-      }
-      guard++;
+  // --- label layout ------------------------------------------------------
+  // Ideal position is the concept's own height; labels are pushed down only
+  // enough to stop colliding, then the whole column is nudged up if it spills
+  // past the bottom edge.
+  const centers = [];
+  let cursor = pad + rowH / 2;
+  for (const item of kept) {
+    const ideal = (item.pct / 100) * height;
+    const center = Math.max(ideal, cursor);
+    centers.push(center);
+    cursor = center + rowH + 2;
+  }
+  const spill = centers[centers.length - 1] + labelH / 2 - (height - pad);
+  if (spill > 0) {
+    const room = Math.max(0, centers[0] - labelH / 2 - pad);
+    const shift = Math.min(spill, room);
+    for (let i = 0; i < centers.length; i++) centers[i] -= shift;
+  }
+
+  // --- connectors and plates --------------------------------------------
+  kept.forEach((item, index) => {
+    const c = PALETTE[item.kind] || PALETTE.level;
+    const center = centers[index];
+    const anchorY = (item.pct / 100) * height;
+
+    // A thin elbow from the chart edge to the label, so a nudged label still
+    // clearly belongs to its line.
+    parts.push(
+      `<path d="M ${chartRight} ${anchorY} H ${railX + 10} L ${railX + pad - 2} ${center} H ${railX + pad}" fill="none" stroke="${c.stroke}" stroke-width="1" opacity="0.45"/>`,
+      `<circle cx="${chartRight}" cy="${anchorY}" r="2.4" fill="${c.stroke}"/>`
+    );
+
+    const plateX = railX + pad;
+    const plateW = railWidth - pad * 2;
+    const plateTop = center - labelH / 2;
+
+    parts.push(
+      `<rect x="${plateX}" y="${plateTop}" width="${plateW}" height="${labelH}" rx="4" fill="rgba(255,255,255,0.035)"/>`,
+      `<rect x="${plateX}" y="${plateTop}" width="3" height="${labelH}" rx="1.5" fill="${c.stroke}"/>`
+    );
+
+    const title = item.title.slice(0, maxChars);
+    const textX = plateX + 11;
+    const textY = center + fontSize * 0.35;
+    // The price column is right-aligned; if the two would touch, the title
+    // gives way rather than running into the number.
+    const priceX = plateX + plateW - 9;
+    const priceW = item.price.length * fontSize * 0.58;
+    const room = plateW - 20 - priceW - 10;
+    const charsThatFit = Math.max(4, Math.floor(room / (fontSize * 0.57)));
+    const shownTitle = title.slice(0, charsThatFit);
+
+    parts.push(
+      `<text x="${textX}" y="${textY}" fill="${c.stroke}" font-size="${fontSize}" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif" font-weight="600">${esc(shownTitle)}</text>`
+    );
+    if (item.price) {
+      parts.push(
+        `<text x="${priceX}" y="${textY}" fill="${TEXT_DIM}" font-size="${Math.max(9, fontSize - 2)}" font-family="DejaVu Sans Mono, Consolas, monospace" text-anchor="end">${esc(item.price)}</text>`
+      );
     }
-    placed.push({ top: labelTop, bottom: labelTop + labelH });
+  });
 
-    const maxChars = Math.max(8, Math.floor((zoneW - pad * 2) / (fontSize * 0.56)));
-    const text = row.label.slice(0, Math.min(42, maxChars));
-    const plateW = Math.min(text.length * fontSize * 0.56 + pad * 2, zoneW);
-    parts.push(
-      `<rect x="${left}" y="${labelTop}" width="${plateW}" height="${labelH}" fill="rgba(10,12,18,0.78)" rx="4"/>`,
-      `<text x="${left + pad}" y="${labelTop + fontSize + pad * 0.4}" fill="${c.stroke}" font-size="${fontSize}" font-family="monospace">${text}</text>`
-    );
-  }
-
-  // Trade-plan levels: entry, stop, targets, key levels. Drawn as thin lines
-  // with their labels on the RIGHT edge so they never fight the concept
-  // labels on the left, and de-duplicated when two levels sit on top of
-  // each other (entry and a target rarely do, but key levels can).
-  const planPlaced = [];
-  for (const lvl of planRows) {
-    const c = PALETTE[lvl.kind] || PALETTE.level;
-    const y = (lvl.pct / 100) * height;
-    if (planPlaced.some((p) => Math.abs(p - y) < fontSize * 0.9)) continue;
-    planPlaced.push(y);
-
-    parts.push(
-      `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="${c.stroke}" stroke-width="1.3" stroke-dasharray="${PLAN_DASH[lvl.kind] || ""}" opacity="0.95"/>`
-    );
-
-    const plateLimit = zoneW * 0.45;
-    const maxChars = Math.max(6, Math.floor((plateLimit - pad * 2) / (fontSize * 0.56)));
-    const text = String(lvl.label || "").slice(0, Math.min(20, maxChars));
-    const plateW = Math.min(text.length * fontSize * 0.56 + pad * 2, plateLimit);
-    const plateX = right - plateW;
-    const plateTop = Math.max(2, Math.min(height - labelH - 2, y - labelH / 2));
-    parts.push(
-      `<rect x="${plateX}" y="${plateTop}" width="${plateW}" height="${labelH}" fill="rgba(10,12,18,0.78)" rx="4"/>`,
-      `<text x="${plateX + pad}" y="${plateTop + fontSize + pad * 0.4}" fill="${c.stroke}" font-size="${fontSize}" font-family="monospace">${text}</text>`
-    );
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${parts.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${height}">${parts.join("")}</svg>`;
 }
 
 async function annotateChartImage({ buffer, concepts, priceScale, planLevels }) {
@@ -334,11 +412,27 @@ async function annotateChartImage({ buffer, concepts, priceScale, planLevels }) 
     const height = meta.height;
     if (!width || !height || width < 100 || height < 100) return null;
 
-    const svg = buildOverlaySvg(width, height, concepts || {}, priceScale, planLevels);
+    const railWidth = Math.round(Math.min(RAIL_MAX, Math.max(RAIL_MIN, width * RAIL_FRAC)));
+    const svg = buildOverlaySvg(width, height, railWidth, concepts || {}, priceScale, planLevels);
     if (!svg) return null;
 
-    const out = await sharp(base)
-      .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    // The marked image is wider than the screenshot by the rail. Build the
+    // canvas first (dark rail), drop the untouched chart on the left, then
+    // draw the overlay across both.
+    const canvas = sharp({
+      create: {
+        width: width + railWidth,
+        height,
+        channels: 4,
+        background: { r: 7, g: 10, b: 16, alpha: 1 }
+      }
+    });
+
+    const out = await canvas
+      .composite([
+        { input: base, top: 0, left: 0 },
+        { input: Buffer.from(svg), top: 0, left: 0 }
+      ])
       .png()
       .toBuffer();
     return out;
@@ -348,4 +442,4 @@ async function annotateChartImage({ buffer, concepts, priceScale, planLevels }) 
   }
 }
 
-module.exports = { annotateChartImage };
+module.exports = { annotateChartImage, fmtPrice };

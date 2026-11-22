@@ -4531,18 +4531,28 @@ app.post("/api/admin/agent/chat", requireUser, async (req, res) => {
   if (!question) return res.status(400).json({ error: "Ask something first." });
 
   try {
-    const { adviseChat } = require("./agentAdvice");
+    const { adviseChat, quickAnswer, fallbackAnswer } = require("./agentAdvice");
     const { generateText } = require("./aiText");
     const sessionMoney = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
     const money =
       sessionMoney && sessionMoney.users !== null ? sessionMoney : (await readMoneyUnattended()) || sessionMoney;
     const facts = await buildAgentFacts({ money });
-    const result = await adviseChat({ question, facts, generateText });
-    if (!result.ok) return res.status(502).json({ error: result.error });
-    res.json({ text: result.text, question });
+
+    // Anything with a factual answer is answered from the facts, immediately.
+    // The model is for judgement, not for reciting a latency number, and the
+    // free quota is too scarce to spend on "how are you".
+    const quick = quickAnswer({ question, facts });
+    if (quick) return res.json({ text: quick, question, source: "facts" });
+
+    const result = await adviseChat({ question, facts, generateText, timeoutMs: 14000 });
+    if (result.ok) return res.json({ text: result.text, question, source: "model" });
+    return res.json({ text: fallbackAnswer({ facts }), question, source: "fallback" });
   } catch (err) {
     console.error("Agent chat failed:", err.message);
-    res.status(502).json({ error: `Could not answer: ${err.message}` });
+    res.json({
+      text: `I couldn't read the service just now (${err.message}). Try again in a minute — nothing was changed.`,
+      question
+    });
   }
 });
 
@@ -4727,18 +4737,16 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
 
       const money = await readMoneyUnattended();
       const facts = await buildAgentFacts({ money });
-      const { adviseChat } = require("./agentAdvice");
+      const { adviseChat, quickAnswer, fallbackAnswer } = require("./agentAdvice");
       const { generateText } = require("./aiText");
-      const result = await adviseChat({ question: question.slice(0, 800), facts, generateText });
-      if (!result.ok) {
-        const sent = await notify({
-          title: "001: quiet",
-          text: `${result.error} The model is out of quota or unreachable — not ignoring you. Open /admin for the full panel.`
-        });
-        if (sent.failed?.length) console.error("Inbox notice failed:", JSON.stringify(sent.failed));
-        return;
-      }
-      const sent = await notify({ title: "001", text: result.text });
+      const quick = quickAnswer({ question: question.slice(0, 800), facts });
+      const result = quick
+        ? { ok: true, text: quick }
+        : await adviseChat({ question: question.slice(0, 800), facts, generateText, timeoutMs: 14000 });
+      const sent = await notify({
+        title: "001",
+        text: result.ok ? result.text : fallbackAnswer({ facts })
+      });
       if (sent.failed?.length) console.error("Inbox answer delivery failed:", JSON.stringify(sent.failed));
     } catch (err) {
       console.error("001 inbox failed:", err.message);
@@ -4783,14 +4791,17 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
   setInterval(opsTick, OPS_INTERVAL_MS).unref();
   console.log(`Ops agent: on, checking every ${Math.round(OPS_INTERVAL_MS / 60000)} minutes`);
 
-  // The inbox is polled far more often than the health cycle, because waiting
-  // fifteen minutes for an answer feels like being ignored. Polling costs one
-  // HTTP request and no model call unless something was actually typed.
-  const INBOX_POLL_MS = Number(process.env.INBOX_POLL_MS) || 30 * 1000;
-  setTimeout(inboxTick, 45 * 1000).unref();
-  setInterval(inboxTick, INBOX_POLL_MS).unref();
-  if (process.env.NTFY_TOPIC) {
+  // 001 lives in /admin, not on a public topic. ntfy stays a one-way pager:
+  // alerts go out, but anything a stranger types into the topic does not come
+  // in, cannot spend model quota, and cannot be mistaken for King's voice.
+  // INBOX_POLL_MS switches the public inbox back on if that ever changes.
+  const INBOX_POLL_MS = Number(process.env.INBOX_POLL_MS) || 0;
+  if (INBOX_POLL_MS > 0) {
+    setTimeout(inboxTick, 45 * 1000).unref();
+    setInterval(inboxTick, INBOX_POLL_MS).unref();
     console.log(`001 inbox: listening on ntfy every ${Math.round(INBOX_POLL_MS / 1000)}s`);
+  } else {
+    console.log("001 inbox: off — he answers in /admin only");
   }
 } else {
   console.log("Ops agent: off (no RENDER_API_KEY or OPS_AGENT_ENABLED=false)");
