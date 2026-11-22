@@ -25,19 +25,12 @@ const rpcSafe = async (rpc, name, fallback = null) => {
   }
 };
 
-// Pulls everything the brief needs. Each call fails soft: one missing RPC
-// (because a migration was never run) must not blank the whole report.
-async function collectMoney({ rpc }) {
-  const [users, paying, paidRows, analytics, months, pending, days] = await Promise.all([
-    rpcSafe(rpc, "admin_user_count", null),
-    rpcSafe(rpc, "admin_paying_users_count", null),
-    rpcSafe(rpc, "admin_paid_summary", []),
-    rpcSafe(rpc, "admin_scan_analytics", { per_day: [], top_pairs: [], by_hour: [] }),
-    rpcSafe(rpc, "admin_month_comparison", null),
-    rpcSafe(rpc, "admin_list_pending_orders", []),
-    rpcSafe(rpc, "admin_purchase_day_pattern", [])
-  ]);
-
+// Turns the raw admin answers into the single object every report and every
+// model sees. Kept separate from fetching because there are now two ways in —
+// the owner's own session (dashboard) and the agent's own secret (unattended) —
+// and both must produce identical numbers. If they ever disagree, the dashboard
+// is right and the difference is a bug, so there is exactly one builder.
+function buildMoney({ users, paying, paidRows, analytics, months, pending, days }) {
   const rows = Array.isArray(paidRows) ? paidRows : [];
   const totalRevenue = rows.reduce((sum, r) => sum + Number(r.paid_usd || 0), 0);
   const totalPaidScans = rows.reduce((sum, r) => sum + Number(r.paid_scans || 0), 0);
@@ -62,6 +55,76 @@ async function collectMoney({ rpc }) {
       ? days.reduce((best, d) => (Number(d.revenue_usd) > Number(best.revenue_usd) ? d : best), days[0])
       : null
   };
+}
+
+// Pulls everything the brief needs through the caller's own Supabase session.
+// Each call fails soft: one missing RPC (because a migration was never run) must
+// not blank the whole report.
+async function collectMoney({ rpc }) {
+  const [users, paying, paidRows, analytics, months, pending, days] = await Promise.all([
+    rpcSafe(rpc, "admin_user_count", null),
+    rpcSafe(rpc, "admin_paying_users_count", null),
+    rpcSafe(rpc, "admin_paid_summary", []),
+    rpcSafe(rpc, "admin_scan_analytics", { per_day: [], top_pairs: [], by_hour: [] }),
+    rpcSafe(rpc, "admin_month_comparison", null),
+    rpcSafe(rpc, "admin_list_pending_orders", []),
+    rpcSafe(rpc, "admin_purchase_day_pattern", [])
+  ]);
+  return buildMoney({ users, paying, paidRows, analytics, months, pending, days });
+}
+
+// The unattended door. The admin readers in Postgres only answer the owner's
+// email, so an agent with no login cannot use them — and putting the
+// service-role key on the server to bypass that would give one process the whole
+// database. Instead there is one function, agent_money(), that takes a shared
+// secret and returns the same numbers; the secret is all the server has, and it
+// cannot read a single row beyond this summary. See supabase/agent_money.sql.
+const AGENT_KEYS = {
+  admin_user_count: "users",
+  admin_paying_users_count: "paying",
+  admin_paid_summary: "paid",
+  admin_scan_analytics: "analytics",
+  admin_month_comparison: "months",
+  admin_list_pending_orders: "pending",
+  admin_purchase_day_pattern: "days"
+};
+
+async function readAgentSnapshot({ url, anonKey, secret, timeoutMs = 15000 }) {
+  if (!url || !anonKey || !secret) throw new Error("agent money reader is not configured");
+  const res = await fetch(`${String(url).replace(/\/+$/, "")}/rest/v1/rpc/agent_money`, {
+    method: "POST",
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ p_secret: secret }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const text = await res.text().catch(() => "");
+  if (!res.ok) throw new Error(`agent_money ${res.status}: ${text.slice(0, 200)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("agent_money returned something that was not JSON");
+  }
+}
+
+async function collectMoneyViaAgent(opts) {
+  const raw = await readAgentSnapshot(opts);
+  const pick = (name, fallback) => {
+    const v = raw?.[AGENT_KEYS[name]];
+    return v === undefined || v === null ? fallback : v;
+  };
+  return buildMoney({
+    users: pick("admin_user_count", null),
+    paying: pick("admin_paying_users_count", null),
+    paidRows: pick("admin_paid_summary", []),
+    analytics: pick("admin_scan_analytics", { per_day: [], top_pairs: [], by_hour: [] }),
+    months: pick("admin_month_comparison", null),
+    pending: pick("admin_list_pending_orders", []),
+    days: pick("admin_purchase_day_pattern", [])
+  });
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -177,4 +240,4 @@ function renderMoneyBrief(m, analysis, advice) {
   return lines.join("\n");
 }
 
-module.exports = { collectMoney, analyse, renderMoneyBrief };
+module.exports = { collectMoney, collectMoneyViaAgent, readAgentSnapshot, buildMoney, analyse, renderMoneyBrief };

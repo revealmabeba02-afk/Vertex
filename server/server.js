@@ -250,6 +250,11 @@ const BINANCE_PAY_ID = (process.env.BINANCE_PAY_ID || "1283803211").trim();
 // countries and Whop needs a store review — a payment method that can't be
 // switched on is not a payment method.
 const PAYPAL_ME_HANDLE = (process.env.PAYPAL_ME_HANDLE || "").trim().replace(/^@/, "");
+// The agent's own key to the money numbers. It is not a database key: it only
+// unlocks agent_money(), a read-only summary function. That is deliberate —
+// the alternative (service_role on the server) would let one process read and
+// write every row in the database, and a summary is all the agents need.
+const AGENT_MONEY_SECRET = (process.env.AGENT_MONEY_SECRET || "").trim();
 const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
@@ -4325,8 +4330,31 @@ app.post("/api/admin/ops/command", requireUser, async (req, res) => {
 // change. Nothing here can send user emails or secrets — notify.js redacts on
 // the way out.
 const { notify, channels: notifyChannels } = require("./notify");
-const { collectMoney, analyse: analyseMoney, renderMoneyBrief } = require("./moneyBrief");
+const { collectMoney, collectMoneyViaAgent, analyse: analyseMoney, renderMoneyBrief } = require("./moneyBrief");
 const { DOCTRINE } = require("./agentDoctrine");
+
+// The unattended read: no session, no admin token, just the summary function.
+// Returns null instead of throwing when it is not configured or the SQL has not
+// been installed yet, so every caller can say "unknown" rather than fail — and
+// only complains once, because a log full of the same error is a log nobody
+// reads.
+let agentMoneyWarned = false;
+async function readMoneyUnattended() {
+  if (!AGENT_MONEY_SECRET) return null;
+  try {
+    return await collectMoneyViaAgent({
+      url: SUPABASE_URL,
+      anonKey: SUPABASE_ANON_KEY,
+      secret: AGENT_MONEY_SECRET
+    });
+  } catch (err) {
+    if (!agentMoneyWarned) {
+      agentMoneyWarned = true;
+      console.error("001 money read unavailable (run supabase/agent_money.sql):", err.message);
+    }
+    return null;
+  }
+}
 
 app.get("/api/admin/notify/channels", requireUser, (req, res) => {
   if ((req.user.email || "").toLowerCase() !== ADMIN_EMAIL) {
@@ -4367,7 +4395,11 @@ app.get("/api/admin/money/brief", requireUser, async (req, res) => {
     return res.status(403).json({ error: "Not authorized." });
   }
   try {
-    const data = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) });
+    const sessionMoney = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
+    // A session read that comes back empty usually means a migration is missing;
+    // the agent's own reader is a second opinion then, not a replacement.
+    const data =
+      sessionMoney && sessionMoney.users !== null ? sessionMoney : (await readMoneyUnattended()) || sessionMoney;
     const analysis = analyseMoney(data);
     let advice = null;
     if ((process.env.MONEY_BRIEF_AI || "true") !== "false") {
@@ -4437,7 +4469,9 @@ app.post("/api/admin/agent/advice", requireUser, async (req, res) => {
     const { generateText } = require("./aiText");
 
     const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 }).catch(() => null);
-    const money = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
+    const sessionMoney = await collectMoney({ rpc: (name) => supabaseRpc(name, {}, req.user.token) }).catch(() => null);
+    const money =
+      sessionMoney && sessionMoney.users !== null ? sessionMoney : (await readMoneyUnattended()) || sessionMoney;
 
     const facts = {
       service: snap
@@ -4526,6 +4560,67 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
     return lines.filter(Boolean).join("\n");
   };
 
+  // ---- Money watch ------------------------------------------------------
+  // The agents exist because money is the goal, so this is not an afterthought
+  // hung off the health check: every cycle 001 reads the same summary the
+  // dashboard reads, and speaks only when a number moved. Silent otherwise —
+  // an agent that reports "still $0" every 15 minutes gets muted, and a muted
+  // agent is no agent.
+  let lastMoney = null;
+  let moneyBriefDay = "";
+  const MONEY_BRIEF_HOUR_UTC = Number(process.env.MONEY_BRIEF_HOUR_UTC ?? 17); // 17:00 UTC = 19:00 SAST
+
+  const moneyWatch = async () => {
+    const money = await readMoneyUnattended();
+    if (!money) return;
+    const prev = lastMoney;
+    lastMoney = money;
+
+    if (!prev) {
+      console.log(
+        `Money: $${Number(money.revenueUsd).toFixed(2)} all-time, ${money.payingUsers ?? "?"} buyer(s), ${money.pendingOrders ?? "?"} pending`
+      );
+    } else {
+      const notes = [];
+      const gained = Number(money.revenueUsd) - Number(prev.revenueUsd);
+      if (gained > 0.004) {
+        notes.push(
+          `Money came in: +$${gained.toFixed(2)}. All-time is now $${Number(money.revenueUsd).toFixed(2)} across ${money.orders} order${money.orders === 1 ? "" : "s"}.`
+        );
+      }
+      const newBuyers = Number(money.payingUsers) - Number(prev.payingUsers);
+      if (Number.isFinite(newBuyers) && newBuyers > 0) {
+        notes.push(`${newBuyers} new paying customer${newBuyers === 1 ? "" : "s"} since my last check.`);
+      }
+      const newPending = Number(money.pendingOrders) - Number(prev.pendingOrders);
+      if (Number.isFinite(newPending) && newPending > 0) {
+        notes.push(
+          `${money.pendingOrders} payment${money.pendingOrders === 1 ? " is" : "s are"} waiting for you to approve. Someone tried to pay and stopped — that is the closest thing to money you have. ${SELF_URL}/admin`
+        );
+      }
+      if (notes.length) {
+        notify({ title: "001: money", text: notes.join("\n\n") })
+          .then((r) => {
+            if (r.failed?.length) console.error("Money notice failed:", JSON.stringify(r.failed));
+          })
+          .catch((err) => console.error("Money notice error:", err.message));
+      }
+    }
+
+    // One full brief in the evening, so the numbers arrive without anyone
+    // remembering to ask. No model call here: the arithmetic is the brief.
+    const day = new Date().toISOString().slice(0, 10);
+    if (moneyBriefDay !== day && new Date().getUTCHours() >= MONEY_BRIEF_HOUR_UTC) {
+      moneyBriefDay = day;
+      const analysis = analyseMoney(money);
+      notify({ title: "001: daily money brief", text: renderMoneyBrief(money, analysis, null) })
+        .then((r) => {
+          if (r.failed?.length) console.error("Daily brief failed:", JSON.stringify(r.failed));
+        })
+        .catch((err) => console.error("Daily brief error:", err.message));
+    }
+  };
+
   const opsTick = async () => {
     if (opsRunning) return;
     opsRunning = true;
@@ -4554,6 +4649,9 @@ if ((process.env.OPS_AGENT_ENABLED || "true") !== "false" && opsAgent.renderRead
     } finally {
       opsRunning = false;
     }
+    // Money is a separate concern from health: a healthy server earning nothing
+    // is the actual problem, so it is checked even when the health cycle failed.
+    moneyWatch().catch((err) => console.error("Money watch failed:", err.message));
   };
   setTimeout(opsTick, 2 * 60 * 1000).unref();
   setInterval(opsTick, OPS_INTERVAL_MS).unref();
