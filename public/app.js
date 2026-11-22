@@ -30,8 +30,8 @@
   const ONBOARD_KEY = "vertex_onboarded";
   const ONBOARD_STEPS = [
     { selector: "#symbol-input", title: "Pick a pair", body: "Type any pair or symbol — EURUSD, XAUUSD, US30, NAS100 — whatever you trade." },
-    { selector: ".scanform", title: "Choose your timeframe", body: "Set the timeframe you scan on, then hit scan. Vertex reads live price bars, no chart screenshot needed." },
-    { selector: "#scan-btn", title: "Get your plan", body: "In about 30 seconds you'll get bias, structure, entries, stop loss and take profit — a real trade plan, not just a signal." },
+    { selector: ".scanform", title: "Choose your timeframe", body: "Set the timeframe, then hit scan. Upload a chart screenshot or pick a pair." },
+    { selector: "#scan-btn", title: "Get your plan", body: "In seconds you'll get bias, structure, entries, stop loss and take profit — a real trade plan, not just a signal." },
     { selector: ".sidebar, .mobile-topbar", title: "Everything else lives here", body: "History, Credits, Settings and Help are all in the menu. Your free scans reset every day." }
   ];
 
@@ -633,9 +633,8 @@
 
   // --------------------------------------------------------------
   // Scan mode: upload a chart screenshot, or name a pair. The timeframe
-  // stays shared because both paths need one. The Upload tab is the default
-  // whenever the server reports a vision key; otherwise the app opens on the
-  // pair scanner and explains why.
+  // stays shared because both paths need one. Upload is the default; the
+  // pair scanner is one tap away.
   // --------------------------------------------------------------
   function setScanMode(mode) {
     scanMode = mode === "pair" ? "pair" : "image";
@@ -729,7 +728,7 @@
     });
   }
 
-  setScanMode(imageScanEnabled ? "image" : "pair");
+  setScanMode("image");
 
   // ---- Watchlist: a quick-glance strip of saved pairs, stored per-browser
   // in localStorage (no backend table needed for a convenience list like
@@ -1584,7 +1583,7 @@
   // Hard ceiling on how long a scan is allowed to sit on the loading screen.
   // The backend now budgets itself to 20s, so 25s here means the user hears
   // "that took too long, try again" instead of watching a spinner with no end.
-  const SCAN_TIMEOUT_MS = 25000;
+  const SCAN_TIMEOUT_MS = 20000;
 
   const LAST_SCAN_KEY = "vertex_last_scan";
   function saveLastScan(symbol, timeframe) {
@@ -2503,6 +2502,7 @@
 
     const firstEntry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
     const firstTarget = Array.isArray(a.take_profit) ? a.take_profit[0] : null;
+    const stop = a.stop_loss || {};
     const candles = Array.isArray(a.candles) ? a.candles : [];
 
     let swingLow = null;
@@ -2517,8 +2517,9 @@
 
     const rows = [
       ["entry", firstEntry && firstEntry.entry_raw, firstEntry && firstEntry.entry_zone],
-      ["level", firstNumericLevel(keyLevels), keyLevelText],
+      ["stop", stop.value_raw, stop.suggestion],
       ["target", firstTarget && firstTarget.target_raw, firstTarget && firstTarget.target],
+      ["level", firstNumericLevel(keyLevels), keyLevelText],
       ["low", swingLow, null],
       ["high", swingHigh, null]
     ];

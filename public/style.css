@@ -874,6 +874,23 @@ body::after {
   text-align: center;
 }
 
+.scan-credit-line {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.scan-credit-line a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.scan-credit-line a:hover {
+  text-decoration: underline;
+}
+
 .low-balance-nudge {
   display: block;
   margin: 14px 0 0;
@@ -1415,11 +1432,10 @@ body.scanning .scan-hud {
 .chart-wrap__swatch--low { background: color-mix(in srgb, var(--bear) 60%, transparent); }
 .chart-wrap__swatch--high { background: color-mix(in srgb, var(--bull) 55%, transparent); }
 
-/* Five-level strip: Entry / Key level / Target / Low / High. This is the
-   cover-page promise made literal at the top of every result. */
+/* Plan strip: Entry / Stop / Target first, then Key level / Low / High. */
 .keyline {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 8px;
   margin: 4px 0 16px;
 }
@@ -1466,6 +1482,12 @@ body.scanning .scan-hud {
   background: color-mix(in srgb, var(--accent) 7%, color-mix(in srgb, var(--panel) 70%, transparent));
 }
 .keyline__item--entry .keyline__value { color: var(--accent); }
+
+.keyline__item--stop {
+  border-color: color-mix(in srgb, var(--bear) 30%, var(--border));
+  background: color-mix(in srgb, var(--bear) 6%, color-mix(in srgb, var(--panel) 70%, transparent));
+}
+.keyline__item--stop .keyline__value { color: var(--bear); }
 
 .keyline__item--level {
   border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
@@ -2222,6 +2244,52 @@ html.lightbox-open body { overflow: hidden; }
   color: var(--text-faint);
 }
 
+.result-cta {
+  margin-top: 22px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.result-cta__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.result-cta__btn {
+  width: auto;
+  min-width: 168px;
+  margin: 0;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.result-details:not([open]) > *:not(summary) {
+  display: none;
+}
+
+.result-details summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.result-details summary::marker {
+  color: var(--accent);
+}
+
+.result-details[open] summary {
+  margin-bottom: 12px;
+}
+
 .ghost-btn {
   margin-top: 20px;
   align-self: flex-start;
@@ -2759,14 +2827,30 @@ html.lightbox-open body { overflow: hidden; }
   text-decoration: none;
 }
 
-.how__credits-note {
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--text-faint);
+.how__credits-card {
+  margin-top: 22px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
 }
-.how__credits-note a {
-  color: var(--accent);
-  text-decoration: underline;
+
+.how__credits-card p {
+  max-width: 52ch;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.how__credits-card .how__cta {
+  margin-top: 18px;
+}
+
+.how__back {
+  display: inline-flex;
+  margin-top: 18px;
+  text-decoration: none;
 }
 
 .how__steps {

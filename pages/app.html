@@ -146,6 +146,7 @@
 
   <nav class="sidenav" role="tablist" aria-label="Sections">
     <a class="navpill is-active" href="#scan" data-view="scan" role="tab" aria-selected="true" aria-controls="view-scan" id="tab-scan">Scanner</a>
+    <a class="navpill" href="#how" data-view="how" role="tab" aria-selected="false" aria-controls="view-how" id="tab-how">How</a>
     <a class="navpill" href="#watch" data-view="watch" role="tab" aria-selected="false" aria-controls="view-watch" id="tab-watch">Watcher</a>
     <a class="navpill" href="#credits" data-view="credits" role="tab" aria-selected="false" aria-controls="view-credits" id="tab-credits">Credits</a>
     <a class="navpill" href="#history" data-view="history" role="tab" aria-selected="false" aria-controls="view-history" id="tab-history">History</a>
@@ -178,14 +179,14 @@
  <div class="view" id="view-scan" role="tabpanel" aria-labelledby="tab-scan">
 
   <!-- ============ HERO + INPUT ============ -->
-  <section class="hero" aria-label="Upload and configure">
+  <section class="hero" aria-label="Scan a chart">
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
-      AI-powered analysis
+      Live market read
     </p>
     <span id="streak-badge" class="streak-badge" hidden>🔥 <span id="streak-value">0</span> day streak</span>
     <h1 class="hero__title">Scan any chart</h1>
-    <p class="hero__lede">Drop a chart screenshot or name a pair — structure, levels and a trade plan in about 30 seconds.</p>
+    <p class="hero__lede">Upload a chart screenshot or pick a pair. Vertex gives you entry, stop and target in seconds.</p>
 
     <div class="session-clock" id="session-clock" aria-label="Market session status">
       <div class="session-clock__pill" data-session="sydney"><span class="session-clock__dot"></span><span class="session-clock__name">Sydney</span></div>
@@ -287,25 +288,13 @@
         </select>
       </fieldset>
 
-      <div class="concepts-row" aria-hidden="true">
-        <span class="concepts-row__label">We look for</span>
-        <div class="concepts-row__pills">
-          <span class="concept-pill">Liquidity sweep</span>
-          <span class="concept-pill">Order block</span>
-          <span class="concept-pill">Change of character</span>
-          <span class="concept-pill">Fair value gap</span>
-          <span class="concept-pill">Break of structure</span>
-          <span class="concept-pill">Kill zones</span>
-          <span class="concept-pill">VWAP</span>
-        </div>
-      </div>
-
       <button type="submit" id="scan-btn" class="scan-btn" disabled>
-        <span class="scan-btn__label">Scan chart</span>
+        <span class="scan-btn__label">Scan now</span>
         <span class="scan-btn__spinner" aria-hidden="true"></span>
       </button>
 
       <p id="form-error" class="form-error" role="alert" hidden></p>
+      <p class="scan-credit-line">2 free scans every day. <a href="#how" data-view="how">How it works</a> · <a href="#credits" data-view="credits">Buy credits</a></p>
       <a href="#credits" id="low-balance-nudge" class="low-balance-nudge" hidden>You're out of free scans for today — <span>top up credits to keep scanning →</span></a>
     </form>
 
@@ -434,22 +423,24 @@
 
       <p id="res-low-confidence-note" class="settings-row__desc" style="margin: -4px 0 14px; padding: 10px 12px; border: 1px solid var(--amber, #d97706); border-radius: 8px; color: var(--amber, #d97706);" hidden>⚠ Low confidence read — the chart doesn't show a clean setup right now. Consider waiting for a clearer signal rather than trading this one.</p>
 
-      <!-- The five levels the site promises on the cover page — Entry,
-           Key level, Target, Low and High — shown as a single strip so the
-           read is visible before anyone scrolls. Each pill hides itself when
-           the scan genuinely has no number for it. -->
+      <!-- The plan at a glance: Entry, Stop, Target first, then context
+           levels. Each pill hides itself when the scan has no real number. -->
       <div id="res-keyline" class="keyline" hidden>
         <div class="keyline__item keyline__item--entry" id="res-keyline-entry-item" hidden>
           <span class="keyline__label">Entry</span>
           <span class="keyline__value" id="res-keyline-entry">—</span>
         </div>
-        <div class="keyline__item keyline__item--level" id="res-keyline-level-item" hidden>
-          <span class="keyline__label">Key level</span>
-          <span class="keyline__value" id="res-keyline-level">—</span>
+        <div class="keyline__item keyline__item--stop" id="res-keyline-stop-item" hidden>
+          <span class="keyline__label">Stop</span>
+          <span class="keyline__value" id="res-keyline-stop">—</span>
         </div>
         <div class="keyline__item keyline__item--target" id="res-keyline-target-item" hidden>
           <span class="keyline__label">Target</span>
           <span class="keyline__value" id="res-keyline-target">—</span>
+        </div>
+        <div class="keyline__item keyline__item--level" id="res-keyline-level-item" hidden>
+          <span class="keyline__label">Key level</span>
+          <span class="keyline__value" id="res-keyline-level">—</span>
         </div>
         <div class="keyline__item keyline__item--low" id="res-keyline-low-item" hidden>
           <span class="keyline__label">Low</span>
@@ -508,17 +499,12 @@
         </section>
 
         <section class="result-section result-section--wide">
-          <h2 class="result-section__title">Market structure</h2>
+          <h2 class="result-section__title">Why this read</h2>
           <p id="res-trend" class="result-section__body"></p>
           <div id="res-pattern-wrap" class="chip-row" hidden>
             <span class="chip">Pattern <strong id="res-pattern"></strong></span>
           </div>
           <ul id="res-levels" class="level-list"></ul>
-        </section>
-
-        <section class="result-section result-section--wide" id="res-concepts-wrap" hidden>
-          <h2 class="result-section__title">Concepts detected</h2>
-          <ul id="res-concepts" class="level-list"></ul>
         </section>
 
         <section class="result-section result-section--wide trade-plan">
@@ -615,6 +601,11 @@
           </details>
         </section>
 
+        <details class="result-section result-section--wide result-details" id="res-concepts-wrap" hidden>
+          <summary class="result-section__title">Detected concepts</summary>
+          <ul id="res-concepts" class="level-list"></ul>
+        </details>
+
         <section class="result-section result-section--wide" id="res-notes-wrap">
           <h2 class="result-section__title">Notes</h2>
           <p id="res-notes" class="result-section__body"></p>
@@ -640,7 +631,12 @@
       <p id="res-disclaimer" class="result__disclaimer"></p>
 
       <button type="button" id="rescan-same-btn" class="ghost-btn">Rescan this chart</button>
-      <button type="button" id="scan-again-btn" class="ghost-btn">Scan another chart</button>
+      <button type="button" id="scan-again-btn" class="ghost-btn">Scan another pair</button>
+
+      <div class="result-cta">
+        <p class="result-cta__title">Need another scan?</p>
+        <a class="scan-btn result-cta__btn" href="#credits" data-view="credits">Buy more scans</a>
+      </div>
     </div>
 
     <div id="state-error" class="state state--error" hidden>
@@ -655,33 +651,39 @@
  </div>
 
   <!-- ============ HOW IT WORKS (own tab) ============ -->
-  <section class="view how is-retired" id="view-how" role="tabpanel" aria-labelledby="tab-how" hidden>
+  <section class="view how" id="view-how" role="tabpanel" aria-labelledby="tab-how" hidden>
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
-      Three steps · seconds per scan
+      Simple steps
     </p>
     <h1 class="hero__title">How it works</h1>
-    <p class="hero__lede">From a pair to a structure read without leaving the page.</p>
+    <p class="hero__lede">Upload a chart or pick a pair, choose your timeframe, then scan. That’s it.</p>
+
     <ol class="how__steps">
       <li class="how__step">
         <span class="how__num">01</span>
-        <h3>Enter the pair</h3>
-        <p>Type the symbol — EURUSD, XAUUSD, US30, NAS100, and more. No screenshot needed.</p>
+        <h3>Choose your chart</h3>
+        <p>Upload a screenshot, or switch to “Pick a pair” and type the symbol — EURUSD, XAUUSD, US30, NAS100, and more.</p>
       </li>
       <li class="how__step">
         <span class="how__num">02</span>
         <h3>Pick the timeframe</h3>
-        <p>Tell the scanner which candles it is reading so the read is scaled right.</p>
+        <p>Match the timeframe on your chart so the read is scaled correctly.</p>
       </li>
       <li class="how__step">
         <span class="how__num">03</span>
-        <h3>Get the signal</h3>
-        <p>A clear BUY or SELL call (or an honest "no trade" if nothing's clean) — plus structure, levels, entries, stop, targets and what would prove it wrong, calculated from live price bars.</p>
+        <h3>Scan and read the plan</h3>
+        <p>You get a clear BUY, SELL or “no trade” call, then entry, stop and target. The full explanation is there when you want it.</p>
       </li>
     </ol>
 
-    <a class="scan-btn how__cta" href="#scan" data-view="scan">Scan a pair</a>
-    <p class="how__credits-note">2 free scans every day. Once those are used up, <a href="#credits" data-view="credits">buy credits</a> to keep getting signals.</p>
+    <div class="how__credits-card">
+      <h2 class="result-section__title">Credits</h2>
+      <p>2 free scans every day. When those are used up, buy a bundle and keep scanning. Credits never expire.</p>
+      <a class="scan-btn how__cta" href="#credits" data-view="credits">Buy credits</a>
+    </div>
+
+    <a class="ghost-btn how__back" href="#scan" data-view="scan">Back to scanner</a>
 
     <p class="disclaimer-note">Output is technical, AI generated analysis of live price data. It is not financial advice and not a guarantee of any market outcome.</p>
   </section>

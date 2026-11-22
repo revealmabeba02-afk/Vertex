@@ -24,8 +24,13 @@
 .btn--primary {
   border: none;
   color: var(--action-ink);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--action) 88%, #fff), var(--action));
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 10px 30px -12px color-mix(in srgb, var(--action) 70%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.06) 42%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, color-mix(in srgb, var(--action) 88%, #fff), var(--action));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 10px 18px -14px rgba(255, 255, 255, 0.7),
+    0 10px 30px -12px color-mix(in srgb, var(--action) 70%, transparent);
 }
 .btn--primary:hover { filter: brightness(1.06); }
 
@@ -94,18 +99,6 @@
   gap: clamp(28px, 5vh, 56px);
   max-width: 1040px;
   text-align: center;
-}
-
-.lhero__chart {
-  display: block;
-  width: 100%;
-  height: clamp(110px, 16vw, 200px);
-  opacity: 0.85;
-  pointer-events: none;
-}
-
-@media (max-width: 640px) {
-  .lhero__chart { height: clamp(80px, 26vw, 140px); opacity: 0.7; }
 }
 
 .lhero__badgewrap {
@@ -770,43 +763,7 @@
    one block so the imagery can be swapped or removed in one place.
    =========================================================== */
 
-/* ---- Landing hero: cinematic backdrop behind the badge and title ---- */
-.page-landing .lhero { isolation: isolate; }
-
-.page-landing .lhero::before {
-  content: "";
-  position: absolute;
-  top: clamp(-140px, -10vw, -60px);
-  left: 50%;
-  width: min(1240px, calc(100% + 18vw));
-  height: calc(100% + clamp(110px, 13vw, 200px));
-  transform: translateX(-50%);
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(56% 50% at 50% 32%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 74%),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg) 30%, transparent) 0%,
-      color-mix(in srgb, var(--bg) 68%, transparent) 54%,
-      var(--bg) 96%
-    ),
-    url("/img/hero-tech.jpg") center 42% / cover no-repeat;
-  opacity: 0.92;
-  -webkit-mask-image: radial-gradient(70% 64% at 50% 32%, #000 34%, transparent 84%);
-  mask-image: radial-gradient(70% 64% at 50% 32%, #000 34%, transparent 84%);
-}
-
-@media (max-width: 640px) {
-  .page-landing .lhero::before {
-    top: clamp(-90px, -14vw, -50px);
-    width: calc(100% + 28px);
-    height: calc(100% + 90px);
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bg) 34%, transparent) 0%, color-mix(in srgb, var(--bg) 74%, transparent) 58%, var(--bg) 96%),
-      url("/img/hero-tech-sm.jpg") center 40% / cover no-repeat;
-  }
-}
+/* The landing hero uses the plain page background — no tech photo. */
 
 /* ---- App: the same material, but only just visible behind panels ---- */
 .page-app .app-shell::before {
@@ -841,7 +798,6 @@
 }
 
 /* Light theme needs far less of a dark photo behind dark text. */
-:root[data-theme="light"] .page-landing .lhero::before { opacity: 0.3; }
 :root[data-theme="light"] .page-app .app-shell::before { opacity: 0.1; }
 :root[data-theme="light"] .cta-band::before { opacity: 0.14; }
 
@@ -851,23 +807,44 @@
    This is what makes the product look like it knows what it
    is doing: the exact layout users get, showing actual levels.
    =========================================================== */
+.hero-proof {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
 .sample-read {
+  position: relative;
+  overflow: hidden;
   max-width: 860px;
   margin: 0 auto;
-  padding: 22px 24px 18px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  text-align: left;
+  padding: 24px 26px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 18px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-alt) 72%, transparent), color-mix(in srgb, var(--panel) 88%, transparent));
+    radial-gradient(100% 70% at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-alt) 78%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
+  box-shadow:
+    0 30px 80px -34px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.sample-read::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent), transparent);
+  pointer-events: none;
 }
 .sample-read__head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 10px 14px;
 }
 .sample-read__pair {
   font-family: var(--font-mono);
@@ -875,6 +852,19 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text);
+}
+.sample-read__call {
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bull) 86%, #fff), var(--bull));
+  color: #03110b;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 8px 20px -10px color-mix(in srgb, var(--bull) 55%, transparent);
 }
 .sample-read__bias {
   padding: 3px 10px;
@@ -893,16 +883,17 @@
   border-color: color-mix(in srgb, var(--bear) 32%, transparent);
 }
 .sample-read__conf {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 .sample-read__structure {
-  margin: 10px 0 14px;
-  font-size: 13.5px;
+  margin: 12px 0 16px;
+  font-size: 14px;
   line-height: 1.55;
-  color: var(--text-dim);
+  color: var(--text);
 }
 .sample-read__chips {
   display: flex;
@@ -920,11 +911,23 @@
   font-weight: 600;
 }
 .sample-read__note {
-  margin: 14px 0 0;
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
   font-size: 11.5px;
   color: var(--text-faint);
 }
-.sample-read .keyline { margin-bottom: 8px; }
+.sample-read .keyline {
+  gap: 9px;
+  margin-bottom: 10px;
+}
+.sample-read .keyline__item {
+  padding: 12px 13px;
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+.sample-read .keyline__value {
+  font-size: 18px;
+}
 
 @media (max-width: 700px) {
   .sample-read { padding: 18px 16px 14px; }
