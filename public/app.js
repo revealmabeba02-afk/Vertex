@@ -3550,6 +3550,12 @@
   const paypalPanelPaid = document.getElementById("paypal-panel-paid");
   const paypalPanelCancel = document.getElementById("paypal-panel-cancel");
   const paypalPanelStatus = document.getElementById("paypal-panel-status");
+  const bankPanel = document.getElementById("bank-panel");
+  const bankPanelAmount = document.getElementById("bank-panel-amount");
+  const bankRequestBtn = document.getElementById("bank-request-btn");
+  const bankPaidBtn = document.getElementById("bank-paid-btn");
+  const bankCancelBtn = document.getElementById("bank-cancel-btn");
+  const bankPanelStatus = document.getElementById("bank-panel-status");
 
   if (PAYPAL_HANDLE) {
     document.querySelectorAll(".bundle-card__paypal").forEach((btn) => { btn.hidden = false; });
@@ -3684,6 +3690,71 @@
     });
   }
 
+  function openBankPanel(bundle) {
+    const info = PAYPAL_BUNDLES[bundle];
+    if (!info || !bankPanel) return;
+    bankPanel.dataset.bundle = bundle;
+    bankPanel.dataset.amount = info.amount.toFixed(2);
+    bankPanelAmount.textContent = `$${info.amount.toFixed(2)}`;
+    bankPanelStatus.hidden = true;
+    bankPanelStatus.textContent = "";
+    bankPanelStatus.classList.remove("credits-status--error");
+    bankRequestBtn.disabled = false;
+    bankPaidBtn.disabled = false;
+    bankRequestBtn.textContent = "Request bank details";
+    bankPaidBtn.textContent = "I've paid";
+    bankPanel.hidden = false;
+    bankPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function sendBankTicket(kind) {
+    const amount = Number(bankPanel.dataset.amount);
+    const bundle = bankPanel.dataset.bundle || "bundle";
+    const label = PAYPAL_BUNDLES[bundle]?.label || bundle;
+    const session = await Auth.getSession();
+    if (!session) {
+      bankPanelStatus.hidden = false;
+      bankPanelStatus.textContent = "Please log in first.";
+      bankPanelStatus.classList.add("credits-status--error");
+      return;
+    }
+    const message = kind === "request"
+      ? `BANK TRANSFER REQUEST\nBundle: ${label}\nAmount: $${amount.toFixed(2)}\nPlease send the bank details.`
+      : `BANK TRANSFER CLAIM\nBundle: ${label}\nAmount shown: $${amount.toFixed(2)}\nI have sent the bank transfer. Please check and add the credits.`;
+    const btn = kind === "request" ? bankRequestBtn : bankPaidBtn;
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    bankPanelStatus.hidden = true;
+    try {
+      const res = await fetch("/api/support", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not send that just now.");
+      bankPanelStatus.hidden = false;
+      bankPanelStatus.textContent = kind === "request"
+        ? "Request sent. Check Help for the bank details."
+        : "Claim sent. The owner will check the bank and add your credits.";
+      bankPanelStatus.classList.remove("credits-status--error");
+      btn.textContent = kind === "request" ? "Request sent" : "Claim sent";
+    } catch (err) {
+      bankPanelStatus.hidden = false;
+      bankPanelStatus.textContent = err.message || "Could not send that just now.";
+      bankPanelStatus.classList.add("credits-status--error");
+      btn.disabled = false;
+      btn.textContent = kind === "request" ? "Request bank details" : "I've paid";
+    }
+  }
+
+  if (bankRequestBtn) bankRequestBtn.addEventListener("click", () => sendBankTicket("request"));
+  if (bankPaidBtn) bankPaidBtn.addEventListener("click", () => sendBankTicket("paid"));
+  if (bankCancelBtn) bankCancelBtn.addEventListener("click", () => { bankPanel.hidden = true; });
+
   if (paypalPanelPaid) {
     paypalPanelPaid.addEventListener("click", async () => {
       const amount = Number(paypalPanel.dataset.amount);
@@ -3731,6 +3802,11 @@
       const paypalBtn = e.target.closest(".bundle-card__paypal");
       if (paypalBtn) {
         openPaypalPanel(paypalBtn.dataset.paypalBundle);
+        return;
+      }
+      const bankBtn = e.target.closest(".bundle-card__bank");
+      if (bankBtn) {
+        openBankPanel(bankBtn.dataset.bankBundle);
         return;
       }
       const btn = e.target.closest(".bundle-card__btn");

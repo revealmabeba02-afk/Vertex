@@ -3210,19 +3210,31 @@ html.lightbox-open body { overflow: hidden; }
   width: 100%;
 }
 
-.bundle-card__paypal {
+.bundle-card__pay-options {
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.bundle-card__paypal,
+.bundle-card__bank {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-faint);
+  color: inherit;
   font-family: var(--font-sans);
   font-size: 12px;
   text-decoration: underline;
   cursor: pointer;
 }
 
-.bundle-card__paypal:hover {
+.bundle-card__paypal:hover,
+.bundle-card__bank:hover {
   color: var(--accent);
 }
 

@@ -717,7 +717,11 @@
         <p class="bundle-card__price">$4.99</p>
         <p class="bundle-card__scans">10 scans · $0.50 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="quick">Buy Quick</button>
-        <button type="button" class="bundle-card__paypal" data-paypal-bundle="quick" hidden>or pay with PayPal</button>
+        <div class="bundle-card__pay-options">
+          <button type="button" class="bundle-card__paypal" data-paypal-bundle="quick" hidden>PayPal</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="bundle-card__bank" data-bank-bundle="quick">Bank transfer</button>
+        </div>
       </div>
       <div class="bundle-card" data-bundle="starter">
         <p class="bundle-card__name">Starter</p>
@@ -725,7 +729,11 @@
         <p class="bundle-card__price">$8.99</p>
         <p class="bundle-card__scans">20 scans · $0.45 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="starter">Buy Starter</button>
-        <button type="button" class="bundle-card__paypal" data-paypal-bundle="starter" hidden>or pay with PayPal</button>
+        <div class="bundle-card__pay-options">
+          <button type="button" class="bundle-card__paypal" data-paypal-bundle="starter" hidden>PayPal</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="bundle-card__bank" data-bank-bundle="starter">Bank transfer</button>
+        </div>
       </div>
       <div class="bundle-card bundle-card--popular" data-bundle="trader">
         <span class="bundle-card__badge">Most popular</span>
@@ -734,7 +742,11 @@
         <p class="bundle-card__price">$12.99</p>
         <p class="bundle-card__scans">60 scans · $0.22 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="trader">Buy Trader</button>
-        <button type="button" class="bundle-card__paypal" data-paypal-bundle="trader" hidden>or pay with PayPal</button>
+        <div class="bundle-card__pay-options">
+          <button type="button" class="bundle-card__paypal" data-paypal-bundle="trader" hidden>PayPal</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="bundle-card__bank" data-bank-bundle="trader">Bank transfer</button>
+        </div>
       </div>
       <div class="bundle-card" data-bundle="pro">
         <p class="bundle-card__name">Pro</p>
@@ -742,7 +754,11 @@
         <p class="bundle-card__price">$19.99</p>
         <p class="bundle-card__scans">150 scans · $0.13 per scan</p>
         <button type="button" class="scan-btn bundle-card__btn" data-bundle="pro">Buy Pro</button>
-        <button type="button" class="bundle-card__paypal" data-paypal-bundle="pro" hidden>or pay with PayPal</button>
+        <div class="bundle-card__pay-options">
+          <button type="button" class="bundle-card__paypal" data-paypal-bundle="pro" hidden>PayPal</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="bundle-card__bank" data-bank-bundle="pro">Bank transfer</button>
+        </div>
       </div>
     </div>
 
@@ -761,6 +777,23 @@
         <button type="button" class="ghost-btn" id="paypal-panel-cancel">Cancel</button>
       </div>
       <p class="credits-status" id="paypal-panel-status" hidden></p>
+    </div>
+
+    <div class="paypal-panel" id="bank-panel" hidden>
+      <div class="paypal-panel__head">
+        <p class="paypal-panel__title">Pay by bank transfer</p>
+        <p class="paypal-panel__amount" id="bank-panel-amount">$0.00</p>
+      </div>
+      <p class="paypal-panel__hint">
+        Bank details are never stored in Vertex. Request them and the owner will send the account details for your country.
+        Use your Vertex email as the payment reference.
+      </p>
+      <div class="paypal-panel__actions">
+        <button type="button" class="btn btn--primary" id="bank-request-btn">Request bank details</button>
+        <button type="button" class="btn btn--ghost" id="bank-paid-btn">I've paid</button>
+        <button type="button" class="ghost-btn" id="bank-cancel-btn">Cancel</button>
+      </div>
+      <p class="credits-status" id="bank-panel-status" hidden></p>
     </div>
 
     <div class="custom-amount-card is-retired" id="custom-amount-card">
@@ -821,7 +854,7 @@
       </div>
     </div>
 
-    <p class="disclaimer-note">Credits never expire. Payments are matched automatically within about a minute — if yours is slower, it'll still land, just check back here.</p>
+    <p class="disclaimer-note">Credits never expire. Whop payments are credited automatically. PayPal and bank transfers are checked and added manually.</p>
   </section>
 
   <!-- ============ NEWS (own tab) ============ -->
