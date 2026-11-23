@@ -487,8 +487,8 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   // attempt a smaller slice of it — a fast "try again" beats a spinner that
   // makes the product look broken. A 1400px chart answers in 3-8s when the model
   // is healthy, so this only bites when something is actually wrong.
-  const OVERALL_BUDGET_MS = 20000;
-  const ATTEMPT_TIMEOUT_MS = 11000;
+  const OVERALL_BUDGET_MS = 12000;
+  const ATTEMPT_TIMEOUT_MS = 8000;
 
   for (const model of GEMINI_IMAGE_MODELS) {
     const remaining = OVERALL_BUDGET_MS - (Date.now() - startedAt);
@@ -528,10 +528,10 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
 
     console.error("Image analysis error (gemini/" + model + "):", response.status, data);
 
-    // A model that is retired, overloaded or missing is worth retrying on the
-    // next name in the list. Auth, credit and quota failures are not — the
-    // next model would fail exactly the same way.
-    const retryable = response.status === 404 || response.status === 503 || response.status === 429;
+    // A retired or overloaded model is worth retrying on the next name.
+    // Quota (429) is not: every model shares the same daily cap, so retrying
+    // only makes the user wait. Fail fast with the "use pair scanner" copy.
+    const retryable = response.status === 404 || response.status === 503;
     if (!retryable) throw visionError("gemini", response.status, data);
     lastFailure = { kind: "http", status: response.status, data };
   }
@@ -592,7 +592,7 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
   try {
     payload = parseJsonObject(text);
   } catch (err) {
-    const e = new Error("The image reader sent back something unreadable. Please try again.");
+    const e = new Error("The image reader couldn't read that screenshot. Use Pick a pair for an instant read, or try a clearer screenshot.");
     e.status = 502;
     throw e;
   }

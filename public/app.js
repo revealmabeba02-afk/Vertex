@@ -1719,7 +1719,9 @@
       const bundleSuggestionEl = document.getElementById("bundle-suggestion");
       if (bundleSuggestionEl) bundleSuggestionEl.hidden = true;
       if (err.name === "AbortError") {
-        errorText.textContent = "This scan is taking longer than expected. Please check your connection and try again.";
+        errorText.textContent = imageFile
+          ? "The image scan took too long. Use Pick a pair for an instant read, or try again."
+          : "The scan took too long. Please try again — you were not charged twice.";
       } else if (err.code === "no_credits") {
         errorText.innerHTML = "";
         errorText.appendChild(document.createTextNode("You're out of free scans for today and have no credits left. "));
