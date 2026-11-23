@@ -108,6 +108,8 @@ Deliver, in plain text with clear section headers:
 2. POSTS — 6 ready-to-post items: 2 TikTok scripts (hook line first, 20-30s), 2 Instagram
    captions with hashtag sets, 1 YouTube Shorts script, 1 X/Twitter post. Each must be about
    a specific Vertex capability (bias read, screenshot scan, the Watcher), not generic motivation.
+   Lead every post with a result or a number in the first line. Use the LIVE READ block exactly
+   as given — never invent a price, confidence or R:R. Keep captions short and spoken.
 3. BEST POSTING TIMES — for a South African audience on those platforms.
 4. ONE EXPERIMENT — a single thing to try this week that costs nothing.`,
   },
@@ -157,33 +159,44 @@ function extractGroundedText(data) {
   return { text, sources, searchQueries: cand?.groundingMetadata?.webSearchQueries || [] };
 }
 
-function fallbackPostsBrief(reason) {
+function fallbackPostsBrief(reason, read) {
+  const key = String(read?.key || "XAUUSD:H1");
+  const pair = key.split(":")[0] || "XAUUSD";
+  const tf = key.split(":")[1] || "H1";
+  const bias = read?.bias || "neutral";
+  const conf = Number.isFinite(read?.confidence) ? read.confidence : "—";
+  const fmt = (v) => Number.isFinite(v) ? (Math.abs(v) >= 100 ? v.toFixed(2) : v.toFixed(5)) : "—";
+  const entry = fmt(read?.entry);
+  const stop = fmt(read?.stop);
+  const target = fmt(read?.target);
+  const hasPlan = Number.isFinite(read?.entry) && Number.isFinite(read?.stop) && Number.isFinite(read?.target);
+  const levels = hasPlan
+    ? `Entry ${entry} · Stop ${stop} · Target ${target}`
+    : "No clean entry, stop and target lined up right now.";
+  const hook = hasPlan
+    ? `${pair} just gave a clean ${String(bias).toLowerCase()} read.`
+    : `No clean trade on ${pair} right now.`;
   return {
     id: Date.now(),
     at: new Date().toISOString(),
     kind: "posts",
     label: "Starter posts (AI unavailable)",
     text:
-      `AI research is unavailable right now (${reason}). These are ready to post; use the Post templates below to add live numbers.\n\n` +
-      `1. TikTok — “You don't need another indicator.”\n` +
-      `Upload the chart, pick the timeframe, and Vertex gives you bias, entry, stop and target in seconds. Two free scans a day.\n\n` +
-      `2. TikTok — “Stop guessing where the stop goes.”\n` +
-      `Vertex marks the entry, the stop and the target from live price bars. You still make the call. Two free scans a day.\n\n` +
+      `AI research is unavailable right now (${reason}). These are ready to post using the latest Watcher read.\n\n` +
+      `1. TikTok — “${hook}”\n` +
+      `${pair} ${tf} — ${bias}${conf !== "—" ? ` (${conf}% confidence)` : ""}.\n${levels}\nThat's the plan, not a prediction. Two free scans a day.\n\n` +
+      `2. TikTok — “The 3-second check before you enter ${pair}.”\n` +
+      `1. Bias: ${bias}\n2. Entry: ${entry}\n3. Wrong at: ${stop}\nIf they don't line up, don't click. Two free scans a day.\n\n` +
       `3. Instagram\n` +
-      `One chart. Five numbers. No indicator soup.\n` +
-      `Bias, entry, stop, target, and what proves it wrong — in seconds.\n` +
-      `#forex #trading #priceaction #xauusd\n\n` +
+      `${hook}\n\n${pair} ${tf} — ${bias}${conf !== "—" ? ` (${conf}% confidence)` : ""}.\n${levels}\n\nTwo free scans a day. No card needed.\n#forex #${pair.toLowerCase()} #trading #priceaction #chartanalysis\n\n` +
       `4. Instagram\n` +
-      `The chart doesn't need more indicators. It needs a clear read.\n` +
-      `Vertex gives you one in seconds. 2 free scans a day.\n` +
-      `#forex #trading #chartanalysis\n\n` +
+      `One chart. Five numbers. No indicator soup.\n\nBias: ${bias}\n${hasPlan ? `Entry: ${entry}\nStop: ${stop}\nTarget: ${target}` : "No clean setup right now."}\n\nVertex gives you the read in seconds. 2 free scans a day.\n#forex #trading #chartanalysis\n\n` +
       `5. YouTube Shorts\n` +
-      `“I scanned XAUUSD so you don't have to.”\n` +
-      `Bias, entry, stop, target — in seconds. Two free scans a day. Link in bio.\n\n` +
+      `“I scanned ${pair} so you don't have to.”\n${pair} ${tf}: ${bias}${conf !== "—" ? `, ${conf}% confidence` : ""}.\n${levels}\nTwo free scans a day. Link in bio.\n\n` +
       `6. X\n` +
-      `One scan. Bias, entry, stop, target. No indicators. 2 free scans a day.\n\n` +
+      `${pair} ${tf}: ${bias}${conf !== "—" ? ` (${conf}% confidence)` : ""}\n${levels}\nTool output, not advice. 2 free scans a day.\n\n` +
       `Handles: TikTok @vertex378 · Instagram @verte.x6.\n` +
-      `Next: open Post templates below, fill one from the live Watcher read, and post it.`,
+      `Next: post one, then run the same read again after the session changes.`,
     sources: [],
     searchQueries: [],
     ungrounded: true,
@@ -344,7 +357,14 @@ function createGrowthAgent() {
     }
 
     try {
-      const out = await callGemini(mission.prompt);
+      const liveRead = payload && payload.read && typeof payload.read === "object" ? payload.read : null;
+      const liveBlock = liveRead
+        ? "\n\nLIVE READ FROM THE WATCHER (use these exact numbers, never invent prices):\n" +
+          `Pair: ${liveRead.key || "—"}\nBias: ${liveRead.bias || "—"}\n` +
+          `Entry: ${liveRead.entry ?? "—"}\nStop: ${liveRead.stop ?? "—"}\nTarget: ${liveRead.target ?? "—"}\n` +
+          `Confidence: ${liveRead.confidence ?? "—"}\nR:R: ${liveRead.rr ?? "—"}`
+        : "";
+      const out = await callGemini(mission.prompt + liveBlock);
       runtime.lastError = null;
       const brief = {
         id: Date.now(),
@@ -363,7 +383,7 @@ function createGrowthAgent() {
       runtime.lastError = err.message || String(err);
       if (kind === "posts") {
         runtime.runsToday = Math.max(0, runtime.runsToday - 1);
-        const brief = fallbackPostsBrief(runtime.lastError || "model unavailable");
+        const brief = fallbackPostsBrief(runtime.lastError || "model unavailable", payload && payload.read);
         briefs.unshift(brief);
         if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
         return brief;

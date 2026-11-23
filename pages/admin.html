@@ -1084,15 +1084,14 @@
   </div>
 
   <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
-  <a href="#q2chat" data-panel-link="q2chat" title="Talk to Q2">Q2</a>
-  <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
-  <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
   <a href="#ops" data-panel-link="ops" title="001 — the operator">001</a>
+  <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
   <a href="#money" data-panel-link="money" title="Revenue">Money</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
 
   <details class="command-rail__group">
     <summary>Business</summary>
+    <a href="#watcher" data-panel-link="watcher" title="Market watcher">Watcher</a>
     <a href="#health" data-panel-link="health" title="Health">Health</a>
     <a href="#clicks" data-panel-link="clicks" title="Link clicks">Clicks</a>
     <a href="#orders" data-panel-link="orders" title="Orders">Orders</a>
@@ -1106,9 +1105,14 @@
     <summary>Support &amp; settings</summary>
     <a href="#support" data-panel-link="support" title="Support">Support</a>
     <a href="#feedback" data-panel-link="feedback" title="Feedback">Feedback</a>
-    <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
     <a href="#broker" data-panel-link="broker" title="Broker accounts">Broker accounts</a>
     <a href="#audit" data-panel-link="audit" title="Audit log">Audit log</a>
+  </details>
+
+  <details class="command-rail__group">
+    <summary>Legacy</summary>
+    <a href="#q2chat" data-panel-link="q2chat" title="Old Q2 chat">Q2 chat</a>
+    <a href="#ai" data-panel-link="ai" title="Q2 / Q3 insight">Q2 / Q3 insight</a>
   </details>
 </nav>
 <main class="admin-wrap command-main">
@@ -3014,15 +3018,25 @@
         btn.addEventListener("click", async () => {
           const kind = btn.dataset.growthKind;
           buttons.forEach((b) => { b.disabled = true; });
-          statusEl.textContent = "Researching online — this can take up to 90 seconds…";
+          statusEl.textContent = kind === "posts"
+            ? "Pulling the live read, then researching — this can take up to 90 seconds…"
+            : "Researching online — this can take up to 90 seconds…";
           outputEl.style.display = "none";
           sourcesEl.style.display = "none";
           copyBtn.style.display = "none";
           try {
+            let read = null;
+            if (kind === "posts") {
+              try {
+                const feed = await fetch("/api/watch/feed?full=1&limit=1", { headers: authHeader });
+                const feedData = await feed.json().catch(() => null);
+                read = feedData && Array.isArray(feedData.symbolsState) ? feedData.symbolsState[0] : null;
+              } catch { /* the agent can still write without a live read */ }
+            }
             const res = await fetch("/api/growth/run", {
               method: "POST",
               headers: { "Content-Type": "application/json", ...authHeader },
-              body: JSON.stringify({ kind })
+              body: JSON.stringify({ kind, read })
             });
             const data = await res.json().catch(() => null);
             if (!res.ok) {
