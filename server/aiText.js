@@ -15,6 +15,8 @@
 
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
 const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+const OPENCODE_GO_API_KEY = (process.env.OPENCODE_GO_API_KEY || "").trim();
+const OPENCODE_GO_MODEL = (process.env.OPENCODE_GO_MODEL || "deepseek-v4.1-flash").trim();
 
 const GEMINI_MODEL = (
   process.env.GEMINI_MODEL ||
@@ -47,7 +49,7 @@ const ANTHROPIC_MODEL = (
 ).trim();
 
 function hasProvider() {
-  return !!(GEMINI_API_KEY || ANTHROPIC_API_KEY);
+  return !!(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY);
 }
 
 function normalizeMessages(messages) {
@@ -107,6 +109,32 @@ async function callGemini({ system, messages, maxTokens, temperature, timeoutMs 
   throw lastError || new Error("No Gemini model answered.");
 }
 
+async function callOpenCodeGo({ system, messages, maxTokens, temperature, timeoutMs }) {
+  const res = await fetch("https://opencode.ai/inference/go/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + OPENCODE_GO_API_KEY,
+      "Content-Type": "application/json",
+      "x-opencode-session": "vertex-ai-" + Date.now()
+    },
+    body: JSON.stringify({
+      model: OPENCODE_GO_MODEL,
+      messages: [
+        ...(system ? [{ role: "system", content: system }] : []),
+        ...normalizeMessages(messages)
+      ],
+      max_tokens: maxTokens,
+      temperature
+    }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error?.message || "OpenCode Go error " + res.status);
+  const text = data?.choices?.[0]?.message?.content || "";
+  if (!text.trim()) throw new Error("OpenCode Go returned an empty reply.");
+  return text.trim();
+}
+
 async function callAnthropic({ system, messages, maxTokens, temperature, timeoutMs }) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -157,6 +185,13 @@ async function generateText(opts = {}) {
   };
 
   const attempts = [];
+  if (OPENCODE_GO_API_KEY) {
+    try {
+      return { text: await callOpenCodeGo(settings), provider: "opencode-go" };
+    } catch (err) {
+      attempts.push("opencode-go: " + err.message);
+    }
+  }
   if (GEMINI_API_KEY) {
     try {
       return { text: await callGemini(settings), provider: "gemini" };

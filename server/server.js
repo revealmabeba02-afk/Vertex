@@ -456,6 +456,65 @@ Keep replies under 120 words, friendly, plain text (no markdown).`;
 
 const SUPPORT_HOLD_REPLY = "Thanks — I've passed this to the team. We'll check it and get back to you here.";
 
+// 001's built-in support brain. These are the questions that do not need a
+// model: the answers are fixed product facts. Keeping them deterministic means
+// support still works when every AI provider is rate-limited or out of credit.
+function deterministicSupportReply(message) {
+  const m = String(message || "").toLowerCase();
+  const has = (...words) => words.some((w) => m.includes(w));
+
+  if (has("paypal", "pay pal")) {
+    return {
+      confidence: "high",
+      reply:
+        "PayPal is available. Open Credits, pick a pack, then tap “Pay with PayPal”. It opens the exact amount at paypal.me/JThanos. Put your Vertex login email in the PayPal note, then tap “I've paid” so the owner can check it."
+    };
+  }
+  if (has("bank transfer", "bank details", "bank pay", "pay by bank")) {
+    return {
+      confidence: "high",
+      reply:
+        "Bank transfer is available. Open Credits, pick a pack, tap “Bank transfer”, then “Request bank details”. The owner sends the account details privately, and you use your Vertex email as the reference. Vertex never stores bank numbers."
+    };
+  }
+  if (has("credit", "credits", "price", "pricing", "bundle", "how much", "cost")) {
+    return {
+      confidence: "high",
+      reply:
+        "You get 2 free scans every day. Bundles: Quick $4.99 for 10 scans, Starter $8.99 for 20, Trader $12.99 for 60, Pro $19.99 for 150. Credits never expire. Whop credits automatically; PayPal and bank transfers are checked manually."
+    };
+  }
+  if (has("how do i scan", "how to scan", "how does it work", "upload", "pick a pair", "timeframe")) {
+    return {
+      confidence: "high",
+      reply:
+        "Open Scanner, upload a chart screenshot or switch to “Pick a pair”, choose the timeframe, then tap Scan. Vertex returns the bias, entry, stop, target and what would invalidate the idea."
+    };
+  }
+  if (has("failed", "refund", "charged", "money back", "didn't work", "did not work")) {
+    return {
+      confidence: "high",
+      reply:
+        "A failed scan is refunded automatically. If a payment or credit did not land, reply with your Vertex email and what happened; the owner will check it and fix it."
+    };
+  }
+  if (has("login", "log in", "logged out", "password", "sign in")) {
+    return {
+      confidence: "high",
+      reply:
+        "Sessions end when the browser or tab closes, so you may need to log in again. Use “Forgot password?” on the login page if you cannot get in."
+    };
+  }
+  if (has("image", "screenshot", "photo", "picture")) {
+    return {
+      confidence: "high",
+      reply:
+        "If an image scan fails, tap “Use Pick a pair instead” and type the symbol — it gives the same read and is faster. Image scans can take longer when the vision service is busy."
+    };
+  }
+  return null;
+}
+
 // Admin-only tone overlay (King's own requests to Q2/Q3, never shown to any
 // other user). Added on top of the real rules above — it changes voice
 // only; the output shape (JSON for support, plain text for Q3) and every
@@ -3443,9 +3502,17 @@ app.post("/api/support", requireUser, async (req, res) => {
     // open message with no suggestion, same as if AI wasn't configured.
     if (row && row.id) {
       const isAdmin = (req.user.email || "").toLowerCase() === ADMIN_EMAIL;
-      Promise.all([aiTriageSupportMessage(message, isAdmin), getQ2Autopilot()])
+      const quick = deterministicSupportReply(message);
+      Promise.all([quick ? Promise.resolve(quick) : aiTriageSupportMessage(message, isAdmin), getQ2Autopilot()])
         .then(([result, q2On]) => {
-          if (!result) return;
+          if (!result) {
+            if (!q2On) return;
+            return supabaseRpc(
+              "system_set_ai_reply",
+              { p_id: row.id, p_reply: SUPPORT_HOLD_REPLY, p_suggestion: null, p_secret: CREDIT_FULFILL_SECRET },
+              SUPABASE_ANON_KEY
+            );
+          }
           // High confidence: answer immediately. Low confidence: with the
           // support brain ON, send a safe holding reply and keep the AI's draft
           // for the owner. This means every message gets a response without
@@ -4966,7 +5033,7 @@ if (DAILY_AGENT_ENABLED) {
 // 002 — daily market intelligence. One run a day after the post agent: what
 // forex traders need, what is changing, the next level-up, and one move today.
 const DAILY_REACH_ENABLED = (process.env.DAILY_REACH_ENABLED || "true") !== "false";
-const DAILY_REACH_HOUR_UTC = Math.min(23, Math.max(0, Number(process.env.DAILY_REACH_HOUR_UTC) || 7));
+const DAILY_REACH_HOUR_UTC = Math.min(23, Math.max(0, Number(process.env.DAILY_REACH_HOUR_UTC) || 9));
 let dailyReachDay = "";
 let dailyReachRunning = false;
 
