@@ -255,7 +255,14 @@ const PAYPAL_ME_HANDLE = (process.env.PAYPAL_ME_HANDLE || "").trim().replace(/^@
 // the alternative (service_role on the server) would let one process read and
 // write every row in the database, and a summary is all the agents need.
 const AGENT_MONEY_SECRET = (process.env.AGENT_MONEY_SECRET || "").trim();
-const CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
+// The old fulfilment secret was published in the public repo. It has been
+// rotated in Postgres; if Render still has the dead value, use the private
+// agent secret so credits and webhooks keep working until the env is updated.
+const LEAKED_CREDIT_SECRET = "5b43538659fe69465f251809e20f1ef73eb99a61ff6f4b57";
+let CREDIT_FULFILL_SECRET = (process.env.CREDIT_FULFILL_SECRET || "").trim();
+if (!CREDIT_FULFILL_SECRET || CREDIT_FULFILL_SECRET === LEAKED_CREDIT_SECRET) {
+  CREDIT_FULFILL_SECRET = (process.env.AGENT_MONEY_SECRET || "").trim();
+}
 const CREDITS_READY = Boolean(BINANCE_API_KEY && BINANCE_API_SECRET && CREDIT_FULFILL_SECRET);
 
 const CREDIT_BUNDLES = {
