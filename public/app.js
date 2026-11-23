@@ -280,6 +280,7 @@
   const stateError = document.getElementById("state-error");
   const errorText = document.getElementById("error-text");
   const retryBtn = document.getElementById("retry-btn");
+  const imageFallbackBtn = document.getElementById("image-fallback-btn");
   const scanAgainBtn = document.getElementById("scan-again-btn");
 
   const scanHudCheckItems = document.querySelectorAll("#scan-hud-checklist .scan-hud__check");
@@ -916,6 +917,17 @@
       showState("empty");
     }
   });
+
+  if (imageFallbackBtn) {
+    imageFallbackBtn.addEventListener("click", () => {
+      setChartFile(null);
+      setScanMode("pair");
+      clearFormError();
+      showState("empty");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      symbolInput.focus();
+    });
+  }
 
   scanAgainBtn.addEventListener("click", () => {
     clearForm();
@@ -1628,6 +1640,7 @@
   async function runScan(symbol, timeframe, imageFile = null) {
     if (!imageFile) saveLastScan(symbol, timeframe);
     scanInFlight = true;
+    if (imageFallbackBtn) imageFallbackBtn.hidden = true;
     setLoadingUI(true);
     if (scanHudBg) scanHudBg.hidden = true;
     showState("loading");
@@ -1696,6 +1709,7 @@
       }
 
       finishScanHud(true);
+      if (imageFallbackBtn) imageFallbackBtn.hidden = true;
       historyLoaded = false; // the server just saved this scan; refetch next time History is opened
       renderResult(data.analysis, data.timeframe);
       showState("result");
@@ -1722,6 +1736,7 @@
       } else {
         errorText.textContent = err.message || "Something went wrong. Please try again.";
       }
+      if (imageFallbackBtn) imageFallbackBtn.hidden = !imageFile;
       showState("error");
     } finally {
       clearTimeout(timeoutId);
@@ -1742,6 +1757,7 @@
     stateLoading.hidden = name !== "loading";
     stateResult.hidden = name !== "result";
     stateError.hidden = name !== "error";
+    if (imageFallbackBtn && name !== "error") imageFallbackBtn.hidden = true;
 
     outputPanel.classList.toggle("is-idle", name === "empty");
     // Full-screen takeover while a scan is in flight (see .scanning in
