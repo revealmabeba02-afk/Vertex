@@ -270,7 +270,7 @@
   const imageModeNote = document.getElementById("image-mode-note");
 
   const imageScanEnabled = !!(window.APP_CONFIG && window.APP_CONFIG.imageScan);
-  let scanMode = "image";
+  let scanMode = "pair";
   let chartFile = null;
   let chartPreviewUrl = null;
 
@@ -729,7 +729,7 @@
     });
   }
 
-  setScanMode("image");
+  setScanMode("pair");
 
   // ---- Watchlist: a quick-glance strip of saved pairs, stored per-browser
   // in localStorage (no backend table needed for a convenience list like

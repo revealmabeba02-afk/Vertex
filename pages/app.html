@@ -179,14 +179,14 @@
  <div class="view" id="view-scan" role="tabpanel" aria-labelledby="tab-scan">
 
   <!-- ============ HERO + INPUT ============ -->
-  <section class="hero" aria-label="Scan a chart">
+  <section class="hero" aria-label="Scan a pair">
     <p class="eyebrow">
       <span class="eyebrow__dot" aria-hidden="true"></span>
       Live market read
     </p>
     <span id="streak-badge" class="streak-badge" hidden>🔥 <span id="streak-value">0</span> day streak</span>
-    <h1 class="hero__title">Scan any chart</h1>
-    <p class="hero__lede">Upload a chart screenshot or pick a pair. Vertex gives you entry, stop and target in seconds.</p>
+    <h1 class="hero__title">Scan a pair. Get a plan.</h1>
+    <p class="hero__lede">Pick a pair and timeframe. Upload is optional — the pair scan is the fastest, most reliable read.</p>
 
     <div class="session-clock" id="session-clock" aria-label="Market session status">
       <div class="session-clock__pill" data-session="sydney"><span class="session-clock__dot"></span><span class="session-clock__name">Sydney</span></div>
@@ -200,15 +200,15 @@
     <form id="scan-form" class="scanform" novalidate>
 
       <div class="scan-modes" role="tablist" aria-label="Scan mode">
-        <button type="button" class="scan-mode is-active" data-scan-mode="image" role="tab" aria-selected="true">
-          Upload chart
-        </button>
-        <button type="button" class="scan-mode" data-scan-mode="pair" role="tab" aria-selected="false">
+        <button type="button" class="scan-mode is-active" data-scan-mode="pair" role="tab" aria-selected="true">
           Pick a pair
+        </button>
+        <button type="button" class="scan-mode" data-scan-mode="image" role="tab" aria-selected="false">
+          Upload chart
         </button>
       </div>
 
-      <div class="scan-panel" id="scan-image-panel">
+      <div class="scan-panel" id="scan-image-panel" hidden>
         <label class="dropzone" id="chart-dropzone" for="chart-file">
           <input type="file" id="chart-file" accept="image/png,image/jpeg,image/webp" hidden />
           <span class="dropzone__empty" id="chart-dropzone-empty">
@@ -231,7 +231,7 @@
         <p style="margin:8px 0 0; text-align:center; font-size:12px; color:var(--text-faint);">Image reading can take a few seconds. Fastest: use Pick a pair.</p>
       </div>
 
-      <div class="scan-panel" id="scan-pair-panel" hidden>
+      <div class="scan-panel" id="scan-pair-panel">
 
       <div class="watchlist" id="watchlist-strip" hidden>
         <span class="watchlist__label">Watchlist</span>
