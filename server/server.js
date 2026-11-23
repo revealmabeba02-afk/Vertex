@@ -4903,6 +4903,44 @@ if (SELF_PING_ENABLED) {
   console.log(`Keepalive: self-ping ${SELF_URL}/api/health every 10 minutes`);
 }
 
+// --- Daily growth agent -----------------------------------------------------
+// One unattended run a day: pull the latest Watcher read, draft the posts, and
+// send them to the owner. The Watcher keeps the market side current; the
+// growth agent turns that into copy. No button needed.
+const DAILY_AGENT_ENABLED = (process.env.DAILY_AGENT_ENABLED || "true") !== "false";
+const DAILY_AGENT_HOUR_UTC = Math.min(23, Math.max(0, Number(process.env.DAILY_AGENT_HOUR_UTC) || 6));
+let dailyAgentDay = "";
+let dailyAgentRunning = false;
+
+async function runDailyAgent() {
+  if (!DAILY_AGENT_ENABLED || dailyAgentRunning) return;
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() < DAILY_AGENT_HOUR_UTC || dailyAgentDay === day) return;
+  dailyAgentRunning = true;
+  try {
+    let read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
+    if (!read && watcher.isMarketOpen()) {
+      await watcher.tick({ force: true }).catch(() => {});
+      read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
+    }
+    const brief = await growth.run("posts", { read });
+    await notify({ title: "Vertex: today's posts", text: brief.text });
+    dailyAgentDay = day;
+    console.log(`Daily agent: posts sent for ${day}`);
+  } catch (err) {
+    console.error("Daily agent failed:", err.message);
+  } finally {
+    dailyAgentRunning = false;
+  }
+}
+
+if (DAILY_AGENT_ENABLED) {
+  setTimeout(() => runDailyAgent().catch(() => {}), 90 * 1000).unref();
+  setInterval(() => runDailyAgent().catch(() => {}), 10 * 60 * 1000).unref();
+  console.log(`Daily agent: posts at ${String(DAILY_AGENT_HOUR_UTC).padStart(2, "0")}:00 UTC`);
+}
+
 // --- Two-minute safe upgrade ----------------------------------------------
 // Compares the running commit with the tracked branch and asks Render to
 // deploy when they differ. Failures are paced: a commit that failed to build
