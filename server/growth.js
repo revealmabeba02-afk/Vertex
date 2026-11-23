@@ -29,7 +29,7 @@ const GROWTH_MODELS = [
     GROWTH_MODEL.split(",")
       .map((m) => m.trim())
       .filter(Boolean)
-      .concat(["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash"])
+      .concat(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"])
   )
 ];
 
@@ -43,8 +43,8 @@ Company: Vertex Chart Scanner (vertex-9s4c.onrender.com).
 What it does: scans a forex pair/metal/index and returns bias, market structure, key levels,
 entries, stop, targets and invalidation in seconds. Users can also upload a chart screenshot
 and get the same read. Free tier: 2 scans/day; paid credit packs, no subscription.
-Owner runs everything alone, markets through short-form video (TikTok, Instagram, YouTube)
-under the handle @verxter6 / @verte.x6 / @Vertex06.
+Owner runs everything alone, markets through short-form video.
+Handles: TikTok @vertex378, Instagram @verte.x6.
 Audience: beginner-to-intermediate forex traders who want fast, clear reads without paying
 for expensive signal groups or year-long courses.
 Rules: advice must be executable by one person with no ad budget. Prefer specific tactics
@@ -155,6 +155,40 @@ function extractGroundedText(data) {
         .slice(0, 12)
     : [];
   return { text, sources, searchQueries: cand?.groundingMetadata?.webSearchQueries || [] };
+}
+
+function fallbackPostsBrief(reason) {
+  return {
+    id: Date.now(),
+    at: new Date().toISOString(),
+    kind: "posts",
+    label: "Starter posts (AI unavailable)",
+    text:
+      `AI research is unavailable right now (${reason}). These are ready to post; use the Post templates below to add live numbers.\n\n` +
+      `1. TikTok — “You don't need another indicator.”\n` +
+      `Upload the chart, pick the timeframe, and Vertex gives you bias, entry, stop and target in seconds. Two free scans a day.\n\n` +
+      `2. TikTok — “Stop guessing where the stop goes.”\n` +
+      `Vertex marks the entry, the stop and the target from live price bars. You still make the call. Two free scans a day.\n\n` +
+      `3. Instagram\n` +
+      `One chart. Five numbers. No indicator soup.\n` +
+      `Bias, entry, stop, target, and what proves it wrong — in seconds.\n` +
+      `#forex #trading #priceaction #xauusd\n\n` +
+      `4. Instagram\n` +
+      `The chart doesn't need more indicators. It needs a clear read.\n` +
+      `Vertex gives you one in seconds. 2 free scans a day.\n` +
+      `#forex #trading #chartanalysis\n\n` +
+      `5. YouTube Shorts\n` +
+      `“I scanned XAUUSD so you don't have to.”\n` +
+      `Bias, entry, stop, target — in seconds. Two free scans a day. Link in bio.\n\n` +
+      `6. X\n` +
+      `One scan. Bias, entry, stop, target. No indicators. 2 free scans a day.\n\n` +
+      `Handles: TikTok @vertex378 · Instagram @verte.x6.\n` +
+      `Next: open Post templates below, fill one from the live Watcher read, and post it.`,
+    sources: [],
+    searchQueries: [],
+    ungrounded: true,
+    fallback: true
+  };
 }
 
 function createGrowthAgent() {
@@ -273,36 +307,69 @@ function createGrowthAgent() {
       prompt = prompt.replace("{{platform}}", platform).replace("{{draft}}", draft);
       // Voice work, not research: skip the memory block so the rewrite uses
       // only the draft in front of it.
-      const out = await callGeminiRaw(prompt);
+      try {
+        const out = await callGeminiRaw(prompt);
+        runtime.lastError = null;
+        const brief = {
+          id: Date.now(),
+          at: new Date().toISOString(),
+          kind,
+          label: "Polished post · " + (platform || "post"),
+          text: out.text,
+          sources: [],
+          searchQueries: [],
+          ungrounded: false
+        };
+        briefs.unshift(brief);
+        if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
+        return brief;
+      } catch (err) {
+        runtime.lastError = err.message || String(err);
+        runtime.runsToday = Math.max(0, runtime.runsToday - 1);
+        const brief = {
+          id: Date.now(),
+          at: new Date().toISOString(),
+          kind,
+          label: "Draft kept · AI unavailable",
+          text: draft + "\n\n(AI polish is unavailable right now — your draft was kept as written.)",
+          sources: [],
+          searchQueries: [],
+          ungrounded: true,
+          fallback: true
+        };
+        briefs.unshift(brief);
+        if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
+        return brief;
+      }
+    }
+
+    try {
+      const out = await callGemini(mission.prompt);
+      runtime.lastError = null;
       const brief = {
         id: Date.now(),
         at: new Date().toISOString(),
         kind,
-        label: "Polished post · " + (platform || "post"),
+        label: mission.label,
         text: out.text,
-        sources: [],
-        searchQueries: [],
-        ungrounded: false
+        sources: out.sources,
+        searchQueries: out.searchQueries,
+        ungrounded: !!out.ungrounded
       };
       briefs.unshift(brief);
       if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
       return brief;
+    } catch (err) {
+      runtime.lastError = err.message || String(err);
+      if (kind === "posts") {
+        runtime.runsToday = Math.max(0, runtime.runsToday - 1);
+        const brief = fallbackPostsBrief(runtime.lastError || "model unavailable");
+        briefs.unshift(brief);
+        if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
+        return brief;
+      }
+      throw err;
     }
-
-    const out = await callGemini(mission.prompt);
-    const brief = {
-      id: Date.now(),
-      at: new Date().toISOString(),
-      kind,
-      label: mission.label,
-      text: out.text,
-      sources: out.sources,
-      searchQueries: out.searchQueries,
-      ungrounded: !!out.ungrounded
-    };
-    briefs.unshift(brief);
-    if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
-    return brief;
   }
 
   function feed(limit = 10) {

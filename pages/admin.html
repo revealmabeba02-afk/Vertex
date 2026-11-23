@@ -3003,7 +3003,9 @@
 
       function setQuota(data) {
         if (data && Number.isFinite(data.runsToday)) {
-          quotaEl.textContent = data.runsToday + " of " + (data.maxRunsPerDay || 10) + " research runs used today" + (data.ready === false ? " · GEMINI_API_KEY missing" : "");
+          quotaEl.textContent = data.runsToday + " of " + (data.maxRunsPerDay || 10) + " research runs used today" +
+            (data.ready === false ? " · GEMINI_API_KEY missing" : "") +
+            (data.lastError ? " · last error: " + String(data.lastError).slice(0, 120) : "");
         }
       }
 
@@ -3027,7 +3029,9 @@
               statusEl.textContent = (data && data.error) || "The growth agent could not finish.";
               return;
             }
-            statusEl.textContent = "";
+            statusEl.textContent = data.brief && data.brief.fallback
+              ? "AI research is unavailable right now — starter posts loaded. No run used."
+              : "";
             briefs.unshift(data.brief);
             briefs = briefs.slice(0, 40);
             saveLocal();
@@ -3182,7 +3186,7 @@
         { name: "Telegram/Discord · broadcast", text: "📍 {pair} · {tf}\n\nStructure: {bias} ({conf}%)\nEntry zone: {entry}\nStop: {stop}\nTarget: {target}\n\nRead by Vertex from live bars. Not financial advice — do your own check." },
         { name: "Before/after", text: "Before: 6 charts, 4 indicators, 40 minutes, still guessing.\n\nAfter: one scan.\n{pair} {tf} — {bias}\nEntry {entry} · Stop {stop} · Target {target}\n\nThat's the product. 2 free scans a day." },
         { name: "CTA · what a scan shows", text: "What a Vertex scan actually shows:\n\n✅ Bias and market structure\n✅ Key levels price respects\n✅ Entry zone, stop, targets\n✅ The exact move that invalidates the idea\n\nToday's live example — {pair} {tf}: {bias}, entry {entry}.\n\n2 free scans a day. No card needed." },
-        { name: "Wealth · honest side income", text: "Nobody gets rich from one trade. I'm not going to pretend otherwise.\n\nWhat a tool can actually do: give you the same five numbers a pro looks for, in seconds.\n\n{pair} {tf} right now — {bias}\nEntry {entry} · Stop {stop} · Target {target}\n\nDo the work. Skip the guru.\n\n@verxter6" },
+        { name: "Wealth · honest side income", text: "Nobody gets rich from one trade. I'm not going to pretend otherwise.\n\nWhat a tool can actually do: give you the same five numbers a pro looks for, in seconds.\n\n{pair} {tf} right now — {bias}\nEntry {entry} · Stop {stop} · Target {target}\n\nDo the work. Skip the guru.\n\n@vertex378" },
         { name: "Wealth · myth buster", text: "3 things wealth content gets wrong about trading:\n\n1. \"You'll quit your job in 30 days.\" No.\n2. \"Follow my signals.\" That's not a skill you keep.\n3. \"You need a $500 course.\" You need to read structure.\n\nStructure on {pair} {tf} today: {bias}, {conf}% confidence.\nEntry {entry} · Stop {stop} · Target {target}\n\nTool output, not advice. 2 free scans a day." }
       ];
 
@@ -3219,11 +3223,24 @@
       fillBtn.addEventListener("click", async () => {
         statusEl.textContent = "Pulling the latest read from the Watcher…";
         try {
-          const res = await fetch("/api/watch/feed?full=1&limit=1", { headers: authHeader });
-          const data = await res.json().catch(() => null);
-          const rows = data && Array.isArray(data.symbolsState) ? data.symbolsState : [];
+          const readFeed = async () => {
+            const res = await fetch("/api/watch/feed?full=1&limit=1", { headers: authHeader });
+            const data = await res.json().catch(() => null);
+            return { res, data, rows: data && Array.isArray(data.symbolsState) ? data.symbolsState : [] };
+          };
+          let { res, data, rows } = await readFeed();
+          if (res.ok && !rows.length) {
+            statusEl.textContent = "No read yet — running one live sweep…";
+            const tickRes = await fetch("/api/watch/tick?force=1", { method: "POST", headers: authHeader });
+            if (!tickRes.ok) {
+              const tickData = await tickRes.json().catch(() => null);
+              statusEl.textContent = (tickData && tickData.error) || "The Watcher sweep failed.";
+              return;
+            }
+            ({ res, data, rows } = await readFeed());
+          }
           if (!res.ok || !rows.length) {
-            statusEl.textContent = "No market read yet — run a Watcher sweep first, then fill.";
+            statusEl.textContent = "No market read yet — try again in a moment.";
             return;
           }
           textEl.value = fillFromRead(rows[0]);
@@ -3250,7 +3267,9 @@
             return;
           }
           textEl.value = data.brief ? data.brief.text : draft;
-          statusEl.textContent = "Polished. Numbers kept exactly as the market gave them.";
+          statusEl.textContent = data.brief && data.brief.fallback
+            ? "AI polish is unavailable right now — your draft was kept as written."
+            : "Polished. Numbers kept exactly as the market gave them.";
         } catch {
           statusEl.textContent = "Network error while polishing.";
         } finally {
