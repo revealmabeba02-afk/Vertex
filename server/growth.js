@@ -17,6 +17,14 @@
 // his history across restarts.
 
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
+const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+const ANTHROPIC_MODEL = (
+  process.env.GROWTH_ANTHROPIC_MODEL ||
+  process.env.SUPPORT_AI_MODEL ||
+  "claude-haiku-4-5-20251001"
+).trim();
+const OPENCODE_GO_API_KEY = (process.env.OPENCODE_GO_API_KEY || "").trim();
+const OPENCODE_GO_MODEL = (process.env.OPENCODE_GO_MODEL || "deepseek-v4.1-flash").trim();
 
 const GROWTH_MODEL = (
   process.env.GROWTH_MODEL ||
@@ -278,21 +286,77 @@ function createGrowthAgent() {
   // The raw path skips the search tool: used for voice rewrites where the
   // facts are already in the draft and grounding would only slow it down.
   async function callGeminiRaw(prompt) {
-    return callGemini(prompt, { search: false });
+    return callBrain(prompt, { search: false });
+  }
+
+  const GROWTH_SYSTEM =
+    "You are the growth brain of Vertex Chart Scanner. You research online before answering " +
+    "and always ground claims in what you found. You write for one busy founder: concrete, " +
+    "short, zero-budget. Plain text only, no markdown tables, no emoji.\n\n" +
+    COMPANY_CONTEXT;
+
+  async function callOpenCodeGo(missionPrompt) {
+    if (!OPENCODE_GO_API_KEY) throw new Error("No OpenCode Go key configured.");
+    const r = await fetch("https://opencode.ai/inference/go/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + OPENCODE_GO_API_KEY,
+        "Content-Type": "application/json",
+        "x-opencode-session": "vertex-002-" + Date.now()
+      },
+      body: JSON.stringify({
+        model: OPENCODE_GO_MODEL,
+        messages: [
+          { role: "system", content: GROWTH_SYSTEM },
+          { role: "user", content: missionPrompt }
+        ],
+        max_tokens: 3072,
+        temperature: 0.55
+      }),
+      signal: AbortSignal.timeout(90000)
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      throw new Error(data?.error?.message || `OpenCode Go ${r.status}`);
+    }
+    const text = data?.choices?.[0]?.message?.content || "";
+    if (!text.trim()) throw new Error("OpenCode Go returned an empty brief.");
+    return { text: text.trim(), sources: [], searchQueries: [], ungrounded: true, via: "opencode-go" };
+  }
+
+  async function callAnthropic(missionPrompt, opts = {}) {
+    if (!ANTHROPIC_API_KEY) throw new Error("No Anthropic fallback configured.");
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 3072,
+        temperature: opts.search === false ? 0.45 : 0.55,
+        system: GROWTH_SYSTEM,
+        messages: [{ role: "user", content: missionPrompt }]
+      }),
+      signal: AbortSignal.timeout(90000)
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      throw new Error(data?.error?.message || `Anthropic ${r.status}`);
+    }
+    const text = Array.isArray(data?.content)
+      ? data.content.map((p) => p?.text || "").join("").trim()
+      : "";
+    if (!text) throw new Error("Anthropic returned an empty brief.");
+    return { text, sources: [], searchQueries: [], ungrounded: true, via: "anthropic" };
   }
 
   async function callGemini(missionPrompt, opts = {}) {
     const body = JSON.stringify({
       systemInstruction: {
-        parts: [
-          {
-            text:
-              "You are the growth brain of Vertex Chart Scanner. You research online before answering " +
-              "and always ground claims in what you found. You write for one busy founder: concrete, " +
-              "short, zero-budget. Plain text only, no markdown tables, no emoji.\n\n" +
-              COMPANY_CONTEXT
-          }
-        ]
+        parts: [{ text: GROWTH_SYSTEM }]
       },
       contents: [{ role: "user", parts: [{ text: missionPrompt + (opts.search === false ? "" : memoryBlock()) }] }],
       tools: opts.search === false ? undefined : [{ google_search: {} }],
@@ -352,8 +416,32 @@ function createGrowthAgent() {
     throw lastFailure || new Error("No Gemini model answered the mission.");
   }
 
+  async function callBrain(prompt, opts = {}) {
+    let lastError = null;
+    if (OPENCODE_GO_API_KEY) {
+      try {
+        return await callOpenCodeGo(prompt);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    try {
+      return await callGemini(prompt, opts);
+    } catch (err) {
+      lastError = lastError ? new Error(lastError.message + " · " + err.message) : err;
+    }
+    if (ANTHROPIC_API_KEY) {
+      try {
+        return await callAnthropic(prompt, opts);
+      } catch (err) {
+        lastError = lastError ? new Error(lastError.message + " · " + err.message) : err;
+      }
+    }
+    throw lastError || new Error("No AI brain answered the mission.");
+  }
+
   async function run(kind, payload = {}) {
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set on this server.");
+    if (!OPENCODE_GO_API_KEY && !GEMINI_API_KEY && !ANTHROPIC_API_KEY) throw new Error("No AI key is set on this server.");
     const mission = MISSIONS[kind];
     if (!mission) throw new Error("Unknown growth mission.");
     rollDay();
@@ -414,7 +502,7 @@ function createGrowthAgent() {
           `Entry: ${liveRead.entry ?? "—"}\nStop: ${liveRead.stop ?? "—"}\nTarget: ${liveRead.target ?? "—"}\n` +
           `Confidence: ${liveRead.confidence ?? "—"}\nR:R: ${liveRead.rr ?? "—"}`
         : "";
-      const out = await callGemini(mission.prompt + liveBlock);
+      const out = await callBrain(mission.prompt + liveBlock);
       runtime.lastError = null;
       const brief = {
         id: Date.now(),
@@ -451,7 +539,7 @@ function createGrowthAgent() {
 
   function feed(limit = 10) {
     return {
-      ready: !!GEMINI_API_KEY,
+      ready: !!(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY),
       runsToday: runtime.runsToday,
       maxRunsPerDay: MAX_RUNS_PER_DAY,
       lastError: runtime.lastError,
