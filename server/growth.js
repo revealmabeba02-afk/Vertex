@@ -21,7 +21,7 @@ const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
 const GROWTH_MODEL = (
   process.env.GROWTH_MODEL ||
   process.env.GEMINI_MODEL ||
-  "gemini-3.8-flash"
+  "gemini-3.5-flash"
 ).trim();
 
 const GROWTH_MODELS = [
@@ -29,11 +29,11 @@ const GROWTH_MODELS = [
     GROWTH_MODEL.split(",")
       .map((m) => m.trim())
       .filter(Boolean)
-      .concat(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"])
+      .concat(["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"])
   )
 ];
 
-const MAX_RUNS_PER_DAY = Number(process.env.GROWTH_MAX_RUNS_PER_DAY) || 10;
+const MAX_RUNS_PER_DAY = Number(process.env.GROWTH_MAX_RUNS_PER_DAY) || 15;
 const BRIEF_LIMIT = 40;
 
 // What the agent always knows about the company, so briefs are about Vertex
@@ -112,6 +112,20 @@ Deliver, in plain text with clear section headers:
    as given — never invent a price, confidence or R:R. Keep captions short and spoken.
 3. BEST POSTING TIMES — for a South African audience on those platforms.
 4. ONE EXPERIMENT — a single thing to try this week that costs nothing.`,
+  },
+  reach: {
+    label: "002 · Daily intel",
+    prompt: `
+Mission: act as 002, the daily intelligence agent for Vertex Chart Scanner. Your job is to make the owner's idea stronger every day. Use Google Search for current information.
+
+Deliver, in plain text with clear section headers:
+1. WHAT FOREX TRADERS NEED TODAY — 3 specific pain points, questions or complaints from retail forex traders this week, with sources. Not generic "they want profits" answers.
+2. WHAT IS CHANGING — 3 things changing in trading tools, content or trader behaviour right now, with sources.
+3. THE LEVEL-UP — one concrete product/UX improvement Vertex should make next, ranked by impact versus build effort for one developer. Say exactly what to change and why.
+4. ONE CONTENT ANGLE — one post or short-video idea that would make a trader stop scrolling, tied to a real Vertex feature.
+5. ONE MOVE TODAY — the single highest-leverage action for the owner today, first step written out.
+
+Rules: zero budget, one founder, no fake promises, no financial advice, no feature that needs a new paid vendor. Be direct and useful.`,
   },
   research: {
     label: "Find new growth",
@@ -197,6 +211,42 @@ function fallbackPostsBrief(reason, read) {
       `${pair} ${tf}: ${bias}${conf !== "—" ? ` (${conf}% confidence)` : ""}\n${levels}\nTool output, not advice. 2 free scans a day.\n\n` +
       `Handles: TikTok @vertex378 · Instagram @verte.x6.\n` +
       `Next: post one, then run the same read again after the session changes.`,
+    sources: [],
+    searchQueries: [],
+    ungrounded: true,
+    fallback: true
+  };
+}
+
+function fallbackReachBrief(reason, read) {
+  const key = String(read?.key || "XAUUSD:H1");
+  const pair = key.split(":")[0] || "XAUUSD";
+  const tf = key.split(":")[1] || "H1";
+  const bias = read?.bias || "unclear";
+  const live = Number.isFinite(read?.entry)
+    ? `${pair} ${tf}: ${bias}. Entry ${read.entry} · Stop ${read.stop ?? "—"} · Target ${read.target ?? "—"}.`
+    : `No clean ${pair} ${tf} read right now.`;
+  return {
+    id: Date.now(),
+    at: new Date().toISOString(),
+    kind: "reach",
+    label: "002 · Daily intel (AI unavailable)",
+    text:
+      `002 daily intel — AI research is unavailable right now (${reason}). This is the baseline read.\n\n` +
+      `1. WHAT FOREX TRADERS NEED TODAY\n` +
+      `- A clear verdict, not ten indicators.\n` +
+      `- Entry, stop and target they can act on in seconds.\n` +
+      `- Honesty when there is no clean trade.\n\n` +
+      `2. WHAT IS CHANGING\n` +
+      `- Traders are tired of signal groups and fake screenshots.\n` +
+      `- Short-form video is still the cheapest discovery channel.\n` +
+      `- Tools that show the plan, not just a bias, stand out.\n\n` +
+      `3. THE LEVEL-UP\n` +
+      `Put the verdict, entry, stop and target above the fold on every result, and keep the deep concepts collapsed. That is the trust gap most tools lose.\n\n` +
+      `4. ONE CONTENT ANGLE\n` +
+      `"I scanned ${pair} so you don't have to." ${live} Two free scans a day. Not financial advice.\n\n` +
+      `5. ONE MOVE TODAY\n` +
+      `Post the 15s scanner video with that live read, pin a comment with the free-scan link, and reply to every comment for the first hour.`,
     sources: [],
     searchQueries: [],
     ungrounded: true,
@@ -384,6 +434,13 @@ function createGrowthAgent() {
       if (kind === "posts") {
         runtime.runsToday = Math.max(0, runtime.runsToday - 1);
         const brief = fallbackPostsBrief(runtime.lastError || "model unavailable", payload && payload.read);
+        briefs.unshift(brief);
+        if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
+        return brief;
+      }
+      if (kind === "reach") {
+        runtime.runsToday = Math.max(0, runtime.runsToday - 1);
+        const brief = fallbackReachBrief(runtime.lastError || "model unavailable", payload && payload.read);
         briefs.unshift(brief);
         if (briefs.length > BRIEF_LIMIT) briefs.length = BRIEF_LIMIT;
         return brief;

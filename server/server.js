@@ -454,6 +454,8 @@ Reply with ONLY a JSON object, no other text, in exactly this shape:
 
 Keep replies under 120 words, friendly, plain text (no markdown).`;
 
+const SUPPORT_HOLD_REPLY = "Thanks — I've passed this to the team. We'll check it and get back to you here.";
+
 // Admin-only tone overlay (King's own requests to Q2/Q3, never shown to any
 // other user). Added on top of the real rules above — it changes voice
 // only; the output shape (JSON for support, plain text for Q3) and every
@@ -3444,12 +3446,15 @@ app.post("/api/support", requireUser, async (req, res) => {
       Promise.all([aiTriageSupportMessage(message, isAdmin), getQ2Autopilot()])
         .then(([result, q2On]) => {
           if (!result) return;
-          // Q2 on: send the AI's answer either way. Q2 off (default): only
-          // auto-send what it's actually confident about; anything else is
-          // left as a draft for a human to review from the admin page.
-          const autoSend = q2On || result.confidence === "high";
-          const args = autoSend
-            ? { p_id: row.id, p_reply: result.reply, p_suggestion: null, p_secret: CREDIT_FULFILL_SECRET }
+          // High confidence: answer immediately. Low confidence: with the
+          // support brain ON, send a safe holding reply and keep the AI's draft
+          // for the owner. This means every message gets a response without
+          // letting the AI make promises on refunds or account-specific issues.
+          const confident = result.confidence === "high";
+          const autoReply = confident ? result.reply : (q2On ? SUPPORT_HOLD_REPLY : null);
+          const suggestion = confident ? null : result.reply;
+          const args = autoReply
+            ? { p_id: row.id, p_reply: autoReply, p_suggestion: suggestion, p_secret: CREDIT_FULFILL_SECRET }
             : { p_id: row.id, p_reply: null, p_suggestion: result.reply, p_secret: CREDIT_FULFILL_SECRET };
           return supabaseRpc("system_set_ai_reply", args, SUPABASE_ANON_KEY);
         })
@@ -4380,6 +4385,7 @@ async function readMoneyUnattended() {
 // depending on which door you came through.
 async function buildAgentFacts({ money }) {
   const snap = await opsAgent.snapshot({ inProcess: true, logMinutes: 60 }).catch(() => null);
+  const marketFeed = watcher.feed({ full: true, limit: 5 });
   return {
     service: snap
       ? {
@@ -4391,6 +4397,22 @@ async function buildAgentFacts({ money }) {
         }
       : "unavailable",
     money,
+    market: {
+      marketOpen: marketFeed.marketOpen,
+      lastTickAt: marketFeed.lastTickAt,
+      lastError: marketFeed.lastError,
+      reads: (marketFeed.symbolsState || []).slice(0, 3).map((r) => ({
+        key: r.key,
+        bias: r.bias,
+        hasPlan: r.hasPlan,
+        side: r.side,
+        entry: r.entry,
+        stop: r.stop,
+        target: r.target,
+        confidence: r.confidence,
+        at: r.at
+      }))
+    },
     recentOpsDecisions: opsAgent.decisions.slice(0, 5).map((d) => ({
       at: d.at,
       verdict: d.decision?.verdict,
@@ -4939,6 +4961,42 @@ if (DAILY_AGENT_ENABLED) {
   setTimeout(() => runDailyAgent().catch(() => {}), 90 * 1000).unref();
   setInterval(() => runDailyAgent().catch(() => {}), 10 * 60 * 1000).unref();
   console.log(`Daily agent: posts at ${String(DAILY_AGENT_HOUR_UTC).padStart(2, "0")}:00 UTC`);
+}
+
+// 002 — daily market intelligence. One run a day after the post agent: what
+// forex traders need, what is changing, the next level-up, and one move today.
+const DAILY_REACH_ENABLED = (process.env.DAILY_REACH_ENABLED || "true") !== "false";
+const DAILY_REACH_HOUR_UTC = Math.min(23, Math.max(0, Number(process.env.DAILY_REACH_HOUR_UTC) || 7));
+let dailyReachDay = "";
+let dailyReachRunning = false;
+
+async function runDailyReach() {
+  if (!DAILY_REACH_ENABLED || dailyReachRunning) return;
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() < DAILY_REACH_HOUR_UTC || dailyReachDay === day) return;
+  dailyReachRunning = true;
+  try {
+    let read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
+    if (!read && watcher.isMarketOpen()) {
+      await watcher.tick({ force: true }).catch(() => {});
+      read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
+    }
+    const brief = await growth.run("reach", { read });
+    await notify({ title: "002: today's intel", text: brief.text });
+    dailyReachDay = day;
+    console.log(`Daily 002: intel sent for ${day}`);
+  } catch (err) {
+    console.error("Daily 002 failed:", err.message);
+  } finally {
+    dailyReachRunning = false;
+  }
+}
+
+if (DAILY_REACH_ENABLED) {
+  setTimeout(() => runDailyReach().catch(() => {}), 2 * 60 * 1000).unref();
+  setInterval(() => runDailyReach().catch(() => {}), 10 * 60 * 1000).unref();
+  console.log(`Daily 002: intel at ${String(DAILY_REACH_HOUR_UTC).padStart(2, "0")}:00 UTC`);
 }
 
 // --- Two-minute safe upgrade ----------------------------------------------

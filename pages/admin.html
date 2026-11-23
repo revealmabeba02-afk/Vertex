@@ -1085,6 +1085,7 @@
 
   <a href="#overview" data-panel-link="overview" title="Overview">Overview</a>
   <a href="#ops" data-panel-link="ops" title="001 — the operator">001</a>
+  <a href="#reach" data-panel-link="reach" title="002 — daily intelligence">002</a>
   <a href="#growth" data-panel-link="growth" title="Growth agent">Growth</a>
   <a href="#money" data-panel-link="money" title="Revenue">Money</a>
   <a href="#planner" data-panel-link="planner" title="Content planner">Planner</a>
@@ -1203,6 +1204,32 @@
     <div id="admin-watch-empty" class="users-empty">No changes recorded yet. The watcher speaks the first time a read differs from the one before it.</div>
     <ul class="watch-feed" id="admin-watch-feed" hidden></ul>
     <div class="q2-card__status" id="admin-watch-status"></div>
+  </div>
+</div>
+
+<div class="command-panel" data-panel="reach">
+  <div class="q2-card" id="sec-reach">
+    <div class="q2-card__head">
+      <div>
+        <div class="q2-card__title">002</div>
+        <div class="q2-card__desc">Daily intelligence: what forex traders need, what is changing, the next level-up for Vertex, and one move for today.</div>
+        <div class="q2-card__status" style="margin-top:10px;">Runs automatically at <strong>07:00 UTC</strong> and emails you. The button is for an extra run.</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 10px;align-items:center;">
+      <button type="button" class="btn btn--primary" id="reach-run">Run 002 now</button>
+      <span id="reach-quota" style="font-size:12px;color:var(--text-faint);"></span>
+    </div>
+    <div class="q2-card__status" id="reach-status"></div>
+    <div id="reach-output" style="display:none;margin-top:14px;padding:16px 18px;border:1px solid var(--border-soft);border-radius:10px;background:color-mix(in srgb, var(--panel-alt) 55%, transparent);font-size:13.5px;line-height:1.65;color:var(--text);white-space:pre-wrap;max-height:520px;overflow-y:auto;"></div>
+    <div id="reach-sources" style="display:none;margin-top:12px;font-size:12.5px;line-height:1.7;"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;">
+      <button type="button" class="btn btn--ghost" id="reach-copy" style="display:none;padding:6px 14px;font-size:12.5px;">Copy intel</button>
+    </div>
+    <details id="reach-history-wrap" style="margin-top:14px;" hidden>
+      <summary style="cursor:pointer;font-size:13px;color:var(--text-dim);">Past intel</summary>
+      <select id="reach-history" class="input" style="margin-top:10px;max-width:420px;"></select>
+    </details>
   </div>
 </div>
 
@@ -1943,6 +1970,7 @@
     wireQ2Chat(authHeader);
     wireWatcher(authHeader);
     wireGrowth(authHeader);
+    wireReach(authHeader);
     wireMoney(authHeader);
     wirePostTemplates(authHeader);
     loadOrders(authHeader);
@@ -3087,6 +3115,132 @@
           renderHistory();
         } catch {}
       })();
+    }
+
+    // --- 002 · daily intelligence -------------------------------------------
+    function wireReach(authHeader) {
+      const statusEl = document.getElementById("reach-status");
+      const outputEl = document.getElementById("reach-output");
+      const sourcesEl = document.getElementById("reach-sources");
+      const copyBtn = document.getElementById("reach-copy");
+      const quotaEl = document.getElementById("reach-quota");
+      const historyWrap = document.getElementById("reach-history-wrap");
+      const historySel = document.getElementById("reach-history");
+      const runBtn = document.getElementById("reach-run");
+      if (!statusEl || !outputEl || !runBtn) return;
+
+      const LS_KEY = "vx_reach_briefs";
+      let briefs = [];
+      try { briefs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { briefs = []; }
+
+      function saveLocal() {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(briefs.slice(0, 40))); } catch {}
+      }
+
+      function showBrief(b) {
+        outputEl.textContent = b.text || "(empty intel)";
+        outputEl.style.display = "block";
+        const src = Array.isArray(b.sources) ? b.sources.filter((s) => s && s.uri) : [];
+        if (src.length) {
+          sourcesEl.style.display = "block";
+          sourcesEl.innerHTML = "Sources: " + src.map((s) =>
+            '<a href="' + escapeHtml(s.uri) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(s.title || s.uri) + "</a>"
+          ).join(" · ");
+        } else {
+          sourcesEl.style.display = "none";
+        }
+        copyBtn.style.display = "inline-block";
+        copyBtn.dataset.brief = b.text || "";
+      }
+
+      function renderHistory() {
+        if (!briefs.length) { historyWrap.hidden = true; return; }
+        historyWrap.hidden = false;
+        historySel.innerHTML = briefs.map((b, i) =>
+          '<option value="' + i + '">' + escapeHtml((b.at || "").slice(0, 10) + " · " + (b.label || "002 intel")) + "</option>"
+        ).join("");
+        historySel.onchange = () => {
+          const b = briefs[Number(historySel.value)];
+          if (b) showBrief(b);
+        };
+      }
+
+      function setQuota(data) {
+        if (data && Number.isFinite(data.runsToday)) {
+          quotaEl.textContent = data.runsToday + " of " + (data.maxRunsPerDay || 15) + " runs used today";
+        }
+      }
+
+      function mergeFeed(rows) {
+        const seen = new Set(briefs.map((b) => b.id));
+        (rows || []).forEach((b) => { if (b && b.kind === "reach" && !seen.has(b.id)) briefs.push(b); });
+        briefs.sort((a, b) => (b.id || 0) - (a.id || 0));
+        briefs = briefs.slice(0, 40);
+        saveLocal();
+        renderHistory();
+      }
+
+      async function loadFeed() {
+        try {
+          const res = await fetch("/api/growth/feed?limit=20", { headers: authHeader });
+          if (!res.ok) return;
+          const data = await res.json();
+          setQuota(data);
+          mergeFeed(data.briefs);
+          if (briefs.length) showBrief(briefs[0]);
+        } catch {}
+      }
+
+      runBtn.addEventListener("click", async () => {
+        runBtn.disabled = true;
+        statusEl.textContent = "002 is pulling the live read and researching — up to 90 seconds…";
+        outputEl.style.display = "none";
+        sourcesEl.style.display = "none";
+        copyBtn.style.display = "none";
+        try {
+          let read = null;
+          try {
+            const feed = await fetch("/api/watch/feed?full=1&limit=1", { headers: authHeader });
+            const feedData = await feed.json().catch(() => null);
+            read = feedData && Array.isArray(feedData.symbolsState) ? feedData.symbolsState[0] : null;
+          } catch {}
+          const res = await fetch("/api/growth/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeader },
+            body: JSON.stringify({ kind: "reach", read })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            statusEl.textContent = (data && data.error) || "002 could not finish.";
+            return;
+          }
+          statusEl.textContent = data.brief && data.brief.fallback
+            ? "AI research is unavailable right now — baseline intel loaded."
+            : "";
+          briefs.unshift(data.brief);
+          briefs = briefs.slice(0, 40);
+          saveLocal();
+          renderHistory();
+          showBrief(data.brief);
+          setQuota(data.feed);
+        } catch {
+          statusEl.textContent = "Network error while running 002.";
+        } finally {
+          runBtn.disabled = false;
+        }
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(copyBtn.dataset.brief || "");
+          copyBtn.textContent = "Copied";
+          setTimeout(() => { copyBtn.textContent = "Copy intel"; }, 1500);
+        } catch {
+          copyBtn.textContent = "Copy failed";
+        }
+      });
+
+      loadFeed();
     }
 
     // --- Money ---------------------------------------------------------------
