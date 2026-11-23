@@ -338,6 +338,7 @@ begin
     from public.credit_orders co
     join auth.users u on u.id = co.user_id
     where co.status = 'pending'
+      and co.created_at > now() - interval '48 hours'
     order by co.created_at asc;
 end;
 $$;
