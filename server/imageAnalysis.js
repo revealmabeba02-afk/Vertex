@@ -15,6 +15,8 @@
 
 const sharp = require("sharp");
 const { buildSystemPrompt, buildUserPrompt } = require("./analysisPrompt");
+const OPENCODE_GO_API_KEY = (process.env.OPENCODE_GO_API_KEY || "").trim();
+const OPENCODE_GO_VISION_MODEL = (process.env.OPENCODE_GO_VISION_MODEL || "gemini-4-argon").trim();
 
 const IMAGE_ANALYSIS_MODEL = (
   process.env.IMAGE_ANALYSIS_MODEL ||
@@ -567,11 +569,69 @@ async function shrinkForModel(buffer, mimeType) {
   }
 }
 
+async function callOpenCodeGoVision({ buffer, mimeType, timeframe, apiKey }) {
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType || "image/png",
+              data: buffer.toString("base64")
+            }
+          },
+          { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 1600,
+      responseMimeType: "application/json"
+    }
+  });
+  let response;
+  try {
+    response = await fetch(
+      "https://opencode.ai/inference/go/google/v1beta/models/" +
+        encodeURIComponent(OPENCODE_GO_VISION_MODEL) +
+        ":generateContent",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + apiKey,
+          "Content-Type": "application/json",
+          "x-opencode-session": "vertex-vision-" + Date.now()
+        },
+        body,
+        signal: AbortSignal.timeout(12000)
+      }
+    );
+  } catch (err) {
+    const e = new Error("The image reader took too long or could not be reached. Please try again.");
+    e.status = 502;
+    e.cause = err;
+    throw e;
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error("Image analysis error (opencode-go):", response.status, data);
+    throw visionError("opencode-go", response.status, data);
+  }
+  const parts = data?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
+  if (!text.trim()) throw new Error("OpenCode Go vision returned an empty read.");
+  return text;
+}
+
 async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKey }) {
   const anthropicKey = String(apiKey || "").trim();
   const googleKey = String(geminiKey || "").trim();
+  const goKey = String(OPENCODE_GO_API_KEY || "").trim();
 
-  if (!googleKey && !anthropicKey) {
+  if (!goKey && !googleKey && !anthropicKey) {
     const err = new Error("Image analysis is not configured on this server.");
     err.status = 503;
     throw err;
@@ -584,9 +644,30 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
 
   const shrunk = await shrinkForModel(buffer, mimeType);
 
-  const text = googleKey
-    ? await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey })
-    : await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
+  let text = null;
+  let goFailure = null;
+  if (goKey) {
+    try {
+      text = await callOpenCodeGoVision({
+        buffer: shrunk.buffer,
+        mimeType: shrunk.mimeType,
+        timeframe,
+        apiKey: goKey
+      });
+    } catch (err) {
+      goFailure = err;
+      console.error("OpenCode Go vision failed, falling back:", err.message);
+    }
+  }
+  if (!text) {
+    if (googleKey) {
+      text = await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey });
+    } else if (anthropicKey) {
+      text = await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
+    } else {
+      throw goFailure || new Error("No vision provider answered.");
+    }
+  }
 
   let payload;
   try {

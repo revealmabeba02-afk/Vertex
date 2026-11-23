@@ -431,6 +431,7 @@ const SUPPORT_AI_MODEL = (process.env.SUPPORT_AI_MODEL || "claude-haiku-4-5-2025
 // zero, which is exactly the state this app found itself in. Image reading is
 // the only feature that needs a vision key; the pair scanner never touches it.
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
+const OPENCODE_GO_API_KEY = (process.env.OPENCODE_GO_API_KEY || "").trim();
 
 const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Vertex Chart Scanner (vertex-9s4c.onrender.com), a forex chart analysis tool.
 
@@ -1240,7 +1241,7 @@ app.get("/config.js", (req, res) => {
         ready: SUPABASE_READY,
         // Chart-photo scanning needs a vision model, so the app can hide /
         // explain the Upload tab instead of offering a button that 503s.
-        imageScan: !!(GEMINI_API_KEY || ANTHROPIC_API_KEY),
+        imageScan: !!(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY),
         // Public PayPal.Me handle. It is a pay link, not a secret.
         paypalHandle: PAYPAL_ME_HANDLE || ""
       }) +
@@ -4059,9 +4060,9 @@ const MAX_CONCURRENT_IMAGE_SCANS = 2;
 // If neither vision key is present the route answers 503 before charging
 // anything, and the pair scanner keeps working exactly as before.
 app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart"), async (req, res) => {
-  if (!GEMINI_API_KEY && !ANTHROPIC_API_KEY) {
+  if (!OPENCODE_GO_API_KEY && !GEMINI_API_KEY && !ANTHROPIC_API_KEY) {
     return res.status(503).json({
-      error: "Chart-photo reading isn't switched on yet. Add GEMINI_API_KEY on the server, or pick a pair instead.",
+      error: "Chart-photo reading isn't switched on yet. Add OPENCODE_GO_API_KEY on the server, or pick a pair instead.",
       code: "image_scan_unavailable"
     });
   }
