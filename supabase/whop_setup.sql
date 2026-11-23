@@ -38,7 +38,7 @@ declare
   v_existing public.credit_orders;
   v_order public.credit_orders;
 begin
-  if p_secret is distinct from '5b43538659fe69465f251809e20f1ef73eb99a61ff6f4b57' then
+  if p_secret is distinct from 'PASTE_CREDIT_FULFILL_SECRET_HERE' then
     raise exception 'Not authorized';
   end if;
 

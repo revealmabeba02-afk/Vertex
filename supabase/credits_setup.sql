@@ -15,7 +15,7 @@
 --     CREDIT_FULFILL_SECRET and must match the value baked in below.
 --
 -- IMPORTANT: the secret already baked into this file (search for
--- 5b43538659fe69465f251809e20f1ef73eb99a61ff6f4b57 below) must be set as
+-- PASTE_CREDIT_FULFILL_SECRET_HERE below) must be set as
 -- CREDIT_FULFILL_SECRET in Render's environment variables, exactly as-is.
 -- Treat it like a password — anyone who has it could credit themselves free
 -- scans. If you ever want to rotate it, generate a new random string,
@@ -207,7 +207,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if p_secret is distinct from '5b43538659fe69465f251809e20f1ef73eb99a61ff6f4b57' then
+  if p_secret is distinct from 'PASTE_CREDIT_FULFILL_SECRET_HERE' then
     raise exception 'Not authorized';
   end if;
 
@@ -234,7 +234,7 @@ as $$
 declare
   v_order public.credit_orders;
 begin
-  if p_secret is distinct from '5b43538659fe69465f251809e20f1ef73eb99a61ff6f4b57' then
+  if p_secret is distinct from 'PASTE_CREDIT_FULFILL_SECRET_HERE' then
     raise exception 'Not authorized';
   end if;
 
