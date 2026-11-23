@@ -4243,9 +4243,11 @@ async function runAnalyze(req, res, symbol, timeframe) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ symbol, timeframe, top_down: true }),
-      // 55s gives slow analysis room to finish without railing past Render's
-      // own ~60s request ceiling.
-      signal: AbortSignal.timeout(55000)
+      // The browser gives up at 20s, so the server must finish or fail before
+      // that. A provider that is still "thinking" at 15s is not going to make
+      // the scan feel instant — fail with a clear retry instead of leaving the
+      // user staring at a spinner that eventually times out.
+      signal: AbortSignal.timeout(15000)
     });
 
     const rawBody = await fxRes.text();
