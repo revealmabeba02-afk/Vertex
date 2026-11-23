@@ -234,13 +234,23 @@ function fallbackReachBrief(reason, read) {
   const live = Number.isFinite(read?.entry)
     ? `${pair} ${tf}: ${bias}. Entry ${read.entry} · Stop ${read.stop ?? "—"} · Target ${read.target ?? "—"}.`
     : `No clean ${pair} ${tf} read right now.`;
+  const focuses = [
+    { title: "First impression", levelUp: "Make the first result screen answer one question: what is the trade? Verdict, entry, stop and target above the fold. Everything else sits below.", move: "Screen-record a first-time user landing on the scanner and remove one thing that makes them pause." },
+    { title: "Proof", levelUp: "Show one real finished read on the landing page, labelled as an example. Numbers build more trust than adjectives.", move: "Post the live read with entry, stop and target, then reply to every comment for the first hour." },
+    { title: "Speed", levelUp: "Measure the time from tapping Scan to seeing the verdict. If it is over 10 seconds, cut the slowest step before adding anything new.", move: "Time three scans on your own connection and write down the slowest one." },
+    { title: "Trust", levelUp: "Make the no-trade state as visible as BUY and SELL. An honest no-trade is the strongest proof the tool is not guessing.", move: "Post one no-trade read and explain why waiting is the trade." },
+    { title: "Pricing", levelUp: "Put the per-scan price next to every bundle so the Trader pack looks obviously cheaper. Do not add more tiers; make the existing choice clearer.", move: "Ask one trader which pack they would pick and why." },
+    { title: "Retention", levelUp: "Give the user one reason to come back tomorrow: the Watcher feed on the scanner home, not buried in a tab.", move: "Send one message to an existing user asking what almost stopped them from scanning again." },
+    { title: "Content", levelUp: "Turn the best live read of the week into a 15-second video: scanner, analyzer, signal, CTA. One idea, one number, one action.", move: "Record and post the 15s scanner video with the live read." }
+  ];
+  const focus = focuses[new Date().getUTCDay() % focuses.length];
   return {
     id: Date.now(),
     at: new Date().toISOString(),
     kind: "reach",
-    label: "002 · Daily intel (AI unavailable)",
+    label: `002 · ${focus.title} (AI unavailable)`,
     text:
-      `002 daily intel — AI research is unavailable right now (${reason}). This is the baseline read.\n\n` +
+      `002 daily intel — AI research is unavailable right now (${reason}). Today's focus: ${focus.title}.\n\n` +
       `1. WHAT FOREX TRADERS NEED TODAY\n` +
       `- A clear verdict, not ten indicators.\n` +
       `- Entry, stop and target they can act on in seconds.\n` +
@@ -249,12 +259,10 @@ function fallbackReachBrief(reason, read) {
       `- Traders are tired of signal groups and fake screenshots.\n` +
       `- Short-form video is still the cheapest discovery channel.\n` +
       `- Tools that show the plan, not just a bias, stand out.\n\n` +
-      `3. THE LEVEL-UP\n` +
-      `Put the verdict, entry, stop and target above the fold on every result, and keep the deep concepts collapsed. That is the trust gap most tools lose.\n\n` +
+      `3. THE LEVEL-UP — ${focus.title}\n${focus.levelUp}\n\n` +
       `4. ONE CONTENT ANGLE\n` +
       `"I scanned ${pair} so you don't have to." ${live} Two free scans a day. Not financial advice.\n\n` +
-      `5. ONE MOVE TODAY\n` +
-      `Post the 15s scanner video with that live read, pin a comment with the free-scan link, and reply to every comment for the first hour.`,
+      `5. ONE MOVE TODAY\n${focus.move}`,
     sources: [],
     searchQueries: [],
     ungrounded: true,
@@ -418,7 +426,7 @@ function createGrowthAgent() {
 
   async function callBrain(prompt, opts = {}) {
     let lastError = null;
-    if (OPENCODE_GO_API_KEY) {
+    if (OPENCODE_GO_API_KEY && !opts.freeOnly) {
       try {
         return await callOpenCodeGo(prompt);
       } catch (err) {
@@ -430,7 +438,7 @@ function createGrowthAgent() {
     } catch (err) {
       lastError = lastError ? new Error(lastError.message + " · " + err.message) : err;
     }
-    if (ANTHROPIC_API_KEY) {
+    if (ANTHROPIC_API_KEY && !opts.freeOnly) {
       try {
         return await callAnthropic(prompt, opts);
       } catch (err) {
@@ -502,7 +510,7 @@ function createGrowthAgent() {
           `Entry: ${liveRead.entry ?? "—"}\nStop: ${liveRead.stop ?? "—"}\nTarget: ${liveRead.target ?? "—"}\n` +
           `Confidence: ${liveRead.confidence ?? "—"}\nR:R: ${liveRead.rr ?? "—"}`
         : "";
-      const out = await callBrain(mission.prompt + liveBlock);
+      const out = await callBrain(mission.prompt + liveBlock, { freeOnly: payload && payload.freeOnly === true });
       runtime.lastError = null;
       const brief = {
         id: Date.now(),

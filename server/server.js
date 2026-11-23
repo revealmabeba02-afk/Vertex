@@ -5013,7 +5013,7 @@ async function runDailyAgent() {
       await watcher.tick({ force: true }).catch(() => {});
       read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
     }
-    const brief = await growth.run("posts", { read });
+    const brief = await growth.run("posts", { read, freeOnly: true });
     await notify({ title: "Vertex: today's posts", text: brief.text });
     dailyAgentDay = day;
     console.log(`Daily agent: posts sent for ${day}`);
@@ -5049,7 +5049,7 @@ async function runDailyReach() {
       await watcher.tick({ force: true }).catch(() => {});
       read = watcher.feed({ full: true, limit: 1 }).symbolsState?.[0] || null;
     }
-    const brief = await growth.run("reach", { read });
+    const brief = await growth.run("reach", { read, freeOnly: true });
     await notify({ title: "002: today's intel", text: brief.text });
     dailyReachDay = day;
     console.log(`Daily 002: intel sent for ${day}`);
