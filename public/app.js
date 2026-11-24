@@ -1721,6 +1721,24 @@
       finishScanHud(false);
       const bundleSuggestionEl = document.getElementById("bundle-suggestion");
       if (bundleSuggestionEl) bundleSuggestionEl.hidden = true;
+
+      // Image reading is the fragile path. Never show a dead-end error for it:
+      // switch straight to the reliable pair scanner, keep the timeframe, and
+      // say what happened. The failed scan was refunded server-side.
+      if (imageFile && err.code !== "no_credits" && err.code !== "account_suspended") {
+        setChartFile(null);
+        setScanMode("pair");
+        clearFormError();
+        if (scanFallbackNote) {
+          scanFallbackNote.textContent = "The image reader is busy. Pick the pair and scan again — the pair scan is instant, and the failed image scan was not charged.";
+          scanFallbackNote.hidden = false;
+        }
+        showState("empty");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        symbolInput.focus();
+        return;
+      }
+
       if (err.name === "AbortError") {
         errorText.textContent = imageFile
           ? "The image scan took too long. Use Pick a pair for an instant read, or try again."
