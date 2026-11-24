@@ -261,6 +261,7 @@
   const scanModeBtns = Array.from(document.querySelectorAll(".scan-mode"));
   const scanPairPanel = document.getElementById("scan-pair-panel");
   const scanImagePanel = document.getElementById("scan-image-panel");
+  const scanFallbackNote = document.getElementById("scan-fallback-note");
   const chartInput = document.getElementById("chart-file");
   const chartDropzone = document.getElementById("chart-dropzone");
   const chartEmpty = document.getElementById("chart-dropzone-empty");
@@ -646,6 +647,7 @@
     });
     if (scanPairPanel) scanPairPanel.hidden = scanMode !== "pair";
     if (scanImagePanel) scanImagePanel.hidden = scanMode !== "image";
+    if (scanFallbackNote) scanFallbackNote.hidden = true;
 
     if (imageModeNote) {
       if (scanMode === "image" && !imageScanEnabled) {
@@ -1641,6 +1643,7 @@
     if (!imageFile) saveLastScan(symbol, timeframe);
     scanInFlight = true;
     if (imageFallbackBtn) imageFallbackBtn.hidden = true;
+    if (scanFallbackNote) scanFallbackNote.hidden = true;
     setLoadingUI(true);
     if (scanHudBg) scanHudBg.hidden = true;
     showState("loading");
