@@ -582,16 +582,37 @@
   // --------------------------------------------------------------
   // Header status: a real check against the server, not decoration.
   // --------------------------------------------------------------
-  fetch("/api/health")
-    .then((r) => (r.ok ? r.json() : Promise.reject()))
-    .then(() => { statusEl.dataset.state = "online"; statusText.textContent = "Online"; })
-    .catch(() => { statusEl.dataset.state = "offline"; statusText.textContent = "Offline"; });
+  let serverReady = false;
+  let healthRetry = null;
+
+  async function checkServerReady() {
+    try {
+      const r = await fetch("/api/health", { signal: AbortSignal.timeout(9000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      serverReady = true;
+      if (healthRetry) { clearTimeout(healthRetry); healthRetry = null; }
+      statusEl.dataset.state = "online";
+      statusText.textContent = "Online";
+      updateScanBtnState();
+    } catch {
+      serverReady = false;
+      statusEl.dataset.state = "offline";
+      statusText.textContent = "Waking…";
+      updateScanBtnState();
+      if (!healthRetry) healthRetry = setTimeout(checkServerReady, 5000);
+    }
+  }
+  checkServerReady();
 
   // --------------------------------------------------------------
   // Symbol input + timeframe chips together decide whether the scan button
   // is enabled — both are required by FXSynapse's API.
   // --------------------------------------------------------------
   function updateScanBtnState() {
+    if (!serverReady) {
+      scanBtn.disabled = true;
+      return;
+    }
     if (scanMode === "image") {
       scanBtn.disabled = !(chartFile && timeframeSelect.value);
       return;
@@ -872,6 +893,10 @@
     // scans — for what the person did once.
     if (scanInFlight) return;
     clearFormError();
+    if (!serverReady) {
+      showFormError("Vertex is waking up. Give it a few seconds, then scan again.");
+      return;
+    }
 
     if (scanMode === "image") {
       if (!chartFile) {

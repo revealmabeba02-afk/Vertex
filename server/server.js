@@ -839,7 +839,11 @@ app.use((req, res, next) => {
   res.set("X-Content-Type-Options", "nosniff");
   res.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.set("X-Frame-Options", "SAMEORIGIN");
+  res.set("X-Permitted-Cross-Domain-Policies", "none");
   res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (req.secure || process.env.NODE_ENV === "production") {
+    res.set("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  }
   next();
 });
 
@@ -3494,7 +3498,15 @@ app.get("/api/admin/briefing", requireUser, async (req, res) => {
 });
 
 // --- Support ---------------------------------------------------------------
-app.post("/api/support", requireUser, async (req, res) => {
+const supportLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many support messages. Please wait a few minutes and try again." }
+});
+
+app.post("/api/support", supportLimiter, requireUser, async (req, res) => {
   if (!SUPABASE_READY) return res.status(503).json({ error: "Accounts are not set up on this server yet." });
   const message = String(req.body?.message || "").trim();
   if (!message) return res.status(400).json({ error: "Enter a message first." });
