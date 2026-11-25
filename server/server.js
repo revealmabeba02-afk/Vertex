@@ -1485,6 +1485,56 @@ app.post("/api/admin/image-self-test", upload.single("chart"), async (req, res) 
 
   const timeframe = String(req.body?.timeframe || "M1").trim().toUpperCase();
 
+  // Probe mode: send the real prompt to each candidate model once and report
+  // how long each one actually took, so the production model order and budget
+  // are chosen from measurements instead of guesses.
+  if (String(req.query?.probe || "") === "1") {
+    const { buildSystemPrompt, buildUserPrompt } = require("./analysisPrompt");
+    const prepared = await prepareImage(req.file.buffer, req.file.mimetype);
+    const probeBody = JSON.stringify({
+      systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: prepared.mimeType, data: prepared.buffer.toString("base64") } },
+            { text: buildUserPrompt(timeframe.toLowerCase()) }
+          ]
+        }
+      ],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1600, responseMimeType: "application/json" }
+    });
+
+    const probe = [];
+    for (const model of ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.8-flash"]) {
+      const t0 = Date.now();
+      try {
+        const r = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
+          {
+            method: "POST",
+            headers: { "x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json" },
+            body: probeBody,
+            signal: AbortSignal.timeout(20000)
+          }
+        );
+        const d = await r.json().catch(() => null);
+        const text = (d?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+        probe.push({
+          model,
+          status: r.status,
+          ms: Date.now() - t0,
+          ok: r.ok && text.length > 0,
+          chars: text.length,
+          snippet: text.slice(0, 60)
+        });
+      } catch (e) {
+        probe.push({ model, status: null, ms: Date.now() - t0, ok: false, error: e.message });
+      }
+    }
+    return res.json({ probe });
+  }
+
   let failures = [];
   try {
     const r = await fetch(
