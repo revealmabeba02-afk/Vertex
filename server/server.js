@@ -1616,6 +1616,69 @@ app.post("/api/admin/image-self-test", upload.single("chart"), async (req, res) 
   }
 });
 
+// --- Pair check (admin only) ----------------------------------------------
+// Runs one real pair scan with no login and no credit spent, so the read can
+// be inspected (and screenshotted) without touching anyone's balance. Costs one
+// FXSynapse call. Read-only: nothing is charged, refunded or written to history.
+app.get("/api/admin/pair-check", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  const symbol = String(req.query?.symbol || "XAUUSD").trim().toUpperCase();
+  const timeframe = String(req.query?.timeframe || "H4").trim().toUpperCase();
+  if (!isValidTimeframe(timeframe)) {
+    return res.status(400).json({ error: "Pick a valid timeframe (M1, M5, M15, M30, H1, H4, D1, W1)." });
+  }
+  if (!FXSYNAPSE_API_KEY) {
+    return res.status(503).json({ error: "FXSYNAPSE_API_KEY is not set on this server." });
+  }
+
+  const started = Date.now();
+  try {
+    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_CHART_PATH}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${FXSYNAPSE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ symbol, timeframe, top_down: true }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await fxRes.json().catch(() => null);
+    if (!fxRes.ok) {
+      return res.json({
+        ok: false,
+        ms: Date.now() - started,
+        status: fxRes.status,
+        error: data?.error || data?.message || "The analysis provider returned an error."
+      });
+    }
+
+    const a = mapFxSynapseToAnalysis(data);
+    return res.json({
+      ok: true,
+      ms: Date.now() - started,
+      symbol,
+      timeframe,
+      bias: a.market_bias,
+      confidence: a.confidence,
+      confidence_breakdown: a.confidence_breakdown,
+      trend: a.market_structure?.trend,
+      key_levels: a.market_structure?.key_levels,
+      chart_pattern: a.market_structure?.chart_pattern,
+      entries: a.potential_entries,
+      stop_loss: a.stop_loss,
+      take_profit: a.take_profit,
+      rr: a.risk_reward_estimate,
+      invalidation: a.invalidation,
+      notes: a.notes,
+      concepts: a.concepts
+    });
+  } catch (err) {
+    return res.json({ ok: false, ms: Date.now() - started, error: err.message || String(err) });
+  }
+});
+
 // --- Market watcher ------------------------------------------------------
 // The loop that keeps looking between scans. It calls the provider through
 // the exact same request a scan uses, so a watched read and a scanned read
