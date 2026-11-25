@@ -872,6 +872,162 @@
 
   renderWatchlistStrip();
 
+  // ---- Scan all: one tap runs the pair scanner over the starred pairs.
+  // Deliberately not a new backend — it calls the same /api/analyze the Scan
+  // button calls, so credits, refunds, rate limits and history behave exactly
+  // as they do for a single scan. Capped at five, and it stops the moment the
+  // account runs out of scans, so nobody burns a balance by accident.
+  const watchlistScanAllBtn = document.getElementById("watchlist-scan-all");
+  const watchlistResultsEl = document.getElementById("watchlist-results");
+  const WATCHLIST_SCAN_MAX = 5;
+  let watchlistScanning = false;
+
+  function watchlistRow(sym) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "watchlist-row";
+    row.dataset.state = "pending";
+    row.dataset.symbol = sym;
+
+    const left = document.createElement("span");
+    left.className = "watchlist-row__sym";
+    left.textContent = sym;
+    row.appendChild(left);
+
+    const right = document.createElement("span");
+    right.className = "watchlist-row__meta";
+    right.textContent = "queued";
+    row.appendChild(right);
+    return row;
+  }
+
+  function setRowState(row, state, text) {
+    row.dataset.state = state;
+    const meta = row.querySelector(".watchlist-row__meta");
+    if (meta) meta.textContent = text;
+  }
+
+  async function scanWatchlist() {
+    if (watchlistScanning) return;
+    const all = loadWatchlist();
+    const list = all.slice(0, WATCHLIST_SCAN_MAX);
+    if (!list.length) return;
+
+    const countText = list.length === 1 ? "1 pair" : `${list.length} pairs`;
+    if (
+      list.length > 1 &&
+      !window.confirm(
+        `Scan ${countText}? That uses one scan per pair (your free scans or credits), and it stops if you run out.`
+      )
+    ) {
+      return;
+    }
+
+    watchlistScanning = true;
+    watchlistScanAllBtn.disabled = true;
+    watchlistResultsEl.hidden = false;
+    watchlistResultsEl.innerHTML = "";
+    if (all.length > WATCHLIST_SCAN_MAX) {
+      const hint = document.createElement("p");
+      hint.className = "watchlist-row__hint";
+      hint.textContent = `First ${WATCHLIST_SCAN_MAX} of ${all.length} pairs.`;
+      watchlistResultsEl.appendChild(hint);
+    }
+
+    const rows = new Map();
+    list.forEach((sym) => {
+      const row = watchlistRow(sym);
+      watchlistResultsEl.appendChild(row);
+      rows.set(sym, row);
+    });
+
+    const timeframe = timeframeSelect.value;
+    const session = await Auth.getSession();
+    const headers = { "Content-Type": "application/json" };
+    if (session) headers.Authorization = `Bearer ${session.access_token}`;
+
+    let outcomes = 0;
+    try {
+      for (let i = 0; i < list.length; i += 1) {
+        const sym = list[i];
+        const row = rows.get(sym);
+        setRowState(row, "pending", `${i + 1} of ${list.length}…`);
+
+        let data = null;
+        try {
+          const res = await fetch("/api/analyze", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ symbol: sym, timeframe })
+          });
+          if (res.status === 401) {
+            await Auth.clearSession();
+            location.replace("/login?next=/app");
+            return;
+          }
+          data = await res.json().catch(() => null);
+          if (!res.ok) {
+            const code = data?.code || null;
+            if (code === "no_credits") {
+              setRowState(row, "failed", "no scans left");
+              break;
+            }
+            throw new Error(data?.error || `Scan failed (${res.status})`);
+          }
+        } catch (err) {
+          setRowState(row, "failed", "failed");
+          continue;
+        }
+
+        const analysis = data.analysis || {};
+        const bias = analysis.market_bias || "—";
+        const conf = Number.isFinite(Number(analysis.confidence)) ? `${Math.round(Number(analysis.confidence))}%` : "";
+
+        row.dataset.state = "done";
+        const meta = row.querySelector(".watchlist-row__meta");
+        if (meta) {
+          meta.innerHTML = "";
+          const biasEl = document.createElement("span");
+          biasEl.className = "watchlist-row__bias";
+          biasEl.dataset.bias = bias;
+          biasEl.textContent = bias;
+          meta.appendChild(biasEl);
+          const confEl = document.createElement("span");
+          confEl.textContent = conf;
+          meta.appendChild(confEl);
+          const arrow = document.createElement("span");
+          arrow.textContent = "›";
+          meta.appendChild(arrow);
+        }
+
+        row.addEventListener("click", () => {
+          symbolInput.value = sym;
+          syncQuickpickActive();
+          syncWatchlistStar();
+          renderResult(analysis, data.timeframe || timeframe);
+          showState("result");
+          const card = document.getElementById("result-card") || stateResult;
+          if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        outcomes += 1;
+      }
+    } finally {
+      if (outcomes === 0 && watchlistResultsEl.childElementCount === list.length) {
+        const hint = document.createElement("p");
+        hint.className = "watchlist-row__hint";
+        hint.textContent = "No scans completed. The pair scanner may be busy, or you may be out of scans.";
+        watchlistResultsEl.appendChild(hint);
+      }
+      watchlistScanning = false;
+      watchlistScanAllBtn.disabled = false;
+      if (typeof window.__vertexRefreshCredits === "function") window.__vertexRefreshCredits();
+    }
+  }
+
+  if (watchlistScanAllBtn) {
+    watchlistScanAllBtn.addEventListener("click", scanWatchlist);
+  }
+
   function showFormError(msg) {
     formError.textContent = msg;
     formError.hidden = false;
