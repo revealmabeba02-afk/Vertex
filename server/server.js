@@ -955,6 +955,81 @@ app.post("/api/admin/unlock", adminPinLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Key check (admin only) -------------------------------------------------
+// The image reader is the one feature that depends on an outside AI key, and
+// when it fails the provider's own status code is the only thing that says
+// why: 401/403 = key rejected, 402 = out of credit, 429 = daily cap reached,
+// 503 = provider overloaded. That code only ever lands in the server log,
+// which nobody can read from a browser. This asks each configured vision
+// provider the same question the scanner asks (a tiny image + a one-word
+// answer) and returns just the status and the provider's own message — never
+// the key itself.
+const KEY_CHECK_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+app.get("/api/admin/key-check", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+
+  const body = JSON.stringify({
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "image/png", data: KEY_CHECK_PNG } },
+          { text: "Reply with the single word: ok" }
+        ]
+      }
+    ],
+    generationConfig: { maxOutputTokens: 16, temperature: 0 }
+  });
+
+  const checks = [];
+
+  async function probe(label, url, headers) {
+    if (!headers) {
+      checks.push({ provider: label, configured: false, status: null, ok: false, message: "No key set on this server." });
+      return;
+    }
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body,
+        signal: AbortSignal.timeout(12000)
+      });
+      const data = await r.json().catch(() => null);
+      const message = String(data?.error?.message || (r.ok ? "Answered." : "")).slice(0, 300);
+      checks.push({ provider: label, configured: true, status: r.status, ok: r.ok, message });
+    } catch (err) {
+      checks.push({
+        provider: label,
+        configured: true,
+        status: null,
+        ok: false,
+        message: "Could not reach the provider: " + err.message
+      });
+    }
+  }
+
+  await probe(
+    "opencode-go:gemini-4-argon",
+    "https://opencode.ai/inference/go/google/v1beta/models/gemini-4-argon:generateContent",
+    OPENCODE_GO_API_KEY ? { Authorization: "Bearer " + OPENCODE_GO_API_KEY } : null
+  );
+
+  for (const model of ["gemini-3.6-flash", "gemini-flash-latest"]) {
+    await probe(
+      "gemini:" + model,
+      "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
+      GEMINI_API_KEY ? { "x-goog-api-key": GEMINI_API_KEY } : null
+    );
+  }
+
+  res.json({ checkedAt: new Date().toISOString(), checks });
+});
+
 // --- YouTube auto-post connection -------------------------------------------
 // One-time admin step: King authorizes Vertex's Google Cloud OAuth client to
 // upload videos to his YouTube channel. Google hands back a refresh_token,
