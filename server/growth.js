@@ -133,7 +133,7 @@ Deliver, in plain text with clear section headers:
 4. ONE CONTENT ANGLE — one post or short-video idea that would make a trader stop scrolling, tied to a real Vertex feature.
 5. ONE MOVE TODAY — the single highest-leverage action for the owner today, first step written out.
 
-Rules: zero budget, one founder, no fake promises, no financial advice, no feature that needs a new paid vendor. Be direct and useful.`,
+Rules: zero budget, one founder, no fake promises, no financial advice, no feature that needs a new paid vendor. Never quote a win rate, probability, expected return or past-performance figure — no such data exists, so any number would be invented. When nothing is actionable, say so instead of forcing an idea. Be direct and useful.`,
   },
   research: {
     label: "Find new growth",

@@ -460,7 +460,9 @@ Reply with ONLY a JSON object, no other text, in exactly this shape:
 {"confidence":"high","reply":"..."} — for a question you can fully answer from the information above
 {"confidence":"low","reply":"..."} — a best-effort DRAFT reply for a human to review and edit before sending; still write something useful, just don't claim certainty about anything you don't actually know
 
-Keep replies under 120 words, friendly, plain text (no markdown).`;
+Keep replies under 120 words, friendly, plain text (no markdown).
+
+Hard limits, no exceptions: never state a win rate, probability, expected return or past-performance figure. Vertex does not publish any of those, so any number would be invented — say plainly that the confidence figure is not a win-rate promise. Never tell a user to place a specific trade or to enter/exit a position; describe what the scan shows and let them decide. Never promise profit.`;
 
 const SUPPORT_HOLD_REPLY = "Thanks — I've passed this to the team. We'll check it and get back to you here.";
 
