@@ -52,8 +52,8 @@ const GEMINI_IMAGE_MODELS = [
       .map((m) => m.trim())
       .filter(Boolean)
       .concat([
-        "gemini-flash-lite-latest",
         "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
         "gemini-3.6-flash",
         "gemini-flash-latest",
         "gemini-3.8-flash",
@@ -399,12 +399,15 @@ function visionError(provider, status, data) {
   let text;
   if (status === 401 || status === 403) {
     text = "The image reader is not authorized right now. Please try the pair scanner, or contact support.";
-  } else if (isCredit) {
-    text = "The chart-photo reader is out of credit. Use the pair scanner for now, or add credit to the image provider.";
   } else if (status === 429 || isQuota) {
+    // Quota is checked before credit on purpose: Google's free-tier 429 says
+    // "check your plan and billing details", which used to be read as "out of
+    // credit" and shown to users who simply hit the daily free cap.
     text = provider === "gemini"
       ? "The free image reader has hit its limit for now. Use the pair scanner, or try again later."
       : "The image reader is rate limited. Please try again shortly.";
+  } else if (status === 402 || isCredit) {
+    text = "The chart-photo reader is out of credit. Use the pair scanner for now, or add credit to the image provider.";
   } else {
     text = message || "The image reader could not analyze that chart.";
   }
@@ -574,10 +577,26 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
       const errors = (agg && agg.errors) || [];
       lastFailure = errors[errors.length - 1] || null;
 
-      // Auth and quota are account-wide: every model would fail the same way,
-      // so there is nothing to gain from walking the rest of the list.
-      const fatal = errors.find((e) => e && (e.status === 401 || e.status === 403 || e.status === 429));
+      // Auth is account-wide: every model fails the same way, so stop.
+      // Quota is NOT: measured 2026-11-25, one model answered 429 while
+      // another answered 200 a second later, because each model has its own
+      // free allowance. Treating 429 as fatal turned a working scan into an
+      // error, so it now just moves to the next pair.
+      const fatal = errors.find((e) => e && (e.status === 401 || e.status === 403));
       if (fatal) throw visionError("gemini", fatal.status, fatal.data);
+    }
+  }
+
+  // Last chance: the models that answer are the lite ones, and a 503 on the
+  // first try is often gone two seconds later. If there is still clock left,
+  // give the fastest model one more shot before telling the user it failed.
+  if (deadline - Date.now() > 2500) {
+    try {
+      const winner = await tryModel(GEMINI_IMAGE_MODELS[0]);
+      console.log(`Image analysis answered by gemini/${winner.model} on the last try in ${Date.now() - startedAt}ms`);
+      return winner.text;
+    } catch (err) {
+      lastFailure = err;
     }
   }
 
