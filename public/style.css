@@ -6,6 +6,18 @@
    no longer reachable from the simplified navigation. */
 .is-retired { display: none !important; }
 
+/* Mobile taps: kill the grey flash and the ~300ms delay some mobile browsers
+   still apply while they wait to see if a tap is a double-tap-to-zoom. Applied
+   to real controls only, so pinch-zoom on the chart image still works. */
+a,
+button,
+summary,
+label[for],
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 /* ===========================================================
    Tokens
    =========================================================== */

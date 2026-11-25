@@ -699,6 +699,22 @@
   }
   .command-rail__group[open] summary::after { content: "–"; }
   .command-rail__group a { padding-left: 20px; font-size: 13.5px; }
+  /* Touch devices: the rail items sat at ~39px tall (11px padding + 14px text),
+     just under the 44px comfortable-thumb target, and a tap could be swallowed
+     by the browser's double-tap-to-zoom delay. Only applies to coarse pointers,
+     so the desktop rail keeps its tight spacing. */
+  @media (hover: none) and (pointer: coarse) {
+    .command-rail a {
+      min-height: 46px;
+      padding-top: 13px;
+      padding-bottom: 13px;
+    }
+    .command-rail__group summary { min-height: 46px; }
+    .command-rail-toggle { min-height: 46px; min-width: 46px; }
+    .command-rail a,
+    .command-rail__group summary,
+    .command-rail-toggle { touch-action: manipulation; }
+  }
   .command-panel {
     display: none;
     opacity: 0;
