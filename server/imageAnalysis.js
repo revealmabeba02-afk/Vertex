@@ -531,8 +531,20 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
       const parts = data?.candidates?.[0]?.content?.parts;
       const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
       if (text.trim()) {
-        console.log(`Image analysis answered by gemini/${model} in ${Date.now() - startedAt}ms`);
-        return text;
+        // A model can answer 200 and still hand back something that isn't the
+        // JSON object the app renders (truncated, prose, a stray brace). That
+        // used to end the scan with "couldn't read that screenshot" even though
+        // the next model would have answered fine. Validate here so a bad read
+        // is just another retry.
+        try {
+          parseJsonObject(text);
+          console.log(`Image analysis answered by gemini/${model} in ${Date.now() - startedAt}ms`);
+          return text;
+        } catch {
+          console.error(`Image analysis: gemini/${model} answered without valid JSON, trying next model`);
+          lastFailure = { kind: "json", status: response.status, data };
+          continue;
+        }
       }
       lastFailure = { kind: "empty", status: response.status, data };
       continue;
