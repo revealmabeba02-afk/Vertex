@@ -492,22 +492,32 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
     }
   });
 
-  let lastFailure = null;
   const startedAt = Date.now();
   // A scan has to feel instant, not thorough. King's rule: around ten seconds,
-  // never past twenty. So the whole model walk gets a hard 15s budget — the
-  // browser gives up at 20s, so a slow model must never be allowed to burn the
-  // whole window — and each attempt a smaller slice of it. A 1400px chart
-  // answers in 3-7s on a lite model when the free tier is healthy, so this only
-  // bites when something is actually wrong. 12s was too tight: one lite-model
-  // hiccup plus two retries ran out of clock and the user got "took too long"
-  // even though the very next attempt worked.
+  // never past twenty. The browser gives up at 20s, so the whole walk has a
+  // hard 15s budget and each attempt a slice of it.
+  //
+  // Sequential was not reliable: measured over ten runs, the free tier stalled
+  // one model in roughly half of them, and a single stall ate the budget before
+  // the next model got a turn — 40% of uploads came back "took too long" while
+  // the model next door was answering in 3s. So the models now race in pairs:
+  // two requests start together, the first valid answer wins, and a stalled
+  // model costs nothing because its partner is already working. Pairs are
+  // walked in order, so a healthy lite model still answers first.
+  //
+  // Cost: two requests per scan instead of one. On the free tier that is inside
+  // the per-minute allowance, and it buys a very large drop in worst-case wait.
   const OVERALL_BUDGET_MS = 15000;
   const ATTEMPT_TIMEOUT_MS = 8000;
+  const deadline = startedAt + OVERALL_BUDGET_MS;
 
-  for (const model of GEMINI_IMAGE_MODELS) {
-    const remaining = OVERALL_BUDGET_MS - (Date.now() - startedAt);
-    if (remaining < 1500) break;
+  let lastFailure = null;
+
+  async function tryModel(model) {
+    const remaining = deadline - Date.now();
+    if (remaining < 1200) {
+      throw Object.assign(new Error("No time left in the scan budget."), { kind: "clock" });
+    }
     const url =
       "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(model) +
@@ -517,53 +527,61 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
     try {
       response = await fetch(url, {
         method: "POST",
-        headers: {
-          "x-goog-api-key": apiKey,
-          "Content-Type": "application/json"
-        },
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
         body,
         signal: AbortSignal.timeout(Math.min(ATTEMPT_TIMEOUT_MS, remaining))
       });
     } catch (err) {
-      lastFailure = { kind: "network", err };
-      continue;
+      throw Object.assign(new Error("The image reader took too long to answer."), { kind: "network", err });
     }
 
     const data = await response.json().catch(() => null);
-    if (response.ok) {
-      const parts = data?.candidates?.[0]?.content?.parts;
-      const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
-      if (text.trim()) {
-        // A model can answer 200 and still hand back something that isn't the
-        // JSON object the app renders (truncated, prose, a stray brace). That
-        // used to end the scan with "couldn't read that screenshot" even though
-        // the next model would have answered fine. Validate here so a bad read
-        // is just another retry.
-        try {
-          parseJsonObject(text);
-          console.log(`Image analysis answered by gemini/${model} in ${Date.now() - startedAt}ms`);
-          return text;
-        } catch {
-          console.error(`Image analysis: gemini/${model} answered without valid JSON, trying next model`);
-          lastFailure = { kind: "json", status: response.status, data };
-          continue;
-        }
-      }
-      lastFailure = { kind: "empty", status: response.status, data };
-      continue;
+    if (!response.ok) {
+      console.error("Image analysis error (gemini/" + model + "):", response.status, data);
+      throw Object.assign(new Error("Gemini answered " + response.status), {
+        kind: "http",
+        status: response.status,
+        data
+      });
     }
 
-    console.error("Image analysis error (gemini/" + model + "):", response.status, data);
+    const parts = data?.candidates?.[0]?.content?.parts;
+    const text = Array.isArray(parts) ? parts.map((p) => p?.text || "").join("") : "";
+    if (!text.trim()) {
+      throw Object.assign(new Error("Gemini returned an empty read."), { kind: "empty", status: response.status, data });
+    }
 
-    // A retired or overloaded model is worth retrying on the next name.
-    // Quota (429) is not: every model shares the same daily cap, so retrying
-    // only makes the user wait. Fail fast with the "use pair scanner" copy.
-    const retryable = response.status === 404 || response.status === 503;
-    if (!retryable) throw visionError("gemini", response.status, data);
-    lastFailure = { kind: "http", status: response.status, data };
+    // A model can answer 200 and still hand back something that isn't the JSON
+    // object the app renders (truncated, prose, a stray brace). Treat that as a
+    // failed attempt so the partner model gets to answer instead of the user
+    // being told their screenshot was unreadable.
+    parseJsonObject(text);
+    return { text, model };
   }
 
-  if (lastFailure && lastFailure.kind === "http") {
+  const pairs = [];
+  for (let i = 0; i < GEMINI_IMAGE_MODELS.length; i += 2) {
+    pairs.push(GEMINI_IMAGE_MODELS.slice(i, i + 2));
+  }
+
+  for (const pair of pairs) {
+    if (deadline - Date.now() < 1200) break;
+    try {
+      const winner = await Promise.any(pair.map((m) => tryModel(m)));
+      console.log(`Image analysis answered by gemini/${winner.model} in ${Date.now() - startedAt}ms`);
+      return winner.text;
+    } catch (agg) {
+      const errors = (agg && agg.errors) || [];
+      lastFailure = errors[errors.length - 1] || null;
+
+      // Auth and quota are account-wide: every model would fail the same way,
+      // so there is nothing to gain from walking the rest of the list.
+      const fatal = errors.find((e) => e && (e.status === 401 || e.status === 403 || e.status === 429));
+      if (fatal) throw visionError("gemini", fatal.status, fatal.data);
+    }
+  }
+
+  if (lastFailure && lastFailure.kind === "http" && lastFailure.status) {
     throw visionError("gemini", lastFailure.status, lastFailure.data);
   }
   const e = new Error("The image reader took too long or could not be reached. Please try again.");
