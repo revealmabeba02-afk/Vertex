@@ -28,43 +28,53 @@ const GEMINI_IMAGE_MODEL = (
   process.env.GEMINI_IMAGE_MODEL ||
   process.env.GEMINI_MODEL ||
   // Google retires dated Gemini models for new keys ("no longer available to
-  // new users"), so keep a list and use whichever answers. Leading with the
-  // currently-healthy model rather than the flagship: a 503 from an
-  // overloaded flagship costs ~10-20s of dead time before the first model
-  // that actually answers.
-  "gemini-3.6-flash"
+  // new users"), so keep a list and use whichever answers.
+  "gemini-flash-lite-latest"
 ).trim();
 
 // Free-tier capacity moves around, so a single model name is a single point of
 // failure: the alias can 503 during a demand spike, a pinned version can be
-// retired for new keys, and popular models can hit per-model quota. Live
-// tested 2026-11-18: 3.6-flash answered fast, 3.8-flash and the aliases were
-// 503/429 at that moment, the 2.5 models are retired for new keys. Order is
-// quality-first among the models that actually answer, with the litest
-// models last as the near-always-available fallback.
+// retired for new keys, and popular models can hit per-model quota.
+//
+// Measured 2026-11-25 against a real 1m XAUUSD screenshot (same prompt the
+// scanner sends):
+//   gemini-flash-lite-latest  3.4s  correct pair, full JSON
+//   gemini-3.5-flash-lite     5.5s  correct pair, full JSON
+//   gemini-3.6-flash         20s+  never finished (this was the head of the
+//                                  list, which is why every upload timed out)
+//   gemini-3.8-flash          503  overloaded
+// So the lite models lead: they read the chart correctly and answer in a
+// third of the time. The flagships stay behind them for the day the lite
+// models are the ones under load.
 const GEMINI_IMAGE_MODELS = [
   ...new Set(
     GEMINI_IMAGE_MODEL.split(",")
       .map((m) => m.trim())
       .filter(Boolean)
       .concat([
-        "gemini-3.6-flash",
-        "gemini-3.8-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
-        "gemini-flash-latest"
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash"
       ])
   )
 ];
 
 const BIASES = ["Bullish", "Bearish", "Neutral / Ranging"];
 
-// The app speaks M1/H1/D1; the image prompt speaks 1m/1H/1D.
+// The app speaks M1/H1/D1; the image prompt speaks 1m/1H/1D. Lower-casing the
+// app code ("M1" -> "m1") is not the same string, so the prompt used to tell
+// the model "the m1 (m1) timeframe" instead of "1 minute (1m)".
 const PROMPT_TIMEFRAMES = {
   M1: "1m", M5: "5m", M15: "15m", M30: "30m",
   H1: "1H", H4: "4H", D1: "1D", W1: "1W"
 };
+function promptTimeframe(timeframe) {
+  const code = String(timeframe || "").trim().toUpperCase();
+  return PROMPT_TIMEFRAMES[code] || String(timeframe || "").toLowerCase();
+}
 
 function pickConfidence(label) {
   switch (String(label || "").toLowerCase()) {
@@ -430,7 +440,7 @@ async function callAnthropicVision({ buffer, mimeType, timeframe, apiKey }) {
                   data: buffer.toString("base64")
                 }
               },
-              { type: "text", text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+              { type: "text", text: buildUserPrompt(promptTimeframe(timeframe)) }
             ]
           }
         ]
@@ -468,7 +478,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
               data: buffer.toString("base64")
             }
           },
-          { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+          { text: buildUserPrompt(promptTimeframe(timeframe)) }
         ]
       }
     ],
@@ -582,7 +592,7 @@ async function callOpenCodeGoVision({ buffer, mimeType, timeframe, apiKey }) {
               data: buffer.toString("base64")
             }
           },
-          { text: buildUserPrompt(String(timeframe || "").toLowerCase()) }
+          { text: buildUserPrompt(promptTimeframe(timeframe)) }
         ]
       }
     ],
