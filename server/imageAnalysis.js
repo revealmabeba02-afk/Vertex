@@ -495,11 +495,14 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   let lastFailure = null;
   const startedAt = Date.now();
   // A scan has to feel instant, not thorough. King's rule: around ten seconds,
-  // never past twenty. So the whole model walk gets a hard 20s budget and each
-  // attempt a smaller slice of it — a fast "try again" beats a spinner that
-  // makes the product look broken. A 1400px chart answers in 3-8s when the model
-  // is healthy, so this only bites when something is actually wrong.
-  const OVERALL_BUDGET_MS = 12000;
+  // never past twenty. So the whole model walk gets a hard 15s budget — the
+  // browser gives up at 20s, so a slow model must never be allowed to burn the
+  // whole window — and each attempt a smaller slice of it. A 1400px chart
+  // answers in 3-7s on a lite model when the free tier is healthy, so this only
+  // bites when something is actually wrong. 12s was too tight: one lite-model
+  // hiccup plus two retries ran out of clock and the user got "took too long"
+  // even though the very next attempt worked.
+  const OVERALL_BUDGET_MS = 15000;
   const ATTEMPT_TIMEOUT_MS = 8000;
 
   for (const model of GEMINI_IMAGE_MODELS) {
