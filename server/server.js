@@ -1469,6 +1469,60 @@ const { mapFxSynapseToAnalysis } = require("./analysisMapper");
 const { analyzeChartImage, prepareImage } = require("./imageAnalysis");
 const { annotateChartImage } = require("./imageAnnotate");
 
+// --- Image self-test (admin only) -----------------------------------------
+// Runs the exact production image path — same downscale, same prompt, same
+// provider walk, same budget — on a screenshot the admin uploads, and reports
+// what happened with timings. It skips login and credits on purpose: this is a
+// diagnostic, not a scan. Also returns the latest rows from scan_failures so a
+// repeat failure leaves a trace even when nobody is watching the live log.
+app.post("/api/admin/image-self-test", upload.single("chart"), async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "Attach a chart screenshot as 'chart'." });
+  }
+
+  const timeframe = String(req.body?.timeframe || "M1").trim().toUpperCase();
+
+  let failures = [];
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/scan_failures?select=created_at,pair,timeframe,reason&order=created_at.desc&limit=8`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, signal: AbortSignal.timeout(8000) }
+    );
+    if (r.ok) failures = await r.json().catch(() => []);
+  } catch {}
+
+  const started = Date.now();
+  try {
+    const prepared = await prepareImage(req.file.buffer, req.file.mimetype);
+    const out = await analyzeChartImage({
+      buffer: prepared.buffer,
+      mimeType: prepared.mimeType,
+      timeframe,
+      apiKey: ANTHROPIC_API_KEY,
+      geminiKey: GEMINI_API_KEY
+    });
+    res.json({
+      ok: true,
+      ms: Date.now() - started,
+      isChart: out.isChart,
+      pair: out.analysis?.pair_guess || null,
+      bias: out.analysis?.market_bias || null,
+      failures
+    });
+  } catch (err) {
+    res.json({
+      ok: false,
+      ms: Date.now() - started,
+      status: err.status || null,
+      error: err.message || String(err),
+      failures
+    });
+  }
+});
+
 // --- Market watcher ------------------------------------------------------
 // The loop that keeps looking between scans. It calls the provider through
 // the exact same request a scan uses, so a watched read and a scanned read
