@@ -490,7 +490,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
       // Output tokens are time: every extra field the model writes is latency
       // the trader watches. 2048 was sized for "be thorough"; 1600 is enough
       // for the full shape and measurably faster.
-      maxOutputTokens: 1600,
+      maxOutputTokens: 1200,
       responseMimeType: "application/json"
     }
   });
@@ -500,16 +500,14 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   // never past twenty. The browser gives up at 20s, so the whole walk has a
   // hard 15s budget and each attempt a slice of it.
   //
-  // Sequential was not reliable: measured over ten runs, the free tier stalled
-  // one model in roughly half of them, and a single stall ate the budget before
-  // the next model got a turn — 40% of uploads came back "took too long" while
-  // the model next door was answering in 3s. So the models now race in pairs:
-  // two requests start together, the first valid answer wins, and a stalled
-  // model costs nothing because its partner is already working. Pairs are
-  // walked in order, so a healthy lite model still answers first.
-  //
-  // Cost: two requests per scan instead of one. On the free tier that is inside
-  // the per-minute allowance, and it buys a very large drop in worst-case wait.
+  // Measured 2026-11-25 on a real 1m XAUUSD screenshot against the free tier:
+  //   gemini-3.5-flash-lite   2.9-5.5s  correct pair, full JSON
+  //   gemini-flash-lite-latest 3.4-5.0s  correct when it answers, 503 often
+  //   gemini-3.6-flash       20s+ / 429  never finished at the head of the list
+  //   gemini-3.8-flash       503 / 8.6s  overloaded
+  // The free tier throttles the whole project under load, so one request at a
+  // time to the model that actually answers beats firing several at once —
+  // racing was tried and produced more 429/503, not fewer.
   const OVERALL_BUDGET_MS = 15000;
   const ATTEMPT_TIMEOUT_MS = 8000;
   const deadline = startedAt + OVERALL_BUDGET_MS;
@@ -562,28 +560,16 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
     return { text, model };
   }
 
-  const pairs = [];
-  for (let i = 0; i < GEMINI_IMAGE_MODELS.length; i += 2) {
-    pairs.push(GEMINI_IMAGE_MODELS.slice(i, i + 2));
-  }
-
-  for (const pair of pairs) {
-    if (deadline - Date.now() < 1200) break;
+  for (const model of GEMINI_IMAGE_MODELS) {
+    if (deadline - Date.now() < 1500) break;
     try {
-      const winner = await Promise.any(pair.map((m) => tryModel(m)));
+      const winner = await tryModel(model);
       console.log(`Image analysis answered by gemini/${winner.model} in ${Date.now() - startedAt}ms`);
       return winner.text;
-    } catch (agg) {
-      const errors = (agg && agg.errors) || [];
-      lastFailure = errors[errors.length - 1] || null;
-
+    } catch (err) {
+      lastFailure = err;
       // Auth is account-wide: every model fails the same way, so stop.
-      // Quota is NOT: measured 2026-11-25, one model answered 429 while
-      // another answered 200 a second later, because each model has its own
-      // free allowance. Treating 429 as fatal turned a working scan into an
-      // error, so it now just moves to the next pair.
-      const fatal = errors.find((e) => e && (e.status === 401 || e.status === 403));
-      if (fatal) throw visionError("gemini", fatal.status, fatal.data);
+      if (err.status === 401 || err.status === 403) break;
     }
   }
 
@@ -614,7 +600,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
 // the server's 60s request ceiling. 1400px is still plenty for reading
 // candles, axes and labels, and turns the request into a fraction of the
 // bytes — same analysis, far faster and far more reliable.
-const MODEL_IMAGE_MAX_WIDTH = 1400;
+const MODEL_IMAGE_MAX_WIDTH = 1200;
 async function shrinkForModel(buffer, mimeType) {
   try {
     const meta = await sharp(buffer).metadata();
@@ -650,7 +636,7 @@ async function callOpenCodeGoVision({ buffer, mimeType, timeframe, apiKey }) {
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 1600,
+      maxOutputTokens: 1200,
       responseMimeType: "application/json"
     }
   });
