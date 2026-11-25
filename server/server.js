@@ -1027,6 +1027,47 @@ app.get("/api/admin/key-check", async (req, res) => {
     );
   }
 
+  // Claude is the paid fallback the image reader uses when the free Gemini
+  // tier is overloaded, so its state matters just as much.
+  if (ANTHROPIC_API_KEY) {
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: (process.env.IMAGE_ANALYSIS_MODEL || "claude-haiku-4-5-20251001").trim(),
+          max_tokens: 16,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: "image/png", data: KEY_CHECK_PNG } },
+                { type: "text", text: "Reply with the single word: ok" }
+              ]
+            }
+          ]
+        }),
+        signal: AbortSignal.timeout(12000)
+      });
+      const data = await r.json().catch(() => null);
+      checks.push({
+        provider: "anthropic:" + (process.env.IMAGE_ANALYSIS_MODEL || "claude-haiku-4-5-20251001").trim(),
+        configured: true,
+        status: r.status,
+        ok: r.ok,
+        message: String(data?.error?.message || (r.ok ? "Answered." : "")).slice(0, 300)
+      });
+    } catch (err) {
+      checks.push({ provider: "anthropic", configured: true, status: null, ok: false, message: "Could not reach the provider: " + err.message });
+    }
+  } else {
+    checks.push({ provider: "anthropic", configured: false, status: null, ok: false, message: "No key set on this server." });
+  }
+
   res.json({ checkedAt: new Date().toISOString(), checks });
 });
 

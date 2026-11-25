@@ -468,7 +468,7 @@ async function callAnthropicVision({ buffer, mimeType, timeframe, apiKey }) {
     : "";
 }
 
-async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
+async function callGeminiVision({ buffer, mimeType, timeframe, apiKey, budgetMs }) {
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
     contents: [
@@ -508,7 +508,7 @@ async function callGeminiVision({ buffer, mimeType, timeframe, apiKey }) {
   // The free tier throttles the whole project under load, so one request at a
   // time to the model that actually answers beats firing several at once —
   // racing was tried and produced more 429/503, not fewer.
-  const OVERALL_BUDGET_MS = 15000;
+  const OVERALL_BUDGET_MS = budgetMs || 15000;
   const ATTEMPT_TIMEOUT_MS = 8000;
   const deadline = startedAt + OVERALL_BUDGET_MS;
 
@@ -709,10 +709,20 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
   }
   if (!text) {
     if (googleKey) {
-      text = await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey });
-    } else if (anthropicKey) {
+      try {
+        text = await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey, budgetMs: anthropicKey ? 9000 : 15000 });
+      } catch (geminiErr) {
+        // The free tier is the busy one: 503s and per-model 429s are normal at
+        // peak. A paid Claude read is a far better outcome than handing a
+        // paying user "the image reader is busy", so use it before giving up.
+        if (!anthropicKey) throw geminiErr;
+        console.error("Gemini vision failed, falling back to Claude:", geminiErr.message);
+      }
+    }
+    if (!text && anthropicKey) {
       text = await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
-    } else {
+    }
+    if (!text) {
       throw goFailure || new Error("No vision provider answered.");
     }
   }
