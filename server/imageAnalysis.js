@@ -708,6 +708,7 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
     }
   }
   if (!text) {
+    let geminiFailure = null;
     if (googleKey) {
       try {
         text = await callGeminiVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: googleKey, budgetMs: anthropicKey ? 9000 : 15000 });
@@ -716,14 +717,24 @@ async function analyzeChartImage({ buffer, mimeType, timeframe, apiKey, geminiKe
         // peak. A paid Claude read is a far better outcome than handing a
         // paying user "the image reader is busy", so use it before giving up.
         if (!anthropicKey) throw geminiErr;
+        geminiFailure = geminiErr;
         console.error("Gemini vision failed, falling back to Claude:", geminiErr.message);
       }
     }
     if (!text && anthropicKey) {
-      text = await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
+      try {
+        text = await callAnthropicVision({ buffer: shrunk.buffer, mimeType: shrunk.mimeType, timeframe, apiKey: anthropicKey });
+      } catch (claudeErr) {
+        // Claude's key is on the server but unfunded, so its "credit balance is
+        // too low" is the least useful thing to show. If Gemini is what actually
+        // ran out (or was overloaded), report that instead — it is the reader
+        // the customer is really using, and "free reader is busy" is true.
+        console.error("Claude vision failed:", claudeErr.message);
+        throw geminiFailure || claudeErr;
+      }
     }
     if (!text) {
-      throw goFailure || new Error("No vision provider answered.");
+      throw geminiFailure || goFailure || new Error("No vision provider answered.");
     }
   }
 
