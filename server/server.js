@@ -1084,6 +1084,50 @@ app.get("/api/admin/key-check", async (req, res) => {
   res.json({ checkedAt: new Date().toISOString(), checks });
 });
 
+// --- Truth (admin only) ----------------------------------------------------
+// One honest status read for the owner: the real money numbers, and which AI
+// providers are actually configured. No invented reasoning, no cached "ACTIVE"
+// badge — every field is either a number from Postgres or a boolean from the
+// server's own environment. For a live provider handshake use
+// /api/admin/key-check, which spends a real request.
+app.get("/api/admin/truth", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+
+  let money = null;
+  try {
+    money = await readMoneyUnattended();
+  } catch {
+    money = null;
+  }
+
+  res.json({
+    at: new Date().toISOString(),
+    money: money
+      ? {
+          users: money.users,
+          payingUsers: money.payingUsers,
+          revenueUsd: money.revenueUsd,
+          orders: money.orders,
+          paidScansSold: money.paidScansSold,
+          scansLast14Days: money.scansLast14Days,
+          pendingOrders: money.pendingOrders,
+          topPairs: money.topPairs
+        }
+      : null,
+    ai: {
+      gemini: Boolean(GEMINI_API_KEY),
+      anthropic: Boolean(ANTHROPIC_API_KEY),
+      opencodeGo: Boolean(OPENCODE_GO_API_KEY)
+    },
+    imageScan: Boolean(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY),
+    note: money
+      ? "Money comes from agent_money(). AI flags only say a key is present — use /api/admin/key-check for a live handshake."
+      : "Money is unavailable: AGENT_MONEY_SECRET is not set, or supabase/agent_money.sql has not been run."
+  });
+});
+
 // --- YouTube auto-post connection -------------------------------------------
 // One-time admin step: King authorizes Vertex's Google Cloud OAuth client to
 // upload videos to his YouTube channel. Google hands back a refresh_token,
