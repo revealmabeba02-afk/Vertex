@@ -522,6 +522,17 @@ function deterministicSupportReply(message) {
         "If an image scan fails, tap “Use Pick a pair instead” and type the symbol — it gives the same read and is faster. Image scans can take longer when the vision service is busy."
     };
   }
+  // The trust question, answered the same way every time — and without the
+  // model, so it never turns into "the team will get back to you". This is the
+  // one a stranger asks before paying, and the one that must never be answered
+  // loosely.
+  if (has("financial advice", "is this advice", "advice or", "guarantee", "guaranteed", "win rate", "sure thing", "can't lose", "cannot lose", "will i make")) {
+    return {
+      confidence: "high",
+      reply:
+        "No — Vertex gives a technical read, not financial advice or a recommendation to trade. The confidence number is how aligned the plan and timeframes are, not a win rate or a promise. It shows you what the chart is doing and where the levels sit; whether to trade it is your call, and trading carries real risk."
+    };
+  }
   return null;
 }
 
