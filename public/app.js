@@ -3867,18 +3867,11 @@
     creditsStatus.classList.toggle("credits-status--error", Boolean(isError));
   }
 
-  // Checkout now happens on Whop instead of the old Binance Pay flow below
-  // (kept in place but unused — Binance's API blocks Render's server
-  // region). Clicking a bundle opens its Whop checkout in a new tab; once
-  // paid, Whop's webhook credits the account automatically within about a
-  // minute, so we just poll the balance for a bit and tell the user when it
-  // lands.
-  const WHOP_CHECKOUT_LINKS = {
-    quick: "https://whop.com/shadowfx-1eca/quick-5e/",
-    starter: "https://whop.com/shadowfx-1eca/starter-20-scans",
-    trader: "https://whop.com/shadowfx-1eca/trader-60-scans",
-    pro: "https://whop.com/shadowfx-1eca/pro-150-scans"
-  };
+  // Card checkout is hosted by Yoco: one static payment link per bundle,
+  // created in the Yoco dashboard. The links arrive through /config.js, so the
+  // URLs never live in this file. If a link hasn't been created yet the button
+  // says so and points at PayPal / bank transfer instead of opening a dead page.
+  const CHECKOUT_LINKS = (window.APP_CONFIG && window.APP_CONFIG.yoco) || {};
 
   async function openPaypalPanel(bundle) {
     const info = PAYPAL_BUNDLES[bundle];
@@ -4032,20 +4025,27 @@
       const btn = e.target.closest(".bundle-card__btn");
       if (!btn) return;
       const bundle = btn.dataset.bundle;
-      const link = WHOP_CHECKOUT_LINKS[bundle];
-      if (!link) return;
+      const link = CHECKOUT_LINKS[bundle];
+      if (!link) {
+        showCreditsStatus(
+          "Card checkout isn't live yet. Use PayPal or bank transfer below — both are credited by hand, usually the same day.",
+          false
+        );
+        return;
+      }
       window.open(link, "_blank", "noopener");
       showCreditsStatus(
-        "Checkout opened in a new tab. Important: use the same email there as your Vertex login — your credits land here automatically, usually within a minute of paying.",
+        "Card checkout opened in a new tab. After paying, tap “I've paid” below — card payments are credited by hand, usually the same day.",
         false
       );
       startBalanceWatch();
     });
   }
 
-  // "Name your price" — unlike the fixed bundles, this price is only known
-  // once typed in, so the server creates a one-off Whop checkout for that
-  // exact amount and hands back the link to open.
+  // "Name your price" — PayPal.Me accepts a custom amount in the URL, so this
+  // needs no backend at all. (It used to create a one-off Whop checkout, which
+  // is gone.) Credits are added by hand when the payment shows up, exactly like
+  // the other PayPal and bank-transfer claims.
   const customAmountInput = document.getElementById("custom-amount-input");
   const customAmountBtn = document.getElementById("custom-amount-btn");
   const customAmountHint = document.getElementById("custom-amount-hint");
@@ -4057,34 +4057,18 @@
         if (customAmountHint) customAmountHint.textContent = "Enter at least $5.";
         return;
       }
-      customAmountBtn.disabled = true;
-      customAmountBtn.textContent = "Starting…";
-      if (customAmountHint) customAmountHint.textContent = "";
-      try {
-        const session = await Auth.getSession();
-        if (!session) throw new Error("Please log in first.");
-        const res = await fetch("/api/credits/custom-checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({ amount })
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "Could not start checkout.");
-        window.open(data.checkoutUrl, "_blank", "noopener");
-        showCreditsStatus(
-          `Checkout opened in a new tab for ${data.scans} scans. Use the same email there as your Vertex login — your credits land here automatically, usually within a minute of paying.`,
-          false
-        );
-        startBalanceWatch();
-      } catch (err) {
-        if (customAmountHint) customAmountHint.textContent = err.message || "Something went wrong. Please try again.";
-      } finally {
-        customAmountBtn.disabled = false;
-        customAmountBtn.textContent = "Get scans";
+      const handle = (window.APP_CONFIG && window.APP_CONFIG.paypalHandle) || "";
+      if (!handle) {
+        if (customAmountHint) customAmountHint.textContent = "PayPal isn't set up right now — use bank transfer below.";
+        return;
       }
+
+      const scans = Math.max(1, Math.round(amount / 0.5));
+      window.open(`https://paypal.me/${encodeURIComponent(handle)}/${encodeURIComponent(amount)}`, "_blank", "noopener");
+      showCreditsStatus(
+        `PayPal opened for $${amount.toFixed(2)} — about ${scans} scans at $0.50 each. Put your Vertex email in the PayPal note, then tap “I've paid” so it gets credited.`,
+        false
+      );
     });
   }
 

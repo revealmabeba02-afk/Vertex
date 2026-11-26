@@ -303,12 +303,13 @@ const WHOP_WEBHOOK_SECRET = (process.env.WHOP_WEBHOOK_SECRET || "").trim();
 const WHOP_API_KEY = (process.env.WHOP_API_KEY || "").trim();
 const WHOP_READY = Boolean(WHOP_WEBHOOK_SECRET);
 
-const WHOP_CHECKOUT_LINKS = {
-  quick: process.env.WHOP_CHECKOUT_QUICK || "https://whop.com/shadowfx-1eca/quick-5e/",
-  starter: process.env.WHOP_CHECKOUT_STARTER || "https://whop.com/shadowfx-1eca/starter-20-scans",
-  trader: process.env.WHOP_CHECKOUT_TRADER || "https://whop.com/shadowfx-1eca/trader-60-scans",
-  pro: process.env.WHOP_CHECKOUT_PRO || "https://whop.com/shadowfx-1eca/pro-150-scans"
+const YOCO_CHECKOUT_LINKS = {
+  quick: (process.env.YOCO_CHECKOUT_QUICK || "").trim(),
+  starter: (process.env.YOCO_CHECKOUT_STARTER || "").trim(),
+  trader: (process.env.YOCO_CHECKOUT_TRADER || "").trim(),
+  pro: (process.env.YOCO_CHECKOUT_PRO || "").trim()
 };
+const YOCO_READY = Object.values(YOCO_CHECKOUT_LINKS).some(Boolean);
 
 if (!WHOP_READY) {
   console.warn(
@@ -444,7 +445,7 @@ const SUPPORT_AI_SYSTEM_PROMPT = `You are the support triage assistant for Verte
 
 What Vertex does: users type a pair/symbol (e.g. EURUSD, XAUUSD, US30) and pick a timeframe, and get back a technical read calculated from live price bars — market bias, structure, key levels, a BUY/SELL/No-trade signal, stop loss, take-profit targets, and a confidence % (shown as an animated ring by the pair name and an animated bar in the trade stats — it reflects how aligned the plan, risk/reward and top-down timeframes are, not a win-rate promise). Users can also upload a chart screenshot; the pair scanner is faster and more reliable, so suggest it when an image scan is slow or fails. It is a technical read, not financial advice.
 
-Billing: every signed-in user gets 2 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought via Whop, either as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, credited at the same ~$0.50/scan rate. PayPal and bank transfer are also available under Credits; those are checked and credited manually. Credits never expire. Whop payments are usually credited within about a minute if the buyer uses the same email at checkout as their Vertex login. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
+Billing: every signed-in user gets 2 free scans a day, resetting at midnight UTC. Beyond that, pay-per-scan credits are bought under Credits as a fixed bundle (Quick $4.99/10 scans, Starter $8.99/20 scans, Trader $12.99/60 scans, Pro $19.99/150 scans) or as a custom "name your price" amount from $5, at the same ~$0.50/scan rate. Card (Yoco), PayPal and bank transfer are all accepted; card, PayPal and bank payments are credited by hand, usually the same day. Credits never expire. A failed scan automatically refunds whatever it used (a free scan or a paid credit).
 
 News tab: a live economic calendar (NFP, CPI, PMIs, etc.) with a BUY/SELL tag per event once a clear bias shows. Small/medium events are fully free and unlimited, actual result included. Big ("High" importance) events are free to see on the calendar (time, forecast, previous) but the actual-vs-forecast result only unlocks after the event releases — 2 unlocks are free per user per calendar month, and after that each extra unlock costs 2 credits from the same balance used for scans.
 
@@ -1483,7 +1484,11 @@ app.get("/config.js", (req, res) => {
         // explain the Upload tab instead of offering a button that 503s.
         imageScan: !!(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY),
         // Public PayPal.Me handle. It is a pay link, not a secret.
-        paypalHandle: PAYPAL_ME_HANDLE || ""
+        paypalHandle: PAYPAL_ME_HANDLE || "",
+        // Card checkout links (Yoco). Empty until the owner creates them in the
+        // Yoco dashboard, so the app can say "card checkout isn't live yet"
+        // instead of opening a checkout that doesn't exist.
+        yoco: YOCO_CHECKOUT_LINKS
       }) +
       ";"
   );
@@ -2307,47 +2312,9 @@ app.post("/api/credits/paypal-claim", requireUser, async (req, res) => {
   }
 });
 
-app.post("/api/credits/custom-checkout", requireUser, async (req, res) => {  if (!WHOP_CUSTOM_READY) {
-    return res.status(503).json({ error: "Custom amounts aren't turned on yet — grab one of the bundles below for now." });
-  }
-
-  const amount = Number(req.body?.amount);
-  if (!Number.isFinite(amount) || amount < CUSTOM_MIN_AMOUNT || amount > CUSTOM_MAX_AMOUNT) {
-    return res.status(400).json({ error: `Enter an amount between $${CUSTOM_MIN_AMOUNT} and $${CUSTOM_MAX_AMOUNT}.` });
-  }
-  const amountRounded = Math.round(amount * 100) / 100;
-
-  try {
-    const r = await fetch("https://api.whop.com/api/v2/plans", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${WHOP_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        product_id: WHOP_CUSTOM_PRODUCT_ID,
-        plan_type: "one_time",
-        base_currency: "usd",
-        initial_price: amountRounded
-      }),
-      signal: AbortSignal.timeout(15000)
-    });
-    const data = await r.json().catch(() => null);
-    if (!r.ok) {
-      console.error("Whop create-plan failed:", r.status, JSON.stringify(data).slice(0, 1000));
-      return res.status(502).json({ error: "Could not start checkout for that amount. Try a bundle instead, or try again shortly." });
-    }
-    const checkoutUrl = data?.purchase_url || data?.direct_link || data?.checkout_url || data?.data?.purchase_url || null;
-    if (!checkoutUrl) {
-      console.error("Whop create-plan: no checkout URL in response:", JSON.stringify(data).slice(0, 1000));
-      return res.status(502).json({ error: "Could not start checkout for that amount. Try a bundle instead, or try again shortly." });
-    }
-    res.json({ checkoutUrl, scans: scansForCustomAmount(amountRounded) });
-  } catch (err) {
-    console.error("Whop create-plan error:", err.message);
-    res.status(502).json({ error: "Could not reach Whop right now. Please try again in a moment." });
-  }
-});
+// "Name your price" is handled entirely in the browser now: PayPal.Me takes the
+// amount in the URL, so there is no server checkout to create. The old route
+// here built a one-off Whop plan and has been removed with Whop.
 
 // --- Binance Pay poller ----------------------------------------------------
 // Background job, not tied to any one request: every POLL interval, ask
@@ -2726,7 +2693,10 @@ app.get("/api/broker/mine", requireUser, async (req, res) => {
 // same Whop one-off-plan mechanism as the custom credit top-up.
 app.post("/api/broker/checkout", requireUser, async (req, res) => {
   if (!WHOP_CUSTOM_READY) {
-    return res.status(503).json({ error: "Checkout isn't set up on this server yet — check back soon." });
+    return res.status(503).json({
+      error: "Broker connect is unlocked by hand right now. Message support in the app and the owner will send you the payment details and unlock it after payment.",
+      code: "broker_manual"
+    });
   }
   try {
     const r = await fetch("https://api.whop.com/api/v2/plans", {
