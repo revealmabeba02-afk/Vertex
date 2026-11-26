@@ -1128,6 +1128,62 @@ app.get("/api/admin/truth", async (req, res) => {
   });
 });
 
+// A real, current read for the landing page sample card. Cached for 45 minutes
+// so the public page can never hammer the paid provider: one request at most
+// every 45 min no matter how much traffic the site gets. The card used to show
+// a frozen example with old gold prices (2,418 when gold trades near 3,566),
+// which told any trader who glanced at it that the product was stale — or that
+// the numbers were made up. Now it shows what the scanner actually says, and
+// falls back to the static example only if the provider is down.
+let sampleCache = { at: 0, data: null };
+const SAMPLE_CACHE_MS = 45 * 60 * 1000;
+
+app.get("/api/sample", async (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  if (sampleCache.data && Date.now() - sampleCache.at < SAMPLE_CACHE_MS) {
+    return res.json({ ok: true, cached: true, ...sampleCache.data });
+  }
+  if (!FXSYNAPSE_API_KEY) {
+    return res.json({ ok: false, error: "no key" });
+  }
+
+  try {
+    const fxRes = await fetch(`${FXSYNAPSE_BASE_URL}${FXSYNAPSE_CHART_PATH}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${FXSYNAPSE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: "XAUUSD", timeframe: "H4", top_down: true }),
+      signal: AbortSignal.timeout(12000)
+    });
+    const data = await fxRes.json().catch(() => null);
+    if (!fxRes.ok) throw new Error("provider " + fxRes.status);
+
+    const a = mapFxSynapseToAnalysis(data);
+    const entry = Array.isArray(a.potential_entries) ? a.potential_entries[0] : null;
+    const firstLevel = Array.isArray(a.market_structure?.key_levels) ? a.market_structure.key_levels[0] : null;
+    const payload = {
+      pair: "XAUUSD",
+      timeframe: "H4",
+      call: String(entry?.type || "").toLowerCase() === "short" ? "SELL" : entry ? "BUY" : "—",
+      bias: a.market_bias || "Neutral / Ranging",
+      confidence: Number.isFinite(Number(a.confidence)) ? Math.round(Number(a.confidence)) : null,
+      structure: a.market_structure?.trend || "",
+      entry: entry?.entry_zone || "—",
+      stop: a.stop_loss?.suggestion || "—",
+      target: a.take_profit?.[0]?.target || "—",
+      level: firstLevel ? String(firstLevel).split(" · ")[0] : "—",
+      rr: a.risk_reward_estimate || "—",
+      invalidation: a.invalidation || ""
+    };
+    sampleCache = { at: Date.now(), data: payload };
+    return res.json({ ok: true, cached: false, ...payload });
+  } catch (err) {
+    // Serve the last good read rather than nothing; the page keeps its static
+    // example if this has never succeeded.
+    if (sampleCache.data) return res.json({ ok: true, cached: true, stale: true, ...sampleCache.data });
+    return res.json({ ok: false, error: err.message });
+  }
+});
+
 // --- YouTube auto-post connection -------------------------------------------
 // One-time admin step: King authorizes Vertex's Google Cloud OAuth client to
 // upload videos to his YouTube channel. Google hands back a refresh_token,

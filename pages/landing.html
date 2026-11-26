@@ -108,26 +108,26 @@
     <div class="hero-proof">
       <div class="sample-read" aria-label="Example of a Vertex scan result">
         <div class="sample-read__head">
-        <span class="sample-read__pair">XAUUSD · H1</span>
-        <span class="sample-read__call">BUY</span>
-        <span class="sample-read__bias" data-tone="bull">Bullish</span>
-        <span class="sample-read__conf">72% confidence</span>
+        <span class="sample-read__pair" id="sample-pair">XAUUSD · H4</span>
+        <span class="sample-read__call" id="sample-call">SELL</span>
+        <span class="sample-read__bias" id="sample-bias" data-tone="bear">Bearish</span>
+        <span class="sample-read__conf" id="sample-conf">86% confidence</span>
       </div>
-      <div class="sample-read__structure">Uptrend market structure, measured directly from live price bars.</div>
+      <div class="sample-read__structure" id="sample-structure">Downtrend market structure, measured directly from live price bars.</div>
       <div class="keyline">
-        <div class="keyline__item keyline__item--entry"><span class="keyline__label">Entry</span><span class="keyline__value">2418.50</span></div>
-        <div class="keyline__item keyline__item--stop"><span class="keyline__label">Stop</span><span class="keyline__value">2404.00</span></div>
-        <div class="keyline__item keyline__item--target"><span class="keyline__label">Target</span><span class="keyline__value">2447.00</span></div>
-        <div class="keyline__item keyline__item--level"><span class="keyline__label">Key level</span><span class="keyline__value">2412.80</span></div>
-        <div class="keyline__item keyline__item--high"><span class="keyline__label">Risk / reward</span><span class="keyline__value">1 : 3.0</span></div>
+        <div class="keyline__item keyline__item--entry"><span class="keyline__label">Entry</span><span class="keyline__value" id="sample-entry">3573.50</span></div>
+        <div class="keyline__item keyline__item--stop"><span class="keyline__label">Stop</span><span class="keyline__value" id="sample-stop">3674.59</span></div>
+        <div class="keyline__item keyline__item--target"><span class="keyline__label">Target</span><span class="keyline__value" id="sample-target">3421.87</span></div>
+        <div class="keyline__item keyline__item--level"><span class="keyline__label">Key level</span><span class="keyline__value" id="sample-level">—</span></div>
+        <div class="keyline__item keyline__item--high"><span class="keyline__label">Risk / reward</span><span class="keyline__value" id="sample-rr">1 : 1.5</span></div>
       </div>
       <div class="sample-read__chips">
-        <span class="sample-read__chip">Uptrend structure</span>
-        <span class="sample-read__chip">Higher highs &amp; higher lows</span>
-        <span class="sample-read__chip">Demand zone holding</span>
-        <span class="sample-read__chip">Invalidated below 2404.00</span>
+        <span class="sample-read__chip">Downtrend structure</span>
+        <span class="sample-read__chip">Lower highs &amp; lower lows</span>
+        <span class="sample-read__chip">Supply zone holding</span>
+        <span class="sample-read__chip" id="sample-invalidation">Invalidated above 3674.59</span>
       </div>
-        <p class="sample-read__note">Example output. Measured from live prices. Tool output, not advice.</p>
+        <p class="sample-read__note">Live example, refreshed from real prices. Tool output, not advice.</p>
       </div>
     </div>
   </section>
@@ -312,6 +312,39 @@
     document.getElementById("nav-guest").hidden = true;
     document.getElementById("nav-user").hidden = false;
   }).catch(() => {});
+
+  // Fill the sample card with a real read. The static markup underneath is the
+  // fallback, so the page still looks right if the provider is down or slow.
+  (async () => {
+    try {
+      const res = await fetch("/api/sample", { headers: { Accept: "application/json" } });
+      const s = await res.json();
+      if (!s || !s.ok) return;
+
+      const set = (id, text) => {
+        const el = document.getElementById(id);
+        if (el && text) el.textContent = text;
+      };
+      set("sample-pair", s.pair + " · " + s.timeframe);
+      set("sample-call", s.call);
+      set("sample-conf", s.confidence != null ? s.confidence + "% confidence" : "");
+      set("sample-structure", s.structure);
+      set("sample-entry", s.entry);
+      set("sample-stop", s.stop);
+      set("sample-target", s.target);
+      set("sample-level", s.level);
+      set("sample-rr", s.rr);
+      if (s.invalidation) set("sample-invalidation", s.invalidation);
+
+      const biasEl = document.getElementById("sample-bias");
+      if (biasEl) {
+        biasEl.textContent = s.bias;
+        biasEl.dataset.tone = /bear/i.test(s.bias) ? "bear" : /bull/i.test(s.bias) ? "bull" : "neutral";
+      }
+      const callEl = document.getElementById("sample-call");
+      if (callEl) callEl.dataset.call = String(s.call || "").toLowerCase();
+    } catch {}
+  })();
 </script>
 </body>
 </html>
