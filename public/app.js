@@ -4035,7 +4035,7 @@
       }
       window.open(link, "_blank", "noopener");
       showCreditsStatus(
-        "Card checkout opened in a new tab. After paying, tap “I've paid” below — card payments are credited by hand, usually the same day.",
+        "Card checkout opened in a new tab. Keep the receipt, then message support with your Vertex email — card payments are credited by hand, usually the same day.",
         false
       );
       startBalanceWatch();
