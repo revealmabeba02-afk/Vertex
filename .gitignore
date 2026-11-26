@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 npm-debug.log*
 *.log
+
+NOTRACK-CODE.md
+annotated-preview.png
