@@ -1584,6 +1584,13 @@
         <option value="90">Inactive 90+ days</option>
         <option value="never">Never signed in</option>
       </select>
+      <select id="users-sort" class="input" style="flex: 0 1 190px; margin-bottom: 0;" aria-label="Sort users">
+        <option value="">Default order</option>
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="active">Recently active</option>
+        <option value="inactive">Least recently active</option>
+      </select>
       <button type="button" id="users-export-btn" class="btn btn--ghost" style="flex: 0 0 auto;">Export CSV</button>
     </div>
     <div class="users-table-wrap">
@@ -1824,6 +1831,18 @@
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
         filtered = filtered.filter((u) => !u.last_sign_in_at || new Date(u.last_sign_in_at).getTime() < cutoff);
       }
+      const sortSel = document.getElementById("users-sort");
+      const sortQ = sortSel ? sortSel.value : "";
+      if (sortQ) {
+        const ts = (v) => (v ? new Date(v).getTime() : 0);
+        filtered = filtered.slice().sort((a, b) => {
+          if (sortQ === "newest") return ts(b.created_at) - ts(a.created_at);
+          if (sortQ === "oldest") return ts(a.created_at) - ts(b.created_at);
+          if (sortQ === "active") return ts(b.last_sign_in_at) - ts(a.last_sign_in_at);
+          if (sortQ === "inactive") return ts(a.last_sign_in_at) - ts(b.last_sign_in_at);
+          return 0;
+        });
+      }
       window.__usersFilteredForExport = filtered;
 
       if (users.length === 0) {
@@ -1902,6 +1921,8 @@
     if (usersFilterInput) usersFilterInput.addEventListener("input", renderUsersTable);
     const usersActivityFilter = document.getElementById("users-activity-filter");
     if (usersActivityFilter) usersActivityFilter.addEventListener("change", renderUsersTable);
+    const usersSortSelect = document.getElementById("users-sort");
+    if (usersSortSelect) usersSortSelect.addEventListener("change", renderUsersTable);
 
     const usersExportBtn = document.getElementById("users-export-btn");
     if (usersExportBtn) {
