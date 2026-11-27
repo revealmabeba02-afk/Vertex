@@ -1123,6 +1123,12 @@ app.get("/api/admin/truth", async (req, res) => {
       opencodeGo: Boolean(OPENCODE_GO_API_KEY)
     },
     imageScan: Boolean(OPENCODE_GO_API_KEY || GEMINI_API_KEY || ANTHROPIC_API_KEY),
+    limits: {
+      freeScansPerUserPerDay: 2,
+      scansPerNetworkPerHour: SCAN_NETWORK_HOUR_MAX,
+      scansPerNetworkPerDay: SCAN_NETWORK_DAY_MAX,
+      burstPerMinute: 8
+    },
     note: money
       ? "Money comes from agent_money(). AI flags only say a key is present — use /api/admin/key-check for a live handshake."
       : "Money is unavailable: AGENT_MONEY_SECRET is not set, or supabase/agent_money.sql has not been run."
@@ -1563,9 +1569,12 @@ const analyzeLimiter = rateLimit({
 // dead while leaving a busy trader — or a whole coffee shop on one router —
 // untouched. Counted in memory, so a deploy resets the window; that is an
 // acceptable trade for not running Redis for a product with ten users.
+const SCAN_NETWORK_HOUR_MAX = 30;
+const SCAN_NETWORK_DAY_MAX = 80;
+
 const scanNetworkHourLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 30,
+  max: SCAN_NETWORK_HOUR_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -1575,7 +1584,7 @@ const scanNetworkHourLimiter = rateLimit({
 
 const scanNetworkDayLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  max: 80,
+  max: SCAN_NETWORK_DAY_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
