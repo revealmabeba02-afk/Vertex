@@ -1555,6 +1555,34 @@ const analyzeLimiter = rateLimit({
   message: { error: "Too many requests. Please wait a minute and try again." }
 });
 
+// Per-network ceilings. The per-account limit (2 free scans/day) is trivial to
+// walk around with free email aliases, and every scan costs real money at the
+// provider, so one script with a handful of accounts could run up a bill. These
+// are deliberately generous because mobile carriers put thousands of real
+// customers behind one IP: 30 in an hour and 80 in a day still stops a loop
+// dead while leaving a busy trader — or a whole coffee shop on one router —
+// untouched. Counted in memory, so a deploy resets the window; that is an
+// acceptable trade for not running Redis for a product with ten users.
+const scanNetworkHourLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "That's a lot of scans from this network in one hour. Give it a few minutes, or switch off Wi-Fi if you're on a shared connection."
+  }
+});
+
+const scanNetworkDayLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 80,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "This network has hit its scan ceiling for today. It resets within 24 hours."
+  }
+});
+
 // --- Routes -------------------------------------------------------------
 
 app.get("/api/health", (req, res) => {
@@ -4444,7 +4472,7 @@ const MAX_CONCURRENT_IMAGE_SCANS = 2;
 // is charged up front, a failure refunds it, the result is saved to history.
 // If neither vision key is present the route answers 503 before charging
 // anything, and the pair scanner keeps working exactly as before.
-app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart"), async (req, res) => {
+app.post("/api/analyze-image", requireUser, scanNetworkHourLimiter, scanNetworkDayLimiter, analyzeLimiter, upload.single("chart"), async (req, res) => {
   if (!OPENCODE_GO_API_KEY && !GEMINI_API_KEY && !ANTHROPIC_API_KEY) {
     return res.status(503).json({
       error: "Chart-photo reading isn't switched on yet. Add OPENCODE_GO_API_KEY on the server, or pick a pair instead.",
@@ -4560,7 +4588,7 @@ app.post("/api/analyze-image", requireUser, analyzeLimiter, upload.single("chart
   }
 });
 
-app.post("/api/analyze", requireUser, analyzeLimiter, async (req, res) => {
+app.post("/api/analyze", requireUser, scanNetworkHourLimiter, scanNetworkDayLimiter, analyzeLimiter, async (req, res) => {
   const symbol = String(req.body?.symbol || "").trim().toUpperCase();
   const timeframe = String(req.body?.timeframe || "").trim().toUpperCase();
 
