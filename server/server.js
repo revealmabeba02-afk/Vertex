@@ -2162,7 +2162,11 @@ app.get("/api/credits/balance", requireUser, async (req, res) => {
     ]);
     res.json({
       balance: typeof balance === "number" ? balance : 0,
-      freeRemaining: typeof freeRemaining === "number" ? freeRemaining : null
+      freeRemaining: typeof freeRemaining === "number" ? freeRemaining : null,
+      // The owner's account never spends a scan, so a "0 credits" badge next to
+      // his name would be true and completely misleading — and it would show up
+      // in every screenshot he posts. Tell the UI to say "unlimited" instead.
+      unlimited: isAdminRequest(req)
     });
   } catch (err) {
     console.error("Credit balance error:", err.message);

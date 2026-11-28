@@ -3785,8 +3785,12 @@
   let orderPollTimer = null;
   let activeOrderId = null;
 
-  function setCreditPill(balance, freeRemaining) {
+  function setCreditPill(balance, freeRemaining, unlimited) {
     if (!creditPillText) return;
+    if (unlimited) {
+      creditPillText.textContent = "Unlimited (owner)";
+      return;
+    }
     if (balance === null) {
       creditPillText.textContent = "— credits";
     } else if (balance === 0 && freeRemaining > 0) {
@@ -3809,12 +3813,17 @@
       const data = await res.json();
       currentBalance = typeof data.balance === "number" ? data.balance : null;
       const freeRemaining = typeof data.freeRemaining === "number" ? data.freeRemaining : null;
-      setCreditPill(currentBalance, freeRemaining);
-      if (creditBalanceValue) creditBalanceValue.textContent = currentBalance === null ? "—" : String(currentBalance);
-      if (freeScansValue) freeScansValue.textContent = freeRemaining === null ? "—" : `${freeRemaining} / 2`;
+      const unlimited = data.unlimited === true;
+      setCreditPill(currentBalance, freeRemaining, unlimited);
+      if (creditBalanceValue) {
+        creditBalanceValue.textContent = unlimited ? "Unlimited" : currentBalance === null ? "—" : String(currentBalance);
+      }
+      if (freeScansValue) {
+        freeScansValue.textContent = unlimited ? "Unlimited" : freeRemaining === null ? "—" : `${freeRemaining} / 2`;
+      }
       const lowBalanceNudge = document.getElementById("low-balance-nudge");
       if (lowBalanceNudge) {
-        lowBalanceNudge.hidden = !(currentBalance === 0 && freeRemaining === 0);
+        lowBalanceNudge.hidden = unlimited || !(currentBalance === 0 && freeRemaining === 0);
       }
     } catch {
       // Best-effort — leave whatever was last shown.
