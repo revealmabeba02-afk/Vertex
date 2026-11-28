@@ -1518,6 +1518,9 @@ async function requireUser(req, res, next) {
 const analyzeLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 8,
+  // The owner is exempt: he regenerates reads all day to make posts, and
+  // rate-limiting him just makes content production fail at random.
+  skip: (req) => isAdminRequest(req),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests. Please wait a minute and try again." }
@@ -1537,6 +1540,7 @@ const SCAN_NETWORK_DAY_MAX = 80;
 const scanNetworkHourLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: SCAN_NETWORK_HOUR_MAX,
+  skip: (req) => isAdminRequest(req),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -1547,6 +1551,7 @@ const scanNetworkHourLimiter = rateLimit({
 const scanNetworkDayLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: SCAN_NETWORK_DAY_MAX,
+  skip: (req) => isAdminRequest(req),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
