@@ -1130,6 +1130,29 @@ app.get("/api/sample", async (req, res) => {
   }
 });
 
+// --- Who am I (admin only) ------------------------------------------------
+// Answers the one question that decides whether the owner's own scans are free:
+// which email does THIS server treat as the admin? The default lives in code,
+// but a stale ADMIN_EMAIL in the host's environment silently wins, and then the
+// owner gets charged like any customer with no visible reason. PIN-gated, and
+// it never returns a key.
+app.get("/api/admin/whoami", async (req, res) => {
+  if (!adminPinCookieIsValid(req.headers.cookie)) {
+    return res.status(401).json({ error: "Unlock /admin with the PIN first." });
+  }
+  const asked = String(req.query?.email || "").trim().toLowerCase();
+  res.json({
+    adminEmailOnServer: ADMIN_EMAIL || null,
+    adminEmailFromEnv: Boolean(process.env.ADMIN_EMAIL),
+    adminEmailEnvValue: (process.env.ADMIN_EMAIL || "").trim().toLowerCase() || null,
+    freeScansForAdmin: true,
+    creditsEnabled: Boolean(CREDITS_READY),
+    askedEmail: asked || null,
+    askedEmailIsAdmin: asked ? asked === ADMIN_EMAIL : null,
+    note: "If adminEmailFromEnv is true and differs from the address you log in with, your scans are charged like a customer's."
+  });
+});
+
 // --- YouTube auto-post connection -------------------------------------------
 // One-time admin step: King authorizes Vertex's Google Cloud OAuth client to
 // upload videos to his YouTube channel. Google hands back a refresh_token,
