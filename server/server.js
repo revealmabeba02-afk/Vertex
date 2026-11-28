@@ -196,6 +196,15 @@ const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || "").trim();
 // two independent locks, so a bug in one does not expose the other.
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "revealmabeba02@gmail.com").trim().toLowerCase();
 
+// The owner's own account never spends scans. He needs unlimited reads to make
+// content, test the product and screenshot results, and making him top up his
+// own credits is bookkeeping against himself. Nothing else changes: he still
+// authenticates like everyone else, and every other account is charged normally.
+function isAdminRequest(req) {
+  const email = String(req?.user?.email || "").trim().toLowerCase();
+  return Boolean(ADMIN_EMAIL) && email === ADMIN_EMAIL;
+}
+
 // --- Social link tracking --------------------------------------------------
 // /go/:platform links go in King's TikTok/Instagram/YouTube/Facebook bios
 // instead of the raw profile URLs. Each one logs the click (so the admin
@@ -465,77 +474,7 @@ Keep replies under 120 words, friendly, plain text (no markdown).
 
 Hard limits, no exceptions: never state a win rate, probability, expected return or past-performance figure. Vertex does not publish any of those, so any number would be invented — say plainly that the confidence figure is not a win-rate promise. Never tell a user to place a specific trade or to enter/exit a position; describe what the scan shows and let them decide. Never promise profit.`;
 
-const SUPPORT_HOLD_REPLY = "Thanks — I've passed this to the team. We'll check it and get back to you here.";
-
-// 001's built-in support brain. These are the questions that do not need a
-// model: the answers are fixed product facts. Keeping them deterministic means
-// support still works when every AI provider is rate-limited or out of credit.
-function deterministicSupportReply(message) {
-  const m = String(message || "").toLowerCase();
-  const has = (...words) => words.some((w) => m.includes(w));
-
-  if (has("paypal", "pay pal")) {
-    return {
-      confidence: "high",
-      reply:
-        "PayPal is available. Open Credits, pick a pack, then tap “Pay with PayPal”. It opens the exact amount at paypal.me/JThanos. Put your Vertex login email in the PayPal note, then tap “I've paid” so the owner can check it."
-    };
-  }
-  if (has("bank transfer", "bank details", "bank pay", "pay by bank")) {
-    return {
-      confidence: "high",
-      reply:
-        "Bank transfer is available. Open Credits, pick a pack, tap “Bank transfer”, then “Request bank details”. The owner sends the account details privately, and you use your Vertex email as the reference. Vertex never stores bank numbers."
-    };
-  }
-  if (has("credit", "credits", "price", "pricing", "bundle", "how much", "cost")) {
-    return {
-      confidence: "high",
-      reply:
-        "You get 2 free scans every day. Bundles: Quick $4.99 for 10 scans, Starter $8.99 for 20, Trader $12.99 for 60, Pro $19.99 for 150. Credits never expire. Whop credits automatically; PayPal and bank transfers are checked manually."
-    };
-  }
-  if (has("how do i scan", "how to scan", "how does it work", "upload", "pick a pair", "timeframe")) {
-    return {
-      confidence: "high",
-      reply:
-        "Open Scanner, upload a chart screenshot or switch to “Pick a pair”, choose the timeframe, then tap Scan. Vertex returns the bias, entry, stop, target and what would invalidate the idea."
-    };
-  }
-  if (has("failed", "refund", "charged", "money back", "didn't work", "did not work")) {
-    return {
-      confidence: "high",
-      reply:
-        "A failed scan is refunded automatically. If a payment or credit did not land, reply with your Vertex email and what happened; the owner will check it and fix it."
-    };
-  }
-  if (has("login", "log in", "logged out", "password", "sign in")) {
-    return {
-      confidence: "high",
-      reply:
-        "Sessions end when the browser or tab closes, so you may need to log in again. Use “Forgot password?” on the login page if you cannot get in."
-    };
-  }
-  if (has("image", "screenshot", "photo", "picture")) {
-    return {
-      confidence: "high",
-      reply:
-        "If an image scan fails, tap “Use Pick a pair instead” and type the symbol — it gives the same read and is faster. Image scans can take longer when the vision service is busy."
-    };
-  }
-  // The trust question, answered the same way every time — and without the
-  // model, so it never turns into "the team will get back to you". This is the
-  // one a stranger asks before paying, and the one that must never be answered
-  // loosely.
-  if (has("financial advice", "is this advice", "advice or", "guarantee", "guaranteed", "win rate", "sure thing", "can't lose", "cannot lose", "will i make")) {
-    return {
-      confidence: "high",
-      reply:
-        "No — Vertex gives a technical read, not financial advice or a recommendation to trade. The confidence number is how aligned the plan and timeframes are, not a win rate or a promise. It shows you what the chart is doing and where the levels sit; whether to trade it is your call, and trading carries real risk."
-    };
-  }
-  return null;
-}
+const { deterministicSupportReply, SUPPORT_HOLD_REPLY } = require("./supportBrain");
 
 // Admin-only tone overlay (King's own requests to Q2/Q3, never shown to any
 // other user). Added on top of the real rules above — it changes voice
@@ -2175,7 +2114,7 @@ function logAdminAction(token, action, detail) {
 // refund call itself fails, we log it rather than blocking the error
 // response the user is already waiting on.
 async function refundIfSpent(user, source) {
-  if (!source) return;
+  if (!source || source === "admin") return;
   try {
     await supabaseRpc("refund_scan", { p_source: source }, user.token);
   } catch (err) {
@@ -4514,7 +4453,7 @@ app.post("/api/analyze-image", requireUser, scanNetworkHourLimiter, scanNetworkD
     const prepared = await prepareImage(req.file.buffer, req.file.mimetype);
 
     let scanSource = null;
-    if (CREDITS_READY) {
+    if (CREDITS_READY && !isAdminRequest(req)) {
       try {
         const result = await supabaseRpc("use_scan", {}, req.user.token);
         scanSource = result?.source || "paid";
@@ -4628,7 +4567,7 @@ async function runAnalyze(req, res, symbol, timeframe) {
   // fails below, whatever was spent gets refunded, so a failed scan never
   // costs the user anything.
   let scanSource = null;
-  if (CREDITS_READY) {
+  if (CREDITS_READY && !isAdminRequest(req)) {
     try {
       const result = await supabaseRpc("use_scan", {}, req.user.token);
       scanSource = result?.source || "paid";
