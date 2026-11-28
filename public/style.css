@@ -6,6 +6,36 @@
    no longer reachable from the simplified navigation. */
 .is-retired { display: none !important; }
 
+/* Floating "message us" button. The fastest route from "I'm stuck" to a real
+   conversation is WhatsApp, and it's the only channel that reliably produces a
+   reply on a phone. Sits above the bottom nav on mobile, and clear of the
+   right edge with safe-area padding so it isn't clipped by a home indicator. */
+.dm-fab {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 18px 0 15px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #04140a;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  box-shadow: 0 10px 26px -8px rgba(37, 211, 102, 0.75), 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.dm-fab:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -8px rgba(37, 211, 102, 0.85); }
+.dm-fab:active { transform: translateY(0) scale(0.98); }
+.dm-fab__label { white-space: nowrap; }
+@media (max-width: 480px) {
+  .dm-fab { bottom: calc(78px + env(safe-area-inset-bottom)); }
+}
+
 /* Mobile taps: kill the grey flash and the ~300ms delay some mobile browsers
    still apply while they wait to see if a tap is a double-tap-to-zoom. Applied
    to real controls only, so pinch-zoom on the chart image still works. */
